@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-// import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
+
 import { useAppContext } from '../context/AppContext';
 import type { TransactionType, Category } from '../types';
 import { PlusIcon, TrashIcon, XIcon, ChevronDownIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, MenuIcon } from '../components/icons';
@@ -178,32 +178,7 @@ const Budgets: React.FC = () => {
         expense: categories.filter(c => c.type === 'expense' && !c.parentId).sort((a, b) => a.order - b.order),
     }), [categories]);
 
-    // const onDragEnd = (result: DropResult) => {
-    //     const { destination, source, type } = result;
-
-    //     if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
-    //         return;
-    //     }
-
-    //     const categoryType = type === 'droppable-income' ? 'income' : 'expense';
-    //     const items = Array.from(parentCategories[categoryType]);
-    //     const [reorderedItem] = items.splice(source.index, 1);
-    //     items.splice(destination.index, 0, reorderedItem);
-
-    //     const updatedCategoryOrders = items.map((category, index) => ({
-    //         id: category.id,
-    //         order: index,
-    //     }));
-
-    //     // Získame iba tie kategórie, ktorým sa zmenilo poradie
-    //     const changedCategories = updatedCategoryOrders
-    //         .map((newOrder, index) => ({ ...items[index], order: newOrder.order }))
-    //         .filter((cat, index) => cat.order !== parentCategories[categoryType][index].order);
-
-    //     if(changedCategories.length > 0) {
-    //         updateCategoryOrder(changedCategories);
-    //     }
-    // };
+    
     
     const summary = useMemo(() => {
         const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
@@ -301,7 +276,7 @@ const Budgets: React.FC = () => {
     }
 
     return (
-        // <DragDropContext onDragEnd={onDragEnd}>
+        
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                     <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Rozpočty</h1>
@@ -343,7 +318,7 @@ const Budgets: React.FC = () => {
                     reassignAnddeleteCategory={reassignAnddeleteCategory}
                 />
             </div>
-        // </DragDropContext>
+        
     );
 };
 
@@ -358,7 +333,7 @@ interface CategoryGroupProps {
     onSaveSubcategorySuccess: (newCategory: Category) => void;
     isExpanded: boolean;
     toggleExpansion: () => void;
-    // dragHandleProps: any;
+    
     isDragging: boolean;
 }
 
@@ -414,9 +389,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
     return (
         <div className={containerClasses}>
             <div className={`p-4 flex justify-between items-center ${headerBgClass} ${headerTextClass}`}>
-                {/* <div {...dragHandleProps} className="flex items-center p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 cursor-grab">
-                    <MenuIcon className="h-6 w-6" />
-                </div> */}
+                
                 <div className="w-10 h-10 flex-shrink-0" />
 
                 <div onClick={toggleExpansion} className="flex items-center space-x-3 flex-grow min-w-0 mx-2 cursor-pointer">

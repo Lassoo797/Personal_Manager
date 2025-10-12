@@ -103,17 +103,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         let newProfileId = currentProfileId;
 
-        // Step 2: Ensure a valid profile ID is selected if needed
-        if (mappedProfiles.length === 0) {
-            const newProfile = await pb.collection('profiles').create({ name: 'Môj prvý rozpočet' });
-            setBudgetProfiles(prev => [...prev, mapPbToProfile(newProfile)]);
-            newProfileId = newProfile.id;
-        } else {
+        // Step 2: Ensure a valid profile ID is selected
+        if (mappedProfiles.length > 0) {
             const isValid = mappedProfiles.some(p => p.id === newProfileId);
             // If the current ID is invalid (but not null), select the first profile
             if (newProfileId !== null && !isValid) {
                 newProfileId = mappedProfiles[0].id;
+            } else if (newProfileId === null) {
+                // If no profile is selected, but profiles exist, select the first one.
+                newProfileId = mappedProfiles[0].id;
             }
+        } else {
+            // No profiles exist at all.
+            newProfileId = null;
         }
         
         // Step 3: Set the determined profile ID (might still be null)
@@ -192,13 +194,54 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   const deleteBudgetProfile = useCallback(async (id: string) => {
-    // This is a complex operation; for now, we just delete the profile.
-    // In a real app, we'd need to delete all associated data.
-    await pb.collection('profiles').delete(id);
-    const remaining = budgetProfiles.filter(p => p.id !== id);
-    setBudgetProfiles(remaining);
-    if (currentProfileId === id) {
-      setCurrentProfileId(remaining.length > 0 ? remaining[0].id : null);
+    try {
+      setIsLoading(true);
+      const filter = pb.filter('profile = {:profileId}', { profileId: id });
+      
+      // Get IDs of all related records
+      const [accountsToDelete, categoriesToDelete, transactionsToDelete, budgetsToDelete] = await Promise.all([
+          pb.collection('accounts').getFullList({ filter, fields: 'id' }),
+          pb.collection('categories').getFullList({ filter, fields: 'id' }),
+          pb.collection('transactions').getFullList({ filter, fields: 'id' }),
+          pb.collection('budgets').getFullList({ filter, fields: 'id' })
+      ]);
+
+      // Batch delete records. PocketBase JS SDK doesn't have batch delete, so we do it in parallel.
+      // Adjust if you have a very large number of records per profile to avoid overwhelming the server.
+      await Promise.all([
+        ...accountsToDelete.map(r => pb.collection('accounts').delete(r.id)),
+        ...categoriesToDelete.map(r => pb.collection('categories').delete(r.id)),
+        ...transactionsToDelete.map(r => pb.collection('transactions').delete(r.id)),
+        ...budgetsToDelete.map(r => pb.collection('budgets').delete(r.id)),
+      ]);
+
+      // Finally, delete the profile itself
+      await pb.collection('profiles').delete(id);
+
+      // Update local state
+      const remaining = budgetProfiles.filter(p => p.id !== id);
+      setBudgetProfiles(remaining);
+      if (currentProfileId === id) {
+        setCurrentProfileId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      
+      // Also update the 'all' states to reflect the deletion without a full reload
+      setAllAccounts(prev => prev.filter(a => a.profileId !== id));
+      setAllCategories(prev => prev.filter(c => c.profileId !== id));
+      setAllTransactions(prev => prev.filter(t => t.profileId !== id));
+      setAllBudgets(prev => prev.filter(b => b.profileId !== id));
+
+    } catch(e: any) {
+        setError(e);
+        console.error("Chyba pri mazaní profilu:", e);
+    } finally {
+        setIsLoading(false);
+        // We might need to refresh data if something went partially wrong
+        if (currentProfileId === id) {
+           // The main useEffect will trigger due to profile change
+        } else {
+            // If we deleted a background profile, the current view is fine.
+        }
     }
   }, [budgetProfiles, currentProfileId, setCurrentProfileId]);
 
