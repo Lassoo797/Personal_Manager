@@ -2,14 +2,72 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 
 import { useAppContext } from '../context/AppContext';
 import type { TransactionType, Category } from '../types';
-import { PlusIcon, TrashIcon, XIcon, ChevronDownIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon } from '../components/icons';
+import { PlusIcon, TrashIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon } from '../components/icons';
 import Modal from '../components/Modal';
+
+import ReactDOM from 'react-dom';
 
 const formatMonth = (monthStr: string) => {
     const [year, month] = monthStr.split('-');
     const date = new Date(parseInt(year), parseInt(month) - 1);
     return date.toLocaleString('sk-SK', { month: 'long', year: 'numeric' });
 };
+
+const ActionMenu: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  triggerRef: React.RefObject<HTMLElement>;
+  children: React.ReactNode;
+}> = ({ isOpen, onClose, triggerRef, children }) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [positionStyle, setPositionStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const menuHeightEstimate = 180; // A safe estimate for menu height
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const opensUpward = spaceBelow < menuHeightEstimate && rect.top > menuHeightEstimate;
+
+      setPositionStyle({
+        position: 'fixed',
+        top: opensUpward ? `${rect.top - menuHeightEstimate}px` : `${rect.bottom + 4}px`,
+        left: `${rect.left + rect.width - 224}px`, // 224px is w-56
+        width: '224px',
+        zIndex: 50,
+      });
+    }
+  }, [isOpen, triggerRef]);
+
+  if (!isOpen) return null;
+
+  return ReactDOM.createPortal(
+    <div
+      ref={menuRef}
+      style={positionStyle}
+      className="bg-light-surfaceContainerHigh dark:bg-dark-surfaceContainerHigh rounded-lg shadow-xl"
+      onClick={onClose}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+};
+
 
 // --- Re-usable Components ---
 
@@ -251,41 +309,46 @@ const Budgets: React.FC = () => {
     };
 
 
-    const renderCategorySection = (type: TransactionType) => (
-        <div className="space-y-4">
-            {parentCategories[type].map((parent) => (
-                <div key={parent.id}>
-                    <CategoryGroup
-                        parent={parent}
-                        isDragging={false}
-                        currentMonth={currentMonth}
-                        getActualAmount={getActualAmount}
-                        onDeleteRequest={handleDeleteRequest}
-                        onAddSubcategory={() => setAddingCategory({ type, parentId: parent.id })}
-                        isAddingSubcategory={addingCategory?.parentId === parent.id}
-                        onCancelAddSubcategory={() => setAddingCategory(null)}
-                        onSaveSubcategorySuccess={handleSaveSuccess}
-                        isExpanded={expandedGroups.has(parent.id)}
-                        toggleExpansion={() => toggleGroupExpansion(parent.id)}
+    const renderCategorySection = (type: TransactionType) => {
+        const parents = parentCategories[type];
+        return (
+            <div className="space-y-4">
+                {parents.map((parent, index) => (
+                    <div key={parent.id}>
+                        <CategoryGroup
+                            parent={parent}
+                            parentIndex={index}
+                            siblingsCount={parents.length}
+                            isDragging={false}
+                            currentMonth={currentMonth}
+                            getActualAmount={getActualAmount}
+                            onDeleteRequest={handleDeleteRequest}
+                            onAddSubcategory={() => setAddingCategory({ type, parentId: parent.id })}
+                            isAddingSubcategory={addingCategory?.parentId === parent.id}
+                            onCancelAddSubcategory={() => setAddingCategory(null)}
+                            onSaveSubcategorySuccess={handleSaveSuccess}
+                            isExpanded={expandedGroups.has(parent.id)}
+                            toggleExpansion={() => toggleGroupExpansion(parent.id)}
+                        />
+                    </div>
+                ))}
+                {addingCategory?.type === type && addingCategory?.parentId === null ? (
+                    <InlineCategoryForm 
+                        type={type} 
+                        parentId={null} 
+                        onCancel={() => setAddingCategory(null)}
+                        onSaveSuccess={handleSaveSuccess}
                     />
-                </div>
-            ))}
-            {addingCategory?.type === type && addingCategory?.parentId === null ? (
-                <InlineCategoryForm 
-                    type={type} 
-                    parentId={null} 
-                    onCancel={() => setAddingCategory(null)}
-                    onSaveSuccess={handleSaveSuccess}
-                />
-            ) : (
-                <div className="p-2">
-                    <button onClick={() => setAddingCategory({ type, parentId: null })} className="w-full flex items-center justify-center px-4 py-2 border-2 border-dashed border-light-outline dark:border-dark-outline rounded-lg text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainer dark:hover:bg-dark-surfaceContainer">
-                        <PlusIcon className="h-5 w-5 mr-2" /> Pridať skupinu
-                    </button>
-                </div>
-            )}
-        </div>
-    );
+                ) : (
+                    <div className="p-2">
+                        <button onClick={() => setAddingCategory({ type, parentId: null })} className="w-full flex items-center justify-center px-4 py-2 border-2 border-dashed border-light-outline dark:border-dark-outline rounded-lg text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainer dark:hover:bg-dark-surfaceContainer">
+                            <PlusIcon className="h-5 w-5 mr-2" /> Pridať skupinu
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    };
     
     if (isLoading) {
         return <div className="text-center p-10">Načítavam dáta...</div>;
@@ -466,6 +529,8 @@ const Budgets: React.FC = () => {
 
 interface CategoryGroupProps {
     parent: Category;
+    parentIndex: number;
+    siblingsCount: number;
     currentMonth: string;
     getActualAmount: (id: string) => number;
     onDeleteRequest: (e: React.MouseEvent, cat: Category) => void;
@@ -475,18 +540,19 @@ interface CategoryGroupProps {
     onSaveSubcategorySuccess: (newCategory: Category) => void;
     isExpanded: boolean;
     toggleExpansion: () => void;
-    
     isDragging: boolean;
 }
 
 const CategoryGroup: React.FC<CategoryGroupProps> = ({ 
-    parent, currentMonth, getActualAmount, onDeleteRequest, 
+    parent, parentIndex, siblingsCount, currentMonth, getActualAmount, onDeleteRequest, 
     onAddSubcategory, isAddingSubcategory, onCancelAddSubcategory, onSaveSubcategorySuccess,
     isExpanded, toggleExpansion, isDragging 
 }) => {
-    const { categories, budgets } = useAppContext();
+    const { categories, budgets, moveCategoryUp, moveCategoryDown } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
-    const subcategories = useMemo(() => categories.filter(c => c.parentId === parent.id).sort((a,b)=>a.name.localeCompare(b.name)), [categories, parent.id]);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const subcategories = useMemo(() => categories.filter(c => c.parentId === parent.id).sort((a,b)=>(a.order || 0) - (b.order || 0)), [categories, parent.id]);
 
     const { parentTotalBudget, parentTotalActual } = useMemo(() => {
         let totalBudget = 0;
@@ -574,16 +640,29 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                     </div>
                     
                     {/* Right Side: Controls */}
-                    <div className="flex items-center">
-                         <button onClick={(e) => { e.stopPropagation(); setIsEditingName(true); }} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
-                            <PencilIcon className="h-5 w-5" />
+                    <div className="flex items-center space-x-1">
+                        <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10">
+                            <DotsVerticalIcon className="h-5 w-5" />
                         </button>
-                        <button 
-                            onClick={(e) => { e.stopPropagation(); onDeleteRequest(e, parent); }} 
-                            className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-black/10 dark:hover:bg-white/10"
-                        >
-                            <TrashIcon className="h-5 w-5"/>
-                        </button>
+                        
+                        <ActionMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} triggerRef={triggerRef}>
+                            <div className="py-2">
+                                <button onClick={() => moveCategoryUp(parent.id)} disabled={parentIndex === 0} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50">
+                                    <ChevronUpIcon className="h-5 w-5 mr-3"/> Posunúť vyššie
+                                </button>
+                                <button onClick={() => moveCategoryDown(parent.id)} disabled={parentIndex === siblingsCount - 1} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50">
+                                    <ChevronDownIcon className="h-5 w-5 mr-3"/> Posunúť nižšie
+                                </button>
+                                <button onClick={() => setIsEditingName(true)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
+                                    <PencilIcon className="h-5 w-5 mr-3"/> Premenovať
+                                </button>
+                                <div className="my-1 h-px bg-light-outlineVariant dark:bg-dark-outlineVariant" />
+                                <button onClick={(e) => onDeleteRequest(e, parent)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">
+                                    <TrashIcon className="h-5 w-5 mr-3"/> Zmazať skupinu
+                                </button>
+                            </div>
+                        </ActionMenu>
+
                         <button onClick={(e) => { e.stopPropagation(); toggleExpansion(); }} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
                             <ChevronDownIcon className={`h-6 w-6 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                         </button>
@@ -600,7 +679,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
             
             {isExpanded && (
                 <div className="divide-y divide-light-outlineVariant/50 dark:divide-dark-outlineVariant/50">
-                    {subcategories.map(sub => <SubcategoryItem key={sub.id} category={sub} currentMonth={currentMonth} getActualAmount={getActualAmount} onDeleteRequest={onDeleteRequest} getBarColor={getBarColor} />)}
+                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onDeleteRequest={onDeleteRequest} getBarColor={getBarColor} />)}
                     
                     {isAddingSubcategory ? (
                         <div className="p-2">
@@ -626,13 +705,17 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
 
 const SubcategoryItem: React.FC<{
     category: Category;
+    subcategoryIndex: number;
+    siblingsCount: number;
     currentMonth: string;
     getActualAmount: (id: string) => number;
     onDeleteRequest: (e: React.MouseEvent, cat: Category) => void;
     getBarColor: (ratio: number, type: TransactionType) => string;
-}> = ({ category, currentMonth, getActualAmount, onDeleteRequest, getBarColor }) => {
-    const { budgets, addOrUpdateBudget } = useAppContext();
+}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onDeleteRequest, getBarColor }) => {
+    const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const triggerRef = useRef<HTMLButtonElement>(null);
 
     // Výpočty
     const budgetAmount = useMemo(() => budgets.find(b => b.categoryId === category.id && b.month === currentMonth)?.amount ?? 0, [budgets, category.id, currentMonth]);
@@ -714,12 +797,26 @@ const SubcategoryItem: React.FC<{
                 
                 {/* Ovládacie prvky */}
                 <div className="flex items-center">
-                    <button onClick={(e) => { e.stopPropagation(); setIsEditingName(true); }} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
-                        <PencilIcon className="h-4 w-4" />
+                    <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10">
+                        <DotsVerticalIcon className="h-4 w-4" />
                     </button>
-                    <button onClick={(e) => onDeleteRequest(e, category)} className="text-light-error dark:text-dark-error rounded-full p-1 hover:bg-black/10 dark:hover:bg-white/10">
-                        <TrashIcon className="h-4 w-4"/>
-                    </button>
+                    <ActionMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} triggerRef={triggerRef}>
+                        <div className="py-2">
+                            <button onClick={() => moveCategoryUp(category.id)} disabled={subcategoryIndex === 0} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50">
+                                <ChevronUpIcon className="h-5 w-5 mr-3"/> Posunúť vyššie
+                            </button>
+                            <button onClick={() => moveCategoryDown(category.id)} disabled={subcategoryIndex === siblingsCount - 1} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50">
+                                <ChevronDownIcon className="h-5 w-5 mr-3"/> Posunúť nižšie
+                            </button>
+                            <button onClick={() => setIsEditingName(true)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
+                                <PencilIcon className="h-5 w-5 mr-3"/> Premenovať
+                            </button>
+                            <div className="my-1 h-px bg-light-outlineVariant dark:bg-dark-outlineVariant" />
+                            <button onClick={(e) => onDeleteRequest(e, category)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">
+                                <TrashIcon className="h-5 w-5 mr-3"/> Zmazať
+                            </button>
+                        </div>
+                    </ActionMenu>
                 </div>
             </div>
             
