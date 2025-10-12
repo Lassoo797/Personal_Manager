@@ -5,7 +5,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
 const mapPbToProfile = (r: any): BudgetProfile => ({ id: r.id, name: r.name });
-const mapPbToAccount = (r: any): Account => ({ id: r.id, name: r.name, initialBalance: r.initialBalance, profileId: r.profile });
+const mapPbToAccount = (r: any): Account => ({ id: r.id, name: r.name, initialBalance: r.initialBalance, profileId: r.profile, currency: r.currency, type: r.type });
 const mapPbToCategory = (r: any): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, profileId: r.profile, order: r.order });
 const mapPbToTransaction = (r: any): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category, accountId: r.account, profileId: r.profile });
 const mapPbToBudget = (r: any): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, profileId: r.profile });

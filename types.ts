@@ -10,6 +10,8 @@ export interface Account {
   name: string;
   initialBalance: number;
   profileId: string;
+  currency: 'EUR' | 'USD' | 'CZK';
+  type: 'Bankový účet';
 }
 
 export interface Category {

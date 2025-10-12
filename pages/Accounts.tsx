@@ -8,6 +8,8 @@ const AccountForm: React.FC<{ account?: Account | null, onSave: () => void, onCa
     const { addAccount, updateAccount } = useAppContext();
     const [name, setName] = useState(account?.name || '');
     const [initialBalance, setInitialBalance] = useState(account?.initialBalance ?? '');
+    const [currency, setCurrency] = useState<'EUR' | 'USD' | 'CZK'>(account?.currency || 'EUR');
+    const [type, setType] = useState<'Bankový účet'>(account?.type || 'Bankový účet');
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
 
@@ -17,9 +19,9 @@ const AccountForm: React.FC<{ account?: Account | null, onSave: () => void, onCa
         const balanceValue = parseFloat(String(initialBalance));
 
         if (account) {
-            updateAccount({ ...account, name, initialBalance: balanceValue });
+            updateAccount({ ...account, name, initialBalance: balanceValue, currency, type });
         } else {
-            addAccount({ name, initialBalance: balanceValue });
+            addAccount({ name, initialBalance: balanceValue, currency, type });
         }
         onSave();
     };
@@ -33,6 +35,20 @@ const AccountForm: React.FC<{ account?: Account | null, onSave: () => void, onCa
             <div className="relative">
                 <input type="number" id="initialBalance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" " />
                  <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
+            </div>
+            <div className="relative">
+                <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as 'EUR' | 'USD' | 'CZK')} className={`${formInputStyle} h-14`} required>
+                    <option value="EUR">EUR</option>
+                    <option value="USD">USD</option>
+                    <option value="CZK">CZK</option>
+                </select>
+                <label htmlFor="currency" className={formLabelStyle}>Mena</label>
+            </div>
+            <div className="relative">
+                <select id="type" value={type} onChange={e => setType(e.target.value as 'Bankový účet')} className={`${formInputStyle} h-14`} required>
+                    <option value="Bankový účet">Bankový účet</option>
+                </select>
+                <label htmlFor="type" className={formLabelStyle}>Typ účtu</label>
             </div>
             <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={onCancel} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
@@ -78,7 +94,7 @@ const Accounts: React.FC = () => {
             <div>
               <h2 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">{account.name}</h2>
               <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-2">
-                {getAccountBalance(account.id).toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
+                {getAccountBalance(account.id).toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}
               </p>
             </div>
             <div className="flex justify-end space-x-1 mt-4">
