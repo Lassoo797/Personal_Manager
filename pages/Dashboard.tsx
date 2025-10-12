@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, 
-    ComposedChart, Area, Line, CartesianGrid 
+    ComposedChart, Line, CartesianGrid, ReferenceArea
 } from 'recharts';
 import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -10,8 +10,23 @@ const Dashboard: React.FC = () => {
   const { accounts, transactions, categories, budgets, getAccountBalance } = useAppContext();
   const { theme } = useTheme();
 
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
+  const { currentMonthName, previousMonthName } = useMemo(() => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIndex = now.getMonth();
+
+    const currentName = now.toLocaleString('sk-SK', { month: 'short' });
+
+    let previousName;
+    if (currentMonthIndex === 0) { // If it's January
+        previousName = (currentYear - 1).toString();
+    } else {
+        const prevMonthDate = new Date(currentYear, currentMonthIndex - 1, 1);
+        previousName = prevMonthDate.toLocaleString('sk-SK', { month: 'short' });
+    }
+    
+    return { currentMonthName: currentName, previousMonthName: previousName };
+  }, []);
 
   const totalBalance = useMemo(() => {
     return accounts.reduce((sum, account) => sum + getAccountBalance(account.id), 0);
@@ -25,6 +40,10 @@ const Dashboard: React.FC = () => {
     averageMonthlyIncome,
     averageMonthlyExpense
   } = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
     let income = 0;
     let expenses = 0;
     const byCategory: { [key: string]: number } = {};
@@ -89,7 +108,7 @@ const Dashboard: React.FC = () => {
         averageMonthlyIncome: avgIncome,
         averageMonthlyExpense: avgExpense
     };
-  }, [transactions, categories, currentMonth, currentYear]);
+  }, [transactions, categories]);
 
   const recentTransactions = useMemo(() => 
     [...transactions]
@@ -101,7 +120,7 @@ const Dashboard: React.FC = () => {
   const cashFlowData = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth();
+    const currentMonth = now.getMonth(); // 0-11
 
     let yearStartBalance = accounts.reduce((sum, acc) => sum + acc.initialBalance, 0);
     transactions.forEach(t => {
@@ -109,58 +128,67 @@ const Dashboard: React.FC = () => {
             yearStartBalance += t.type === 'income' ? t.amount : -t.amount;
         }
     });
-
+    
     const months = Array.from({ length: 12 }, (_, i) => new Date(currentYear, i, 1).toLocaleString('sk-SK', { month: 'short' }));
-    const chartData = months.map(name => ({
+    
+    const chartData = [{
+        name: (currentYear - 1).toString(),
+        actual: yearStartBalance,
+        plan: yearStartBalance,
+        forecast: null as number | null
+    }, ...months.map(name => ({
         name,
         actual: null as number | null,
         plan: null as number | null,
         forecast: null as number | null
-    }));
+    }))];
 
     const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
-    const monthlyBudgets = Array(12).fill(0).map(() => ({ plannedIncome: 0, plannedExpense: 0 }));
+    const monthlyBudgetDeltas = Array(12).fill(0);
     budgets.forEach(b => {
         const [bYear, bMonth] = b.month.split('-').map(Number);
         if (bYear === currentYear) {
             const monthIndex = bMonth - 1;
-            if (incomeCategoryIds.has(b.categoryId)) {
-                monthlyBudgets[monthIndex].plannedIncome += b.amount;
-            } else {
-                monthlyBudgets[monthIndex].plannedExpense += b.amount;
-            }
+            const amount = incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount;
+            monthlyBudgetDeltas[monthIndex] += amount;
         }
     });
 
     let runningPlanBalance = yearStartBalance;
     let runningActualBalance = yearStartBalance;
 
-    for (let i = 0; i < 12; i++) {
-        runningPlanBalance += monthlyBudgets[i].plannedIncome - monthlyBudgets[i].plannedExpense;
-        chartData[i].plan = runningPlanBalance;
+    for (let i = 0; i < 12; i++) { // i=0 pre Január
+        runningPlanBalance += monthlyBudgetDeltas[i];
+        chartData[i + 1].plan = runningPlanBalance;
 
-        if (i <= currentMonth) {
+        if (i < currentMonth) { // Iba pre celé mesiace, ktoré už prešli
             const monthlyTransactions = transactions.filter(t => {
                 const tDate = new Date(t.date);
                 return tDate.getFullYear() === currentYear && tDate.getMonth() === i;
             });
-            const monthlyIncome = monthlyTransactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-            const monthlyExpense = monthlyTransactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-            
-            runningActualBalance += monthlyIncome - monthlyExpense;
-            chartData[i].actual = runningActualBalance;
+            const monthlyDelta = monthlyTransactions.reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
+            runningActualBalance += monthlyDelta;
+            chartData[i + 1].actual = runningActualBalance;
         }
     }
+    
+    // Pre aktuálny, neukončený mesiac, zoberieme transakcie do dnešného dňa
+    const currentMonthTransactions = transactions.filter(t => {
+        const tDate = new Date(t.date);
+        return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth;
+    });
+    const currentMonthDelta = currentMonthTransactions.reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
+    chartData[currentMonth + 1].actual = runningActualBalance + currentMonthDelta;
 
-    const lastActualBalance = chartData[currentMonth].actual;
-    if (lastActualBalance !== null) {
-        let runningForecastBalance = lastActualBalance;
-        chartData[currentMonth].forecast = lastActualBalance; 
 
-        for (let i = currentMonth + 1; i < 12; i++) {
-            runningForecastBalance += monthlyBudgets[i].plannedIncome - monthlyBudgets[i].plannedExpense;
-            chartData[i].forecast = runningForecastBalance;
-        }
+    // Prognóza začína od posledného známeho stavu (koniec minulého mesiaca)
+    const lastKnownActualBalance = chartData[currentMonth].actual ?? yearStartBalance;
+    let runningForecastBalance = lastKnownActualBalance;
+    chartData[currentMonth].forecast = lastKnownActualBalance;
+
+    for (let i = currentMonth; i < 12; i++) {
+        runningForecastBalance += monthlyBudgetDeltas[i];
+        chartData[i + 1].forecast = runningForecastBalance;
     }
     
     return chartData;
@@ -249,7 +277,8 @@ const Dashboard: React.FC = () => {
             <YAxis tick={{ fill: tickColor, fontSize: 12 }} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k €`} axisLine={{ stroke: tickColor }} tickLine={{ stroke: tickColor }} />
             <Tooltip {...tooltipStyles} formatter={(value: number) => value.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })} />
             <Legend wrapperStyle={{ color: tickColor, fontSize: 14 }} />
-            <Line type="monotone" dataKey="plan" stroke="#ffc658" strokeWidth={2} name="Pôvodný plán" strokeDasharray="5 5" dot={false} />
+            <ReferenceArea x1={previousMonthName} x2={currentMonthName} stroke="none" fill={theme === 'dark' ? 'rgba(255, 180, 171, 0.1)' : 'rgba(186, 26, 26, 0.1)'} />
+            <Line type="monotone" dataKey="plan" stroke="#ffc658" strokeWidth={2} name="Plán" strokeDasharray="5 5" dot={false} connectNulls />
             <Line type="monotone" dataKey="forecast" stroke={theme === 'dark' ? '#55DDA2' : '#00875A'} strokeWidth={2} name="Prognóza" strokeDasharray="3 7" dot={false} connectNulls />
             <Line type="monotone" dataKey="actual" stroke={theme === 'dark' ? '#9FCAFF' : '#0061A4'} strokeWidth={3} name="Skutočný stav" connectNulls={false} dot={{ r: 4 }} />
             </ComposedChart>

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 
 import { useAppContext } from '../context/AppContext';
 import type { TransactionType, Category } from '../types';
-import { PlusIcon, TrashIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon } from '../components/icons';
+import { PlusIcon, TrashIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon } from '../components/icons';
 import Modal from '../components/Modal';
 
 import ReactDOM from 'react-dom';
@@ -186,7 +186,8 @@ const Budgets: React.FC = () => {
     const { 
         categories, budgets, transactions, 
         deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, 
-        updateCategoryOrder, isLoading, error 
+        updateCategoryOrder, isLoading, error, 
+        publishBudgetForYear, publishFullBudgetForYear
     } = useAppContext();
     
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -363,6 +364,38 @@ const Budgets: React.FC = () => {
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                     <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Rozpočty</h1>
+                </div>
+
+                <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex-1 min-w-max">
+                            <h3 className="font-medium text-light-onSurface dark:text-dark-onSurface">Nástroje pre plánovanie</h3>
+                            <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Uľahčite si prácu s opakujúcimi sa rozpočtami.</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button 
+                                onClick={() => setCurrentDate(new Date())}
+                                className="flex items-center gap-2 px-4 py-2 bg-light-tertiaryContainer text-light-onTertiaryContainer dark:bg-dark-tertiaryContainer dark:text-dark-onTertiaryContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
+                            >
+                                <CalendarDaysIcon className="h-5 w-5" />
+                                Aktuálny mesiac
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    if (window.confirm(`Naozaj chcete nastaviť aktuálny plán pre všetky kategórie a podkategórie na všetky nasledujúce mesiace do konca roka?`)) {
+                                        publishFullBudgetForYear(currentMonth);
+                                    }
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
+                            >
+                                <CalendarClockIcon className="h-5 w-5" />
+                                Nastaviť plán do konca roka
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-center">
                     <div className="flex items-center space-x-2 bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-1 rounded-full">
                         <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh" aria-label="Predchádzajúci mesiac">
                             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -548,7 +581,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
     onAddSubcategory, isAddingSubcategory, onCancelAddSubcategory, onSaveSubcategorySuccess,
     isExpanded, toggleExpansion, isDragging 
 }) => {
-    const { categories, budgets, moveCategoryUp, moveCategoryDown } = useAppContext();
+    const { categories, budgets, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -656,6 +689,16 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                                 <button onClick={() => setIsEditingName(true)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
                                     <PencilIcon className="h-5 w-5 mr-3"/> Premenovať
                                 </button>
+                                <button 
+                                    onClick={() => {
+                                        if (window.confirm(`Naozaj chcete nastaviť aktuálny plán pre skupinu "${parent.name}" a všetky jej podkategórie na všetky nasledujúce mesiace do konca roka?`)) {
+                                            publishBudgetForYear(parent.id, currentMonth, true);
+                                        }
+                                    }}
+                                    className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5"
+                                >
+                                    <CalendarClockIcon className="h-5 w-5 mr-3"/> Nastaviť do konca roka
+                                </button>
                                 <div className="my-1 h-px bg-light-outlineVariant dark:bg-dark-outlineVariant" />
                                 <button onClick={(e) => onDeleteRequest(e, parent)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">
                                     <TrashIcon className="h-5 w-5 mr-3"/> Zmazať skupinu
@@ -712,7 +755,7 @@ const SubcategoryItem: React.FC<{
     onDeleteRequest: (e: React.MouseEvent, cat: Category) => void;
     getBarColor: (ratio: number, type: TransactionType) => string;
 }> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onDeleteRequest, getBarColor }) => {
-    const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown } = useAppContext();
+    const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
@@ -810,6 +853,16 @@ const SubcategoryItem: React.FC<{
                             </button>
                             <button onClick={() => setIsEditingName(true)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
                                 <PencilIcon className="h-5 w-5 mr-3"/> Premenovať
+                            </button>
+                             <button 
+                                onClick={() => {
+                                    if (window.confirm(`Naozaj chcete nastaviť aktuálny plán pre kategóriu "${category.name}" na všetky nasledujúce mesiace do konca roka?`)) {
+                                        publishBudgetForYear(category.id, currentMonth, false);
+                                    }
+                                }}
+                                className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5"
+                            >
+                                <CalendarClockIcon className="h-5 w-5 mr-3"/> Nastaviť do konca roka
                             </button>
                             <div className="my-1 h-px bg-light-outlineVariant dark:bg-dark-outlineVariant" />
                             <button onClick={(e) => onDeleteRequest(e, category)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">

@@ -10,6 +10,8 @@ const mapPbToCategory = (r: any): Category => ({ id: r.id, name: r.name, parentI
 const mapPbToTransaction = (r: any): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category, accountId: r.account, profileId: r.profile });
 const mapPbToBudget = (r: any): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, profileId: r.profile });
 
+// PocketBase options to prevent autocancellation during batch operations
+const noAutoCancel = { '$autoCancel': false };
 
 interface AppContextType {
   // Nové stavy pre UI
@@ -56,6 +58,8 @@ interface AppContextType {
   deleteTransaction: (id: string) => Promise<void>;
 
   addOrUpdateBudget: (budget: Omit<Budget, 'id' | 'profileId'>) => Promise<void>;
+  publishBudgetForYear: (categoryId: string, month: string, forAllSubcategories?: boolean) => Promise<void>;
+  publishFullBudgetForYear: (month: string) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
 }
 
@@ -454,22 +458,140 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (existing) {
       const updated = await pb.collection('budgets').update(existing.id, { amount: budget.amount });
-      setBudgets(prev => prev.map(b => b.id === existing.id ? mapPbToBudget(updated) : b));
-    } else {
-      const data = {
-          ...budget,
-          profile: currentProfileId,
-          category: budget.categoryId
-      };
-      const newBudget = await pb.collection('budgets').create(data);
-      setBudgets(prev => [...prev, mapPbToBudget(newBudget)]);
-    }
+    setBudgets(prev => prev.map(b => b.id === existing.id ? mapPbToBudget(updated) : b));
+    setAllBudgets(prev => prev.map(b => b.id === existing.id ? mapPbToBudget(updated) : b));
+  } else {
+    const data = {
+        ...budget,
+        profile: currentProfileId,
+        category: budget.categoryId
+    };
+    const newBudget = await pb.collection('budgets').create(data);
+    const mapped = mapPbToBudget(newBudget);
+    setBudgets(prev => [...prev, mapped]);
+    setAllBudgets(prev => [...prev, mapped]);
+  }
   }, [currentProfileId, budgets]);
   
   const deleteBudget = useCallback(async(id:string) => {
     await pb.collection('budgets').delete(id);
     setBudgets(prev => prev.filter(b => b.id !== id));
+    setAllBudgets(prev => prev.filter(b => b.id !== id));
   }, []);
+
+  const publishBudgetForYear = useCallback(async (baseCategoryId: string, baseMonth: string, forAllSubcategories: boolean = false) => {
+    if (!currentProfileId) return;
+
+    const [year, month] = baseMonth.split('-').map(Number);
+    let categoryIdsToUpdate = [baseCategoryId];
+
+    // Ak je to pre všetky podkategórie, nájdi ich
+    if (forAllSubcategories) {
+        const subcategories = categories.filter(c => c.parentId === baseCategoryId);
+        categoryIdsToUpdate.push(...subcategories.map(s => s.id));
+    }
+
+    const newBudgets: Budget[] = [];
+    const updatedBudgets: Budget[] = [];
+
+    // Pre každú kategóriu (hlavnú alebo aj podkategórie)
+    for (const categoryId of categoryIdsToUpdate) {
+        const sourceBudget = budgets.find(b => b.categoryId === categoryId && b.month === baseMonth);
+        const sourceAmount = sourceBudget?.amount ?? 0;
+
+        // Pre každý nasledujúci mesiac v roku
+        for (let m = month + 1; m <= 12; m++) {
+            const targetMonth = `${year}-${String(m).padStart(2, '0')}`;
+            const existingBudget = budgets.find(b => b.categoryId === categoryId && b.month === targetMonth);
+
+            if (existingBudget) {
+                if (existingBudget.amount !== sourceAmount) {
+                                      // Update existujúceho
+                try {
+                    const updated = await pb.collection('budgets').update(existingBudget.id, { amount: sourceAmount }, noAutoCancel);
+                    updatedBudgets.push(mapPbToBudget(updated));
+                } catch (e) { console.error(`Failed to update budget for ${categoryId} in ${targetMonth}:`, e); }
+            }
+        } else if (sourceAmount > 0) {
+             // Vytvor nový, len ak je suma > 0
+            const data = { profile: currentProfileId, category: categoryId, month: targetMonth, amount: sourceAmount };
+            try {
+                const newBudget = await pb.collection('budgets').create(data, noAutoCancel);
+                newBudgets.push(mapPbToBudget(newBudget));
+            } catch (e) { console.error(`Failed to create budget for ${categoryId} in ${targetMonth}:`, e); }
+        }
+        }
+    }
+    
+    // Aktualizuj stav naraz
+    setBudgets(prev => {
+        const updatedMap = new Map(updatedBudgets.map(b => [b.id, b]));
+        const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
+        return [...prevWithoutUpdated, ...newBudgets];
+    });
+
+    setAllBudgets(prev => {
+      const updatedMap = new Map(updatedBudgets.map(b => [b.id, b]));
+      const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
+      return [...prevWithoutUpdated, ...newBudgets];
+    });
+
+  }, [currentProfileId, budgets, categories]);
+
+  const publishFullBudgetForYear = useCallback(async (baseMonth: string) => {
+    if (!currentProfileId) return;
+  
+    const [year, month] = baseMonth.split('-').map(Number);
+    const categoryIds = categories.map(c => c.id);
+  
+    const budgetsToCreate: any[] = [];
+    const budgetsToUpdate: any[] = [];
+  
+    // Pre každú kategóriu
+    for (const categoryId of categoryIds) {
+      const sourceBudget = budgets.find(b => b.categoryId === categoryId && b.month === baseMonth);
+      const sourceAmount = sourceBudget?.amount ?? 0;
+  
+      // Pre každý nasledujúci mesiac v roku
+      for (let m = month + 1; m <= 12; m++) {
+        const targetMonth = `${year}-${String(m).padStart(2, '0')}`;
+        const existingBudget = budgets.find(b => b.categoryId === categoryId && b.month === targetMonth);
+  
+        if (existingBudget) {
+          if (existingBudget.amount !== sourceAmount) {
+            budgetsToUpdate.push(pb.collection('budgets').update(existingBudget.id, { amount: sourceAmount }, noAutoCancel));
+          }
+        } else if (sourceAmount > 0) {
+          const data = { profile: currentProfileId, category: categoryId, month: targetMonth, amount: sourceAmount };
+          budgetsToCreate.push(pb.collection('budgets').create(data, noAutoCancel));
+        }
+      }
+    }
+  
+    try {
+      setIsLoading(true);
+      const created = await Promise.all(budgetsToCreate);
+      const updated = await Promise.all(budgetsToUpdate);
+      
+      // Update local state
+      setBudgets(prev => {
+        const updatedMap = new Map(updated.map(b => [b.id, mapPbToBudget(b)]));
+        const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
+        return [...prevWithoutUpdated, ...created.map(mapPbToBudget)];
+      });
+      setAllBudgets(prev => {
+        const updatedMap = new Map(updated.map(b => [b.id, mapPbToBudget(b)]));
+        const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
+        return [...prevWithoutUpdated, ...created.map(mapPbToBudget)];
+      });
+
+    } catch (e) {
+      console.error("Chyba pri hromadnom publikovaní rozpočtu:", e);
+      setError(e as Error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentProfileId, categories, budgets]);
 
   const value = useMemo(() => ({
     isLoading, error,
@@ -477,7 +599,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     accounts, addAccount, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
-    budgets, addOrUpdateBudget, deleteBudget,
+    budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
     allAccounts, allTransactions, allBudgets, allCategories,
   }), [
     isLoading, error,
@@ -485,8 +607,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     accounts, addAccount, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
-    budgets, addOrUpdateBudget, deleteBudget,
-    allAccounts, allTransactions, allBudgets, allCategories
+    budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear
   ]);
 
   return (
