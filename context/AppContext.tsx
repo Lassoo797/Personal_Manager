@@ -101,31 +101,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setAllBudgets(allBuds.map(mapPbToBudget));
         setAllCategories(allCats.map(mapPbToCategory));
 
-        let newProfileId = currentProfileId;
+        // Step 2: Check if the stored profile ID is invalid (exists but is not in the fetched list)
+        let activeProfileId = currentProfileId;
+        const isInvalidStoredProfile = activeProfileId && !mappedProfiles.some(p => p.id === activeProfileId);
 
-        // Step 2: Ensure a valid profile ID is selected
-        if (mappedProfiles.length > 0) {
-            const isValid = mappedProfiles.some(p => p.id === newProfileId);
-            // If the current ID is invalid (but not null), select the first profile
-            if (newProfileId !== null && !isValid) {
-                newProfileId = mappedProfiles[0].id;
-            } else if (newProfileId === null) {
-                // If no profile is selected, but profiles exist, select the first one.
-                newProfileId = mappedProfiles[0].id;
-            }
-        } else {
-            // No profiles exist at all.
-            newProfileId = null;
+        if (isInvalidStoredProfile) {
+            // The stored ID is stale/invalid, so switch to the first available profile
+            activeProfileId = mappedProfiles.length > 0 ? mappedProfiles[0].id : null;
+            setCurrentProfileId(activeProfileId);
         }
-        
-        // Step 3: Set the determined profile ID (might still be null)
-        if (newProfileId !== currentProfileId) {
-            setCurrentProfileId(newProfileId);
-        }
+        // If currentProfileId was initially null, we let it be, allowing MasterDashboard to be shown.
 
-        // Step 4: Load data for the active profile, if one is selected
-        if (newProfileId) {
-            const filter = pb.filter('profile = {:profileId}', { profileId: newProfileId });
+        // Step 3: Load data for the active profile (if one is selected)
+        if (activeProfileId) {
+            const filter = pb.filter('profile = {:profileId}', { profileId: activeProfileId });
             const [accs, cats, trans, buds] = await Promise.all([
               pb.collection('accounts').getFullList({ filter }),
               pb.collection('categories').getFullList({ filter }),
@@ -156,8 +145,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     loadAppData();
-    // Only re-run when the profile ID changes
-  }, [currentProfileId]);
+    // Only re-run when the profile ID from storage/selection changes
+  }, [currentProfileId, setCurrentProfileId]);
 
   const refreshData = useCallback(async () => {
     // This function will now re-trigger the main loader

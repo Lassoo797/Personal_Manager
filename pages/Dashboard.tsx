@@ -250,7 +250,6 @@ const Dashboard: React.FC = () => {
             <Tooltip {...tooltipStyles} formatter={(value: number) => value.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })} />
             <Legend wrapperStyle={{ color: tickColor, fontSize: 14 }} />
             <Line type="monotone" dataKey="plan" stroke="#ffc658" strokeWidth={2} name="Pôvodný plán" strokeDasharray="5 5" dot={false} />
-            <Area type="monotone" dataKey="forecast" fill={theme === 'dark' ? '#55DDA2' : '#00875A'} stroke="none" fillOpacity={0.2} name="Prognóza" legendType="none" connectNulls />
             <Line type="monotone" dataKey="forecast" stroke={theme === 'dark' ? '#55DDA2' : '#00875A'} strokeWidth={2} name="Prognóza" strokeDasharray="3 7" dot={false} connectNulls />
             <Line type="monotone" dataKey="actual" stroke={theme === 'dark' ? '#9FCAFF' : '#0061A4'} strokeWidth={3} name="Skutočný stav" connectNulls={false} dot={{ r: 4 }} />
             </ComposedChart>
