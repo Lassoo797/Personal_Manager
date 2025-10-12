@@ -353,13 +353,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [categories, deleteCategory]);
 
   const reassignAnddeleteCategory = useCallback(async (categoryIdToDelete: string, targetCategoryId: string) => {
-    const relatedTransactions = await pb.collection('transactions').getFullList({ filter: `category = '${categoryIdToDelete}'` });
+    // 1. Find transactions to update in PocketBase
+    const relatedTransactions = await pb.collection('transactions').getFullList({ 
+        filter: `category = '${categoryIdToDelete}'` 
+    });
+
+    // 2. Update them in PocketBase
     await Promise.all(
       relatedTransactions.map(t => pb.collection('transactions').update(t.id, { category: targetCategoryId }))
     );
+
+    // 3. Update local state for immediate UI feedback
+    setTransactions(prevTransactions => 
+      prevTransactions.map(t => 
+        t.categoryId === categoryIdToDelete 
+          ? { ...t, categoryId: targetCategoryId } 
+          : t
+      )
+    );
+
+    // 4. Delete the category (which also handles budgets)
     await deleteCategory(categoryIdToDelete);
-    refreshData(); // Refresh data
-  }, [deleteCategory, refreshData]);
+    
+    // No refreshData() needed as we updated the state manually
+  }, [deleteCategory]);
 
   const moveCategory = useCallback(async (categoryId: string, direction: 'up' | 'down') => {
     const category = categories.find(c => c.id === categoryId);

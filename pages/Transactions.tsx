@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
@@ -6,14 +6,35 @@ import type { Transaction, TransactionType, Category } from '../types';
 
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
     const { accounts, categories, addTransaction, updateTransaction } = useAppContext();
-    const [type, setType] = useState<TransactionType>(transaction?.type || 'expense');
-    const [date, setDate] = useState(transaction?.date || new Date().toISOString().split('T')[0]);
-    const [description, setDescription] = useState(transaction?.description || '');
-    const [amount, setAmount] = useState(transaction?.amount || '');
-    const [categoryId, setCategoryId] = useState(transaction?.categoryId || '');
-    const [accountId, setAccountId] = useState(transaction?.accountId || '');
+    const [type, setType] = useState<TransactionType>('expense');
+    const [date, setDate] = useState('');
+    const [description, setDescription] = useState('');
+    const [amount, setAmount] = useState<number | string>('');
+    const [categoryId, setCategoryId] = useState('');
+    const [accountId, setAccountId] = useState('');
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
+
+    useEffect(() => {
+        if (transaction) {
+            setType(transaction.type);
+            // PocketBase date contains time, slice to get only YYYY-MM-DD
+            setDate(transaction.date.slice(0, 10));
+            setDescription(transaction.description);
+            setAmount(transaction.amount);
+            setCategoryId(transaction.categoryId);
+            setAccountId(transaction.accountId);
+        } else {
+            // Reset form for a new transaction
+            setType('expense');
+            setDate(new Date().toISOString().slice(0, 10));
+            setDescription('');
+            setAmount('');
+            setCategoryId('');
+            setAccountId('');
+        }
+    }, [transaction]);
+
 
 
     const filteredCategories = useMemo(() => {
