@@ -5,14 +5,18 @@ import ThemeSwitcher from './ThemeSwitcher';
 import { useAppContext } from '../context/AppContext';
 import Modal from './Modal';
 import ProfileManager from './ProfileManager';
+import { useAuth } from '../context/AuthContext';
+
 
 const Header: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const { logout, user } = useAuth();
   
   const { budgetProfiles, currentProfileId, setCurrentProfileId } = useAppContext();
   const dropdownRef = useRef<HTMLDivElement>(null);
+
 
   const currentProfile = useMemo(() => 
     budgetProfiles.find(p => p.id === currentProfileId),
@@ -121,6 +125,17 @@ const Header: React.FC = () => {
               )}
             </div>
             <div className="flex items-center">
+              {user && (
+                <span className="mr-4 text-sm">
+                  Prihlásený: <strong>{user.email}</strong>
+                </span>
+              )}
+              <button
+                onClick={logout}
+                className="mr-4 px-3 py-2 rounded-full text-sm font-medium transition-colors text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"
+              >
+                Odhlásiť
+              </button>
               <span className="text-xs text-light-onSurfaceVariant/50 dark:text-dark-onSurfaceVariant/50 mr-4">
                 v{process.env.APP_VERSION}
               </span>
