@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rozpočtový manažér</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Roboto', 'sans-serif'],
+            },
+            borderRadius: {
+              'xl': '1rem', // 16px
+              '2xl': '1.5rem', // 24px
+            },
+            colors: {
+              // Material 3 Color Palette
+              light: {
+                primary: '#0061A4',
+                onPrimary: '#FFFFFF',
+                primaryContainer: '#D1E4FF',
+                onPrimaryContainer: '#001D36',
+                secondary: '#535F70',
+                onSecondary: '#FFFFFF',
+                secondaryContainer: '#D7E3F7',
+                onSecondaryContainer: '#101C2B',
+                tertiary: '#6B5778',
+                onTertiary: '#FFFFFF',
+                tertiaryContainer: '#F2DAFF',
+                onTertiaryContainer: '#251431',
+                error: '#BA1A1A',
+                onError: '#FFFFFF',
+                errorContainer: '#FFDAD6',
+                onErrorContainer: '#410002',
+                background: '#FDFBFF',
+                onBackground: '#1A1C1E',
+                surface: '#FDFBFF',
+                onSurface: '#1A1C1E',
+                surfaceVariant: '#DFE2EB',
+                onSurfaceVariant: '#43474E',
+                outline: '#73777F',
+                outlineVariant: '#C3C7CF',
+                surfaceContainerLowest: '#FFFFFF',
+                surfaceContainerLow: '#F7F2F7',
+                surfaceContainer: '#F1ECF1',
+                surfaceContainerHigh: '#EBE6EB',
+                surfaceContainerHighest: '#E5E1E5',
+              },
+              dark: {
+                primary: '#9FCAFF',
+                onPrimary: '#003258',
+                primaryContainer: '#00497D',
+                onPrimaryContainer: '#D1E4FF',
+                secondary: '#BBC7DB',
+                onSecondary: '#253141',
+                secondaryContainer: '#3B4758',
+                onSecondaryContainer: '#D7E3F7',
+                tertiary: '#D6BAF4',
+                onTertiary: '#3B2947',
+                tertiaryContainer: '#523F5F',
+                onTertiaryContainer: '#F2DAFF',
+                error: '#FFB4AB',
+                onError: '#690005',
+                errorContainer: '#93000A',
+                onErrorContainer: '#FFDAD6',
+                background: '#1A1C1E',
+                onBackground: '#E2E2E6',
+                surface: '#1A1C1E',
+                onSurface: '#E2E2E6',
+                surfaceVariant: '#43474E',
+                onSurfaceVariant: '#C3C7CF',
+                outline: '#8D9199',
+                outlineVariant: '#43474E',
+                surfaceContainerLowest: '#0F1113',
+                surfaceContainerLow: '#1A1C1E',
+                surfaceContainer: '#1E2022',
+                surfaceContainerHigh: '#282A2D',
+                surfaceContainerHighest: '#333538',
+              }
+            }
+          }
+        }
+      }
+    </script>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.3",
+    "recharts": "https://aistudiocdn.com/recharts@^3.2.1"
+  }
+}
+</script>
+</head>
+<body class="bg-light-background dark:bg-dark-background font-sans">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
