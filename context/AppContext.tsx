@@ -38,7 +38,7 @@ interface AppContextType {
 
   // Actions
   addAccount: (account: Omit<Account, 'id' | 'profileId'>) => Promise<void>;
-  updateAccount: (account: Account) => Promise<void>;
+  updateAccount: (account: Partial<Account> & Pick<Account, 'id'>) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   getAccountBalance: (accountId: string) => number;
   
@@ -48,6 +48,8 @@ interface AppContextType {
   deleteCategory: (id: string) => Promise<void>;
   deleteCategoryAndChildren: (id: string) => Promise<void>;
   reassignAnddeleteCategory: (categoryIdToDelete: string, targetCategoryId: string) => Promise<void>;
+  moveCategoryUp: (categoryId: string) => Promise<void>;
+  moveCategoryDown: (categoryId: string) => Promise<void>;
 
   addTransaction: (transaction: Omit<Transaction, 'id' | 'profileId'>) => Promise<void>;
   updateTransaction: (transaction: Transaction) => Promise<void>;
@@ -241,11 +243,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAccounts(prev => [...prev, mapPbToAccount(newAccount)]);
   }, [currentProfileId]);
 
-  const updateAccount = useCallback(async (updated: Account) => {
-    const { id, profileId, ...data } = updated;
-    const payload = { ...data, profile: profileId };
-    const updatedAccount = await pb.collection('accounts').update(id, payload);
-    setAccounts(prev => prev.map(a => a.id === id ? mapPbToAccount(updatedAccount) : a));
+  const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
+    const { id, name, currency, type } = accountToUpdate;
+    const payload: Partial<Account> = {};
+    if (name) payload.name = name;
+    if (currency) payload.currency = currency;
+    if (type) payload.type = type;
+
+    if (Object.keys(payload).length === 0) return; // No fields to update
+
+    await pb.collection('accounts').update(id, payload);
+
+    setAccounts(prev =>
+      prev.map(acc =>
+        acc.id === id ? { ...acc, ...payload } : acc
+      )
+    );
+    setAllAccounts(prev => 
+      prev.map(acc => 
+        acc.id === id ? { ...acc, ...payload } : acc
+      )
+    )
   }, []);
 
   const deleteAccount = useCallback(async (id: string) => {
@@ -343,6 +361,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     refreshData(); // Refresh data
   }, [deleteCategory, refreshData]);
 
+  const moveCategory = useCallback(async (categoryId: string, direction: 'up' | 'down') => {
+    const category = categories.find(c => c.id === categoryId);
+    if (!category) return;
+  
+    const siblings = categories
+      .filter(c => c.parentId === category.parentId && c.type === category.type)
+      .sort((a, b) => a.order - b.order);
+  
+    const currentIndex = siblings.findIndex(c => c.id === categoryId);
+    if (currentIndex === -1) return;
+  
+    let newSiblings = [...siblings];
+    if (direction === 'up' && currentIndex > 0) {
+      [newSiblings[currentIndex], newSiblings[currentIndex - 1]] = [newSiblings[currentIndex - 1], newSiblings[currentIndex]];
+    } else if (direction === 'down' && currentIndex < siblings.length - 1) {
+      [newSiblings[currentIndex], newSiblings[currentIndex + 1]] = [newSiblings[currentIndex + 1], newSiblings[currentIndex]];
+    } else {
+      return; // Can't move further
+    }
+  
+    const updatedOrders = newSiblings.map((c, index) => ({ ...c, order: index }));
+  
+    try {
+      await Promise.all(
+        updatedOrders.map(c => pb.collection('categories').update(c.id, { order: c.order }))
+      );
+      setCategories(prev => {
+        const updatedMap = new Map(updatedOrders.map(c => [c.id, c]));
+        const sorted = prev.map(c => updatedMap.get(c.id) || c).sort((a,b)=> a.order - b.order);
+        return sorted;
+      });
+    } catch (e) {
+      console.error(`Failed to move category ${direction}:`, e);
+      refreshData();
+    }
+  }, [categories, refreshData]);
+  
+  const moveCategoryUp = useCallback((categoryId: string) => moveCategory(categoryId, 'up'), [moveCategory]);
+  const moveCategoryDown = useCallback((categoryId: string) => moveCategory(categoryId, 'down'), [moveCategory]);
+
   const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'profileId'>) => {
     if (!currentProfileId) return;
     const data = {
@@ -400,7 +458,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     isLoading, error,
     budgetProfiles, currentProfileId, setCurrentProfileId, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile,
     accounts, addAccount, updateAccount, deleteAccount, getAccountBalance,
-    categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder,
+    categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget,
     allAccounts, allTransactions, allBudgets, allCategories,
@@ -408,7 +466,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     isLoading, error,
     budgetProfiles, currentProfileId, setCurrentProfileId, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile,
     accounts, addAccount, updateAccount, deleteAccount, getAccountBalance,
-    categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder,
+    categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget,
     allAccounts, allTransactions, allBudgets, allCategories

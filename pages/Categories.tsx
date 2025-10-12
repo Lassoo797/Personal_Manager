@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
-import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
+import { PlusIcon, PencilIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons';
 import type { Category, TransactionType } from '../types';
 
 const CategoryForm: React.FC<{ category?: Category | null, onSave: () => void, onCancel: () => void }> = ({ category, onSave, onCancel }) => {
@@ -191,33 +191,50 @@ const ReassignAndDeleteModal: React.FC<{
 
 
 const CategoryList: React.FC<{ type: TransactionType, onEdit: (cat: Category) => void, onDelete: (cat: Category) => void }> = ({ type, onEdit, onDelete }) => {
-    const { categories } = useAppContext();
-    const parentCategories = categories.filter(c => c.type === type && !c.parentId);
+    const { categories, moveCategoryUp, moveCategoryDown } = useAppContext();
     
+    console.log(`[${type.toUpperCase()}] All categories from context:`, categories.filter(c => c.type === type));
+
+    const parentCategories = categories
+        .filter(c => c.type === type && !c.parentId)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    console.log(`[${type.toUpperCase()}] Sorted parent categories to render:`, parentCategories);
+
     return (
         <div className="space-y-3">
-            {parentCategories.map(parent => (
-                <div key={parent.id} className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-3 rounded-lg">
-                    <div className="flex justify-between items-center">
-                        <span className="font-semibold text-light-onSurface dark:text-dark-onSurface">{parent.name}</span>
-                        <div className="flex items-center space-x-1">
-                            <button aria-label={`Upraviť kategóriu ${parent.name}`} onClick={() => onEdit(parent)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                            <button aria-label={`Zmazať kategóriu ${parent.name}`} onClick={() => onDelete(parent)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+            {parentCategories.map((parent, parentIndex) => {
+                const subcategories = categories
+                    .filter(c => c.parentId === parent.id)
+                    .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+                return (
+                    <div key={parent.id} className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-3 rounded-lg">
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-light-onSurface dark:text-dark-onSurface">{parent.name}</span>
+                                                        <div className="flex items-center space-x-1">
+                                <button aria-label={`Move ${parent.name} up`} onClick={() => moveCategoryUp(parent.id)} disabled={parentIndex === 0} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh disabled:opacity-50"><ChevronUpIcon /> UP</button>
+                                <button aria-label={`Move ${parent.name} down`} onClick={() => moveCategoryDown(parent.id)} disabled={parentIndex === parentCategories.length - 1} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh disabled:opacity-50"><ChevronDownIcon /> DOWN</button>
+                                <button aria-label={`Upraviť kategóriu ${parent.name}`} onClick={() => onEdit(parent)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
+                                <button aria-label={`Zmazať kategóriu ${parent.name}`} onClick={() => onDelete(parent)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                            </div>
+                        </div>
+                        <div className="ml-4 mt-2 space-y-2 border-l-2 border-light-outlineVariant dark:border-dark-outlineVariant pl-4">
+                            {subcategories.map((child, childIndex) => (
+                                <div key={child.id} className="flex justify-between items-center">
+                                    <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{child.name}</span>
+                                    <div className="flex items-center space-x-1">
+                                        <button aria-label={`Move ${child.name} up`} onClick={() => moveCategoryUp(child.id)} disabled={childIndex === 0} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh disabled:opacity-50"><ChevronUpIcon /> UP</button>
+                                        <button aria-label={`Move ${child.name} down`} onClick={() => moveCategoryDown(child.id)} disabled={childIndex === subcategories.length - 1} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh disabled:opacity-50"><ChevronDownIcon /> DOWN</button>
+                                        <button aria-label={`Upraviť podkategóriu ${child.name}`} onClick={() => onEdit(child)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
+                                        <button aria-label={`Zmazať podkategóriu ${child.name}`} onClick={() => onDelete(child)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                                    </div>
+                                </div>
+                        ))}
                         </div>
                     </div>
-                    <div className="ml-4 mt-2 space-y-2 border-l-2 border-light-outlineVariant dark:border-dark-outlineVariant pl-4">
-                        {categories.filter(c => c.parentId === parent.id).map(child => (
-                            <div key={child.id} className="flex justify-between items-center">
-                                <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{child.name}</span>
-                                <div className="flex items-center space-x-1">
-                                    <button aria-label={`Upraviť podkategóriu ${child.name}`} onClick={() => onEdit(child)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                                    <button aria-label={`Zmazať podkategóriu ${child.name}`} onClick={() => onDelete(child)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ))}
+                )
+            })}
         </div>
     );
 };

@@ -48,6 +48,12 @@ export const ChevronDownIcon: React.FC<{ className?: string }> = ({ className = 
     </svg>
 );
 
+export const ChevronUpIcon: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+    </svg>
+);
+
 export const ArrowUpCircleIcon: React.FC<{ className?: string }> = ({ className = "h-6 w-6" }) => (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15 11.25l-3-3m0 0l-3 3m3-3v7.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

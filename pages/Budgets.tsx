@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 
 import { useAppContext } from '../context/AppContext';
 import type { TransactionType, Category } from '../types';
-import { PlusIcon, TrashIcon, XIcon, ChevronDownIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, MenuIcon } from '../components/icons';
+import { PlusIcon, TrashIcon, XIcon, ChevronDownIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon } from '../components/icons';
 import Modal from '../components/Modal';
 
 const formatMonth = (monthStr: string) => {
@@ -51,25 +51,26 @@ const EditableBudgetValue: React.FC<{ categoryId: string; currentMonth: string; 
     );
 };
 
-const EditableCategoryName: React.FC<{ category: Category }> = ({ category }) => {
+const EditableCategoryName: React.FC<{ category: Category, isEditing: boolean, setIsEditing: (isEditing: boolean) => void }> = ({ category, isEditing, setIsEditing }) => {
     const { updateCategory } = useAppContext();
-    const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState(category.name);
     const inputRef = useRef<HTMLInputElement>(null);
     const isParent = !category.parentId;
 
-    useEffect(() => { if (isEditing) { inputRef.current?.focus(); inputRef.current?.select(); } }, [isEditing]);
+    useEffect(() => { 
+        if (isEditing) { 
+            inputRef.current?.focus(); 
+            inputRef.current?.select(); 
+        } else {
+            setName(category.name); // Reset name if editing is cancelled
+        }
+    }, [isEditing, category.name]);
 
     const handleSave = () => {
         if (name.trim() && name.trim() !== category.name) {
             updateCategory({ ...category, name: name.trim() });
         }
         setIsEditing(false);
-    };
-
-    const handleClick = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent toggling expansion when editing name
-        setIsEditing(true);
     };
 
     if (isEditing) {
@@ -79,7 +80,7 @@ const EditableCategoryName: React.FC<{ category: Category }> = ({ category }) =>
         );
     }
     return (
-        <span onClick={handleClick} className={`cursor-pointer hover:underline truncate ${isParent ? 'font-semibold text-lg' : 'font-medium text-base'}`}>
+        <span className={`truncate ${isParent ? 'font-semibold text-lg' : 'font-medium text-base'}`}>
             {category.name}
         </span>
     );
@@ -181,19 +182,38 @@ const Budgets: React.FC = () => {
     
     
     const summary = useMemo(() => {
+        // --- VÝPOČET ZÁKLADNÝCH HODNÔT ---
         const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
+        
         let plannedIncome = 0, actualIncome = 0, plannedExpense = 0, actualExpense = 0;
+
+        // Iterácia cez všetky rozpočty pre aktuálny mesiac
         budgets.forEach(b => {
             if (b.month === currentMonth) {
-                if (incomeCategoryIds.has(b.categoryId)) plannedIncome += b.amount; else plannedExpense += b.amount;
+                // Rozdelenie na príjmy a výdavky podľa kategórie
+                if (incomeCategoryIds.has(b.categoryId)) {
+                    plannedIncome += b.amount;
+                } else {
+                    plannedExpense += b.amount;
+                }
             }
         });
+
+        // Iterácia cez všetky transakcie pre aktuálny mesiac
         transactions.forEach(t => {
             if (t.date.startsWith(currentMonth)) {
-                if (t.type === 'income') actualIncome += t.amount; else actualExpense += t.amount;
+                if (t.type === 'income') {
+                    actualIncome += t.amount;
+                } else {
+                    actualExpense += t.amount;
+                }
             }
         });
-        return { plannedIncome, actualIncome, plannedExpense, actualExpense, plannedBalance: plannedIncome - plannedExpense, actualBalance: actualIncome - actualExpense };
+        
+        const plannedBalance = plannedIncome - plannedExpense;
+        const actualBalance = actualIncome - actualExpense;
+
+        return { plannedIncome, actualIncome, plannedExpense, actualExpense, plannedBalance, actualBalance };
     }, [budgets, transactions, currentMonth, categories]);
 
     const handleDeleteRequest = (e: React.MouseEvent, category: Category) => {
@@ -293,8 +313,130 @@ const Budgets: React.FC = () => {
 
                 <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant">
                     <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface">Súhrn za mesiac</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 text-center">
-                        {/* Summary content... */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
+                        {(() => {
+                            // --- PRÍPRAVA HODNÔT PRE ZOBRAZENIE ---
+                            const { plannedIncome, actualIncome, plannedExpense, actualExpense, plannedBalance, actualBalance } = summary;
+
+                            // --- Logika pre Príjmy ---
+                            const incomeDiff = actualIncome - plannedIncome;
+                            // Pomer plnenia: ak je plán 0, akýkoľvek príjem je 100% úspech. Inak štandardný pomer.
+                            const incomeRatio = plannedIncome > 0 ? actualIncome / plannedIncome : (actualIncome > 0 ? 1 : 0);
+                            const incomeProgressWidth = `${Math.min(incomeRatio * 100, 100)}%`;
+                            const incomeDiffColor = incomeDiff >= 0 ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+                            
+                            // --- Logika pre Výdavky ---
+                            const remainingExpense = plannedExpense - actualExpense;
+                             // Pomer čerpania: ak je plán 0, akýkoľvek výdavok je 100% prekročenie.
+                            const expenseRatio = plannedExpense > 0 ? actualExpense / plannedExpense : (actualExpense > 0 ? 1 : 0);
+                            const expenseProgressWidth = `${Math.min(expenseRatio * 100, 100)}%`;
+                            const remainingExpenseColor = remainingExpense >= 0 ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+                            // Farba progress baru pre výdavky sa mení podľa miery čerpania
+                            let expenseBarColor = 'bg-green-500';
+                            if (expenseRatio > 1) expenseBarColor = 'bg-light-error dark:bg-dark-error';
+                            else if (expenseRatio > 0.8) expenseBarColor = 'bg-yellow-500';
+
+                            // --- Logika pre Bilanciu ---
+                            const balanceDiff = actualBalance - plannedBalance;
+                            
+                            // ÚSPECH sa definuje ako dosiahnutie alebo prekročenie plánovanej bilancie.
+                            const isSuccess = actualBalance >= plannedBalance;
+                            
+                            // Definovanie farieb na základe stavu
+                            const balanceDiffColor = isSuccess ? 'text-green-600 dark:text-green-400' : 'text-yellow-500';
+                            let actualBalanceColor = isSuccess ? 'text-green-600 dark:text-green-400' : 'text-yellow-500';
+                            if (actualBalance < 0) {
+                                actualBalanceColor = 'text-light-error dark:text-dark-error';
+                            }
+                            
+                            // Pomer pre progress bar: jednoduchý pomer aktuálnej hodnoty k plánu.
+                            // Ak je plán 0, akýkoľvek výsledok nad 0 je 100%.
+                            let balanceRatio = 0;
+                            if (plannedBalance !== 0) {
+                                balanceRatio = actualBalance / plannedBalance;
+                            } else {
+                                balanceRatio = actualBalance > 0 ? 1 : 0;
+                            }
+                            
+                            const balanceProgressWidth = `${Math.max(0, Math.min(balanceRatio * 100, 100))}%`;
+                            const balanceBarColor = isSuccess ? 'bg-green-500' : (actualBalance < 0 ? 'bg-light-error' : 'bg-yellow-500');
+
+                            return (
+                                <>
+                                    {/* Príjmy */}
+                                    <div className="md:border-r md:border-light-outlineVariant md:dark:border-dark-outlineVariant md:pr-8 flex flex-col">
+                                        <h3 className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant text-center">Príjmy</h3>
+                                        <div className="flex-grow mt-1 text-center mb-3">
+                                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                                {actualIncome.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
+                                            </p>
+                                        </div>
+                                        <div className="flex justify-between items-baseline text-xs">
+                                            <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">
+                                                Plán: {plannedIncome.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
+                                            </span>
+                                            <span>
+                                                <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">Rozdiel: </span>
+                                                <span className={`font-medium ${incomeDiffColor}`}>
+                                                    {incomeDiff.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay:'always'})}
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-2 mt-1">
+                                            <div className="bg-green-500 h-2 rounded-full" style={{ width: incomeProgressWidth }}></div>
+                                        </div>
+                                    </div>
+
+                                    {/* Výdavky */}
+                                    <div className="md:border-r md:border-light-outlineVariant md:dark:border-dark-outlineVariant md:pr-8 flex flex-col">
+                                        <h3 className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant text-center">Výdavky</h3>
+                                        <div className="flex-grow mt-1 text-center mb-3">
+                                            <p className="text-2xl font-bold text-light-error dark:text-dark-error">
+                                                {actualExpense.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
+                                            </p>
+                                        </div>
+                                        <div className="flex justify-between items-baseline text-xs">
+                                            <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">
+                                                Plán: {plannedExpense.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
+                                            </span>
+                                            <span>
+                                                <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">Rozdiel: </span>
+                                                <span className={`font-medium ${remainingExpenseColor}`}>
+                                                    {remainingExpense.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay:'always'})}
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-2 mt-1">
+                                            <div className={`${expenseBarColor} h-2 rounded-full`} style={{ width: expenseProgressWidth }}></div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Bilancia */}
+                                    <div className="flex flex-col">
+                                        <h3 className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant text-center">Bilancia</h3>
+                                        <div className="flex-grow mt-1 text-center mb-3">
+                                            <p className={`text-2xl font-bold ${actualBalanceColor}`}>
+                                                {actualBalance.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
+                                            </p>
+                                        </div>
+                                        <div className="flex justify-between items-baseline text-xs">
+                                            <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">
+                                                Plán: {plannedBalance.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
+                                            </span>
+                                            <span>
+                                                <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">Rozdiel: </span>
+                                                <span className={`font-medium ${balanceDiffColor}`}>
+                                                    {balanceDiff.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR', signDisplay: 'always' })}
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-2 mt-1">
+                                            <div className={`${balanceBarColor} h-2 rounded-full`} style={{ width: balanceProgressWidth }}></div>
+                                        </div>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
 
@@ -343,6 +485,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
     isExpanded, toggleExpansion, isDragging 
 }) => {
     const { categories, budgets } = useAppContext();
+    const [isEditingName, setIsEditingName] = useState(false);
     const subcategories = useMemo(() => categories.filter(c => c.parentId === parent.id).sort((a,b)=>a.name.localeCompare(b.name)), [categories, parent.id]);
 
     const { parentTotalBudget, parentTotalActual } = useMemo(() => {
@@ -361,10 +504,11 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
 
     let summaryLabel = '';
     let summaryColor = '';
+    const actualColor = isIncome ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
 
     if (isIncome) {
-        summaryLabel = isPositive ? 'Plán prekročený' : 'Chýba do plánu';
-        summaryColor = isPositive ? 'text-green-600 dark:text-green-400' : 'text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant';
+        summaryLabel = 'Rozdiel';
+        summaryColor = isPositive ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
     } else { // Expense
         summaryLabel = isPositive ? 'Zostáva' : 'Prekročené';
         summaryColor = isPositive ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
@@ -388,70 +532,91 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
 
     return (
         <div className={containerClasses}>
-            <div className={`p-4 flex justify-between items-center ${headerBgClass} ${headerTextClass}`}>
+            <div 
+                className={`relative ${headerBgClass} ${headerTextClass} p-4 cursor-pointer`}
+                onClick={() => !isEditingName && toggleExpansion()}
+            >
+                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 w-full">
+                    {/* Left Side: Icon and Name */}
+                    <div className="flex items-center space-x-3">
+                        {isIncome ? <ArrowUpCircleIcon className="h-6 w-6 flex-shrink-0" /> : <ArrowDownCircleIcon className="h-6 w-6 flex-shrink-0" />}
+                        <EditableCategoryName category={parent} isEditing={isEditingName} setIsEditing={setIsEditingName} />
+                    </div>
+
+                    {/* Middle: Summary */}
+                    <div className="flex items-center justify-center">
+                         <div className="grid grid-cols-3 gap-x-4 sm:gap-x-6 text-center w-full max-w-sm">
+                            {/* Plán */}
+                            <div>
+                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Plán</p>
+                                <span className="text-xs font-medium text-light-onSurface dark:text-dark-onSurface">
+                                    {parentTotalBudget.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
+                                </span>
+                            </div>
+                            {/* Skutočnosť */}
+                            <div>
+                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Skutočnosť</p>
+                                <span className={`text-xs font-medium ${actualColor}`}>
+                                    {parentTotalActual.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
+                                </span>
+                            </div>
+                            {/* Rozdiel */}
+                            <div>
+                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{summaryLabel}</p>
+                                <span className={`text-xs font-medium ${summaryColor}`}>
+                                    {isIncome 
+                                        ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always'})
+                                        : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR'})
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Right Side: Controls */}
+                    <div className="flex items-center">
+                         <button onClick={(e) => { e.stopPropagation(); setIsEditingName(true); }} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
+                            <PencilIcon className="h-5 w-5" />
+                        </button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onDeleteRequest(e, parent); }} 
+                            className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-black/10 dark:hover:bg-white/10"
+                        >
+                            <TrashIcon className="h-5 w-5"/>
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); toggleExpansion(); }} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
+                            <ChevronDownIcon className={`h-6 w-6 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                    </div>
+                </div>
                 
-                <div className="w-10 h-10 flex-shrink-0" />
-
-                <div onClick={toggleExpansion} className="flex items-center space-x-3 flex-grow min-w-0 mx-2 cursor-pointer">
-                    {isIncome ? <ArrowUpCircleIcon className="h-6 w-6 flex-shrink-0" /> : <ArrowDownCircleIcon className="h-6 w-6 flex-shrink-0" />}
-                    <EditableCategoryName category={parent} />
-                </div>
-
-                <div className="flex items-center space-x-1 ml-2 flex-shrink-0">
-                    <button onClick={toggleExpansion} className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
-                        <ChevronDownIcon className={`h-6 w-6 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                    </button>
-                    <button 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteRequest(e, parent);
-                        }} 
-                        className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-black/10 dark:hover:bg-white/10"
-                    >
-                        <TrashIcon className="h-5 w-5"/>
-                    </button>
-                </div>
+                {/* Progress Bar */}
+                {subcategories.length > 0 && parentTotalBudget > 0 && (
+                    <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-1.5 mt-3">
+                        <div className={`h-1.5 rounded-full ${getBarColor(ratio, parent.type)}`} style={{ width: progressWidth }}></div>
+                    </div>
+                )}
             </div>
             
-            {/* Summary and Progress Bar */}
-            {subcategories.length > 0 && (
-                <div className="p-4 border-b border-light-outlineVariant dark:border-dark-outlineVariant">
-                     <div className="grid grid-cols-3 gap-4 text-center">
-                        <div>
-                            <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Plán</p>
-                            <span className="font-bold text-base text-light-onSurface dark:text-dark-onSurface">{parentTotalBudget.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}</span>
-                        </div>
-                        <div>
-                            <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Skutočnosť</p>
-                            <span className="font-bold text-base text-light-onSurface dark:text-dark-onSurface">{parentTotalActual.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}</span>
-                        </div>
-                        <div>
-                            <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{summaryLabel}</p>
-                            <span className={`font-bold text-base ${summaryColor}`}>
-                                {Math.abs(difference).toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
-                            </span>
-                        </div>
-                    </div>
-                    <div className="w-full bg-light-surfaceContainerLowest dark:bg-dark-surfaceContainerLowest rounded-full h-2.5 mt-2">
-                        <div className={`h-2.5 rounded-full ${getBarColor(ratio, parent.type)}`} style={{ width: progressWidth }}></div>
-                    </div>
-                </div>
-            )}
-            
             {isExpanded && (
-                <div className="space-y-2 p-2 transition-all duration-300 ease-in-out">
+                <div className="divide-y divide-light-outlineVariant/50 dark:divide-dark-outlineVariant/50">
                     {subcategories.map(sub => <SubcategoryItem key={sub.id} category={sub} currentMonth={currentMonth} getActualAmount={getActualAmount} onDeleteRequest={onDeleteRequest} getBarColor={getBarColor} />)}
+                    
                     {isAddingSubcategory ? (
-                        <InlineCategoryForm 
-                            type={parent.type} 
-                            parentId={parent.id} 
-                            onCancel={onCancelAddSubcategory}
-                            onSaveSuccess={onSaveSubcategorySuccess}
-                        />
+                        <div className="p-2">
+                            <InlineCategoryForm 
+                                type={parent.type} 
+                                parentId={parent.id} 
+                                onCancel={onCancelAddSubcategory}
+                                onSaveSuccess={onSaveSubcategorySuccess}
+                            />
+                        </div>
                     ) : (
-                        <button onClick={onAddSubcategory} className="w-full flex items-center justify-center px-4 py-2 text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-lg hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh">
-                            <PlusIcon className="h-4 w-4 mr-2"/> Pridať podkategóriu
-                        </button>
+                        <div className="p-2">
+                            <button onClick={onAddSubcategory} className="w-full flex items-center justify-center px-4 py-2 text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-lg hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh">
+                                <PlusIcon className="h-4 w-4 mr-2"/> Pridať podkategóriu
+                            </button>
+                        </div>
                     )}
                 </div>
             )}
@@ -466,64 +631,101 @@ const SubcategoryItem: React.FC<{
     onDeleteRequest: (e: React.MouseEvent, cat: Category) => void;
     getBarColor: (ratio: number, type: TransactionType) => string;
 }> = ({ category, currentMonth, getActualAmount, onDeleteRequest, getBarColor }) => {
-    const { budgets } = useAppContext();
-    const budgetAmount = budgets.find(b => b.categoryId === category.id && b.month === currentMonth)?.amount ?? 0;
+    const { budgets, addOrUpdateBudget } = useAppContext();
+    const [isEditingName, setIsEditingName] = useState(false);
+
+    // Výpočty
+    const budgetAmount = useMemo(() => budgets.find(b => b.categoryId === category.id && b.month === currentMonth)?.amount ?? 0, [budgets, category.id, currentMonth]);
     const actualAmount = getActualAmount(category.id);
+    const difference = category.type === 'income' ? actualAmount - budgetAmount : budgetAmount - actualAmount;
     const ratio = budgetAmount > 0 ? actualAmount / budgetAmount : (actualAmount > 0 ? 1 : 0);
     const progressWidth = `${Math.min(ratio * 100, 100)}%`;
+    const isSuccess = category.type === 'income' ? actualAmount >= budgetAmount : actualAmount <= budgetAmount;
 
+    // Definovanie popisov a farieb
     const isIncome = category.type === 'income';
-    let statusText = '';
-    let statusColor = 'text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant';
+    const summaryLabel = isIncome ? 'Rozdiel' : (difference >= 0 ? 'Zostáva' : 'Prekročené');
+    const differenceColor = isSuccess ? 'text-green-600 dark:text-green-400' : (isIncome ? 'text-light-error dark:text-dark-error' : 'text-yellow-500');
+    const actualColor = isIncome ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+    
+    // Inline editácia rozpočtu
+    const [isEditingBudget, setIsEditingBudget] = useState(false);
+    const [budgetValue, setBudgetValue] = useState(budgetAmount > 0 ? budgetAmount.toFixed(2) : '');
+    const budgetInputRef = useRef<HTMLInputElement>(null);
 
-    if (budgetAmount > 0) {
-        const difference = actualAmount - budgetAmount;
-        if (isIncome) {
-            if (difference >= 0) {
-                statusText = `Plán splnený o ${difference.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}`;
-                statusColor = 'text-green-600 dark:text-green-400';
-            } else {
-                statusText = `Chýba ${Math.abs(difference).toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}`;
-            }
-        } else { // Expense
-            const expenseDifference = budgetAmount - actualAmount;
-            if (expenseDifference >= 0) {
-                statusText = `Zostáva ${expenseDifference.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}`;
-                statusColor = 'text-green-600 dark:text-green-400';
-            } else {
-                statusText = `Prekročené o ${Math.abs(expenseDifference).toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}`;
-                statusColor = 'text-light-error dark:text-dark-error';
-            }
+    useEffect(() => { setBudgetValue(budgetAmount > 0 ? budgetAmount.toFixed(2) : ''); }, [budgetAmount]);
+    useEffect(() => { if (isEditingBudget) { budgetInputRef.current?.focus(); budgetInputRef.current?.select(); } }, [isEditingBudget]);
+
+    const handleBudgetSave = () => {
+        const amount = budgetValue === '' ? 0 : parseFloat(budgetValue);
+        if (!isNaN(amount) && amount >= 0 && amount !== budgetAmount) {
+            addOrUpdateBudget({ categoryId: category.id, month: currentMonth, amount });
         }
-    } else if (actualAmount > 0) {
-        statusText = isIncome ? `Nenaplánovaný príjem` : 'Nebol stanovený rozpočet';
-        statusColor = isIncome ? 'text-green-600 dark:text-green-400' : 'text-yellow-500 dark:text-yellow-400';
-    }
+        setIsEditingBudget(false);
+    };
 
     return (
-        <div className="p-2 rounded-lg hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh group">
-            <div className="flex justify-between items-center">
-                <div className="flex-grow truncate pr-2">
-                    <EditableCategoryName category={category}/>
+        <div className="p-4 group">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 w-full">
+                {/* Názov */}
+                <div className="flex items-center space-x-2">
+                    <EditableCategoryName category={category} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                 </div>
-                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                     <button onClick={(e) => onDeleteRequest(e, category)} className="text-light-error dark:text-dark-error rounded-full p-1.5 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon className="h-4 w-4"/></button>
-                </div>
-            </div>
-            <div className="mt-2">
-                <div className="flex justify-between items-end gap-2">
-                    <EditableBudgetValue categoryId={category.id} currentMonth={currentMonth} />
-                    <div className="text-right flex-shrink-0">
-                        <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-0.5">Skutočnosť</p>
-                        <span className="text-base font-bold text-light-onSurface dark:text-dark-onSurface">{actualAmount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</span>
+
+                {/* Súhrn */}
+                <div className="flex items-center justify-center">
+                     <div className="grid grid-cols-3 gap-x-4 sm:gap-x-6 text-center w-full max-w-sm">
+                        {/* Plán */}
+                        <div onClick={() => !isEditingBudget && setIsEditingBudget(true)} className="cursor-pointer">
+                            <p className="text-xs opacity-80">Plán</p>
+                            {isEditingBudget ? (
+                                <input ref={budgetInputRef} type="number" value={budgetValue} 
+                                    onChange={(e) => setBudgetValue(e.target.value)} 
+                                    onBlur={handleBudgetSave} 
+                                    onKeyDown={(e) => { if(e.key === 'Enter') handleBudgetSave(); if(e.key === 'Escape') setIsEditingBudget(false); }}
+                                    onClick={e => e.stopPropagation()}
+                                    className="w-full bg-black/10 dark:bg-white/10 text-current rounded-md border-light-primary dark:border-dark-primary border-2 px-1 py-0 text-xs font-medium text-center"
+                                />
+                            ) : (
+                                <span className="text-xs font-medium text-light-onSurface dark:text-dark-onSurface">
+                                    {budgetAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
+                                </span>
+                            )}
+                        </div>
+                        {/* Skutočnosť */}
+                        <div>
+                            <p className="text-xs opacity-80">Skutočnosť</p>
+                            <span className={`text-xs font-medium ${actualColor}`}>
+                                {actualAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
+                            </span>
+                        </div>
+                        {/* Rozdiel */}
+                        <div>
+                            <p className="text-xs opacity-80">{summaryLabel}</p>
+                            <span className={`text-xs font-medium ${differenceColor}`}>
+                                {isIncome 
+                                    ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always'})
+                                    : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR'})
+                                }
+                            </span>
+                        </div>
                     </div>
                 </div>
-                <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-1.5 mt-1.5">
-                    <div className={`h-1.5 rounded-full ${getBarColor(ratio, category.type)}`} style={{ width: progressWidth }}></div>
+                
+                {/* Ovládacie prvky */}
+                <div className="flex items-center">
+                    <button onClick={(e) => { e.stopPropagation(); setIsEditingName(true); }} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
+                        <PencilIcon className="h-4 w-4" />
+                    </button>
+                    <button onClick={(e) => onDeleteRequest(e, category)} className="text-light-error dark:text-dark-error rounded-full p-1 hover:bg-black/10 dark:hover:bg-white/10">
+                        <TrashIcon className="h-4 w-4"/>
+                    </button>
                 </div>
-                {statusText && (
-                    <p className={`text-xs text-right mt-1 ${statusColor}`}>{statusText}</p>
-                )}
+            </div>
+            
+            {/* Progress Bar */}
+            <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-1.5 mt-2">
+                <div className={`h-1.5 rounded-full ${getBarColor(ratio, category.type)}`} style={{ width: progressWidth }}></div>
             </div>
         </div>
     );
@@ -583,3 +785,4 @@ const ReassignAndDeleteModal: React.FC<{
 
 
 export default Budgets;
+

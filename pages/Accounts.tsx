@@ -4,25 +4,36 @@ import Modal from '../components/Modal';
 import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
 import type { Account } from '../types';
 
-const AccountForm: React.FC<{ account?: Account | null, onSave: () => void, onCancel: () => void }> = ({ account, onSave, onCancel }) => {
+const AccountForm: React.FC<{
+  account?: Account | null;
+  isEditing: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+}> = ({ account, isEditing, onSave, onCancel }) => {
     const { addAccount, updateAccount } = useAppContext();
     const [name, setName] = useState(account?.name || '');
-    const [initialBalance, setInitialBalance] = useState(account?.initialBalance ?? '');
+    // Conditionally manage initialBalance state. For edits, it's not needed in the form.
+    const [initialBalance, setInitialBalance] = useState(isEditing ? '' : (account?.initialBalance ?? ''));
     const [currency, setCurrency] = useState<'EUR' | 'USD' | 'CZK'>(account?.currency || 'EUR');
     const [type, setType] = useState<'Bankový účet'>(account?.type || 'Bankový účet');
+    
+    // ... styles remain the same
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
 
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name || initialBalance === '') return;
-        const balanceValue = parseFloat(String(initialBalance));
-
-        if (account) {
-            updateAccount({ ...account, name, initialBalance: balanceValue, currency, type });
+        
+        if (isEditing) {
+            if (!name || !account) return;
+            updateAccount({ id: account.id, name, currency, type });
         } else {
+            if (!name || initialBalance === '') return;
+            const balanceValue = parseFloat(String(initialBalance));
             addAccount({ name, initialBalance: balanceValue, currency, type });
         }
+        
         onSave();
     };
 
@@ -32,10 +43,14 @@ const AccountForm: React.FC<{ account?: Account | null, onSave: () => void, onCa
                 <input type="text" id="name" value={name} className={`${formInputStyle} h-14`} required placeholder=" " onChange={e => setName(e.target.value)}/>
                 <label htmlFor="name" className={formLabelStyle}>Názov účtu</label>
             </div>
-            <div className="relative">
-                <input type="number" id="initialBalance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" " />
-                 <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
-            </div>
+            
+            {!isEditing && (
+              <div className="relative">
+                  <input type="number" id="initialBalance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" " />
+                  <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
+              </div>
+            )}
+            
             <div className="relative">
                 <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as 'EUR' | 'USD' | 'CZK')} className={`${formInputStyle} h-14`} required>
                     <option value="EUR">EUR</option>
@@ -106,7 +121,12 @@ const Accounts: React.FC = () => {
       </div>
       
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingAccount ? "Upraviť účet" : "Pridať účet"}>
-        <AccountForm account={editingAccount} onSave={closeModal} onCancel={closeModal} />
+        <AccountForm 
+          account={editingAccount} 
+          isEditing={!!editingAccount} 
+          onSave={closeModal} 
+          onCancel={closeModal} 
+        />
       </Modal>
     </div>
   );
