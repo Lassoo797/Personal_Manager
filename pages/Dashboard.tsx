@@ -172,13 +172,13 @@ const Dashboard: React.FC = () => {
         }
     }
     
-    // Pre aktuálny, neukončený mesiac, zoberieme transakcie do dnešného dňa
-    const currentMonthTransactions = transactions.filter(t => {
-        const tDate = new Date(t.date);
-        return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth;
-    });
-    const currentMonthDelta = currentMonthTransactions.reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
-    chartData[currentMonth + 1].actual = runningActualBalance + currentMonthDelta;
+    // // Pre aktuálny, neukončený mesiac, zoberieme transakcie do dnešného dňa
+    // const currentMonthTransactions = transactions.filter(t => {
+    //     const tDate = new Date(t.date);
+    //     return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth;
+    // });
+    // const currentMonthDelta = currentMonthTransactions.reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
+    // chartData[currentMonth + 1].actual = runningActualBalance + currentMonthDelta;
 
 
     // Prognóza začína od posledného známeho stavu (koniec minulého mesiaca)

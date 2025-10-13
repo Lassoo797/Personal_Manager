@@ -90,14 +90,14 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             </div>
              <div className="relative">
                 <select id="category" value={categoryId} onChange={e => setCategoryId(e.target.value)} className={`${formInputStyle} h-14`} required>
-                    <option value="">Vyberte kategóriu</option>
-                    {filteredCategories.map(c => <option key={c.id} value={c.id}>{categories.find(p=>p.id === c.parentId)?.name} - {c.name}</option>)}
+                    <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
+                    {filteredCategories.map(c => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{categories.find(p=>p.id === c.parentId)?.name} - {c.name}</option>)}
                 </select>
             </div>
             <div className="relative">
                 <select id="account" value={accountId} onChange={e => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
-                    <option value="">Vyberte účet</option>
-                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte účet</option>
+                    {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                 </select>
             </div>
             <div className="flex justify-end space-x-2 pt-4">
@@ -113,6 +113,44 @@ const Transactions: React.FC = () => {
   const { transactions, deleteTransaction, categories, accounts } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  
+  const [filters, setFilters] = useState({
+    startDate: '',
+    endDate: '',
+    categoryId: '',
+    minAmount: '',
+    maxAmount: '',
+    type: '',
+  });
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      startDate: '',
+      endDate: '',
+      categoryId: '',
+      minAmount: '',
+      maxAmount: '',
+      type: '',
+    });
+  };
+
+  const filteredTransactions = useMemo(() => {
+    return [...transactions]
+      .filter(t => {
+        if (filters.startDate && new Date(t.date) < new Date(filters.startDate)) return false;
+        if (filters.endDate && new Date(t.date) > new Date(filters.endDate)) return false;
+        if (filters.categoryId && t.categoryId !== filters.categoryId) return false;
+        if (filters.minAmount && t.amount < parseFloat(filters.minAmount)) return false;
+        if (filters.maxAmount && t.amount > parseFloat(filters.maxAmount)) return false;
+        if (filters.type && t.type !== filters.type) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [transactions, filters]);
   
   const sortedTransactions = useMemo(() => 
     [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -164,6 +202,56 @@ const Transactions: React.FC = () => {
         </button>
       </div>
 
+      <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50">
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+          
+          {/* Skupina: Dátum */}
+          <div className="flex-grow md:flex-grow-0">
+            <label className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Rozsah dátumov</label>
+            <div className="flex items-center gap-2">
+              <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0" placeholder="Od" />
+              <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">-</span>
+              <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0" placeholder="Do" />
+            </div>
+          </div>
+
+          {/* Skupina: Kategória a Typ */}
+          <div className="flex-grow md:flex-grow-0">
+            <label htmlFor="category-filter" className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Kategória</label>
+            <select id="category-filter" name="categoryId" value={filters.categoryId} onChange={handleFilterChange} className="w-full md:w-48 bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0">
+                <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky kategórie</option>
+                {categories.filter(c => c.parentId).sort((a,b) => a.name.localeCompare(b.name)).map(c => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{getCategoryDisplayName(c.id)}</option>)}
+            </select>
+          </div>
+          
+          <div className="flex-grow md:flex-grow-0">
+            <label htmlFor="type-filter" className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Typ</label>
+            <select id="type-filter" name="type" value={filters.type} onChange={handleFilterChange} className="w-full md:w-32 bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0">
+                <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky typy</option>
+                <option value="income" className="dark:bg-dark-surfaceContainerHigh">Príjem</option>
+                <option value="expense" className="dark:bg-dark-surfaceContainerHigh">Výdavok</option>
+            </select>
+          </div>
+
+          {/* Skupina: Suma */}
+          <div className="flex-grow md:flex-grow-0">
+            <label className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Suma</label>
+            <div className="flex items-center gap-2">
+              <input type="number" name="minAmount" value={filters.minAmount} onChange={handleFilterChange} placeholder="Min" className="w-24 bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0" />
+              <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">-</span>
+              <input type="number" name="maxAmount" value={filters.maxAmount} onChange={handleFilterChange} placeholder="Max" className="w-24 bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0" />
+            </div>
+          </div>
+
+          {/* Tlačidlo na reset */}
+          <div className="flex-grow flex items-end justify-end">
+            <button onClick={resetFilters} className="px-4 py-2 text-sm font-medium text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 self-end">
+                Zrušiť filtre
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 sm:p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -178,7 +266,7 @@ const Transactions: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedTransactions.map(t => (
+              {filteredTransactions.map(t => (
                 <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
                   <td className="py-4 px-4">{new Date(t.date).toLocaleDateString('sk-SK')}</td>
                   <td className="py-4 px-4">{t.description}</td>

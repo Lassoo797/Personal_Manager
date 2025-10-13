@@ -10,11 +10,18 @@ const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const [editingName, setEditingName] = useState('');
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0";
 
-    const handleAddProfile = (e: React.FormEvent) => {
+    const handleAddProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newProfileName.trim()) {
-            addBudgetProfile(newProfileName.trim());
-            setNewProfileName('');
+            try {
+                await addBudgetProfile(newProfileName.trim());
+                setNewProfileName('');
+                alert(`Profil "${newProfileName.trim()}" bol úspešne vytvorený.`);
+                onClose(); // Zavrie modálne okno po úspešnom pridaní
+            } catch (error) {
+                console.error("Failed to add profile:", error);
+                alert("Nepodarilo sa vytvoriť profil. Skúste to prosím znova.");
+            }
         }
     };
 

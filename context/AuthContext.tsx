@@ -17,6 +17,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string>(pb.authStore.token);
 
   useEffect(() => {
+    // This effect runs once on component mount
+    const checkAuth = async () => {
+      // Check if the token is valid
+      if (pb.authStore.isValid) {
+        try {
+          // Verify with the server
+          await pb.collection('users').authRefresh();
+        } catch (_) {
+          // If refresh fails, clear the auth store
+          pb.authStore.clear();
+        }
+      }
+    };
+
+    checkAuth();
+
     const unsubscribe = pb.authStore.onChange((token, model) => {
       setToken(token);
       setUser(model);

@@ -8,13 +8,13 @@ WORKDIR /app
 RUN apk update && apk add git
 
 # Skopírujeme package.json, aby sme mohli nainštalovať závislosti
-COPY package.json ./
+COPY src/package.json ./
 
 # Nainštalujeme závislosti s príznakom pre vyriešenie konfliktov
 RUN npm install --legacy-peer-deps
 
 # Skopírujeme zvyšok kódu aplikácie
-COPY . .
+COPY src/ .
 
 # Sprístupníme port 3000, na ktorom beží aplikácia
 EXPOSE 3000
