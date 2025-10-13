@@ -10,22 +10,22 @@ const Dashboard: React.FC = () => {
   const { accounts, transactions, categories, budgets, getAccountBalance } = useAppContext();
   const { theme } = useTheme();
 
-  const { currentMonthName, previousMonthName } = useMemo(() => {
+  const { currentMonthName, previousMonthLabel } = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonthIndex = now.getMonth();
 
     const currentName = now.toLocaleString('sk-SK', { month: 'short' });
 
-    let previousName;
+    let previousLabel;
     if (currentMonthIndex === 0) { // If it's January
-        previousName = (currentYear - 1).toString();
+        previousLabel = (currentYear - 1).toString();
     } else {
         const prevMonthDate = new Date(currentYear, currentMonthIndex - 1, 1);
-        previousName = prevMonthDate.toLocaleString('sk-SK', { month: 'short' });
+        previousLabel = prevMonthDate.toLocaleString('sk-SK', { month: 'short' });
     }
     
-    return { currentMonthName: currentName, previousMonthName: previousName };
+    return { currentMonthName: currentName, previousMonthLabel: previousLabel };
   }, []);
 
   const totalBalance = useMemo(() => {
@@ -117,7 +117,7 @@ const Dashboard: React.FC = () => {
     [transactions]
   );
   
-  const cashFlowData = useMemo(() => {
+      const { chartData, months, currentMonthIndex } = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-11
@@ -191,7 +191,7 @@ const Dashboard: React.FC = () => {
         chartData[i + 1].forecast = runningForecastBalance;
     }
     
-    return chartData;
+    return { chartData, months, currentMonthIndex: currentMonth };
 }, [accounts, transactions, budgets, categories]);
 
 
@@ -271,13 +271,28 @@ const Dashboard: React.FC = () => {
       <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
         <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface">Vývoj zostatku na účtoch (Tento rok)</h2>
         <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={cashFlowData}>
+            <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#43474E' : '#C3C7CF'} />
             <XAxis dataKey="name" tick={{ fill: tickColor, fontSize: 12 }} axisLine={{ stroke: tickColor }} tickLine={{ stroke: tickColor }} />
             <YAxis tick={{ fill: tickColor, fontSize: 12 }} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k €`} axisLine={{ stroke: tickColor }} tickLine={{ stroke: tickColor }} />
-            <Tooltip {...tooltipStyles} formatter={(value: number) => value.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })} />
+            <Tooltip 
+                {...tooltipStyles} 
+                formatter={(value: number, name: string, props) => {
+                    const hoveredMonthIndex = months.indexOf(props.payload.name);
+                    
+                    if (name === 'Prognóza' && (hoveredMonthIndex === -1 || hoveredMonthIndex < currentMonthIndex)) {
+                        return null;
+                    }
+
+                    const formattedValue = typeof value === 'number'
+                        ? value.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })
+                        : value;
+                    
+                    return [formattedValue, name];
+                }}
+            />
             <Legend wrapperStyle={{ color: tickColor, fontSize: 14 }} />
-            <ReferenceArea x1={previousMonthName} x2={currentMonthName} stroke="none" fill={theme === 'dark' ? 'rgba(255, 180, 171, 0.1)' : 'rgba(186, 26, 26, 0.1)'} />
+            <ReferenceArea x1={previousMonthLabel} x2={currentMonthName} stroke="none" fill={theme === 'dark' ? 'rgba(255, 180, 171, 0.1)' : 'rgba(186, 26, 26, 0.1)'} />
             <Line type="monotone" dataKey="plan" stroke="#ffc658" strokeWidth={2} name="Plán" strokeDasharray="5 5" dot={false} connectNulls />
             <Line type="monotone" dataKey="forecast" stroke={theme === 'dark' ? '#55DDA2' : '#00875A'} strokeWidth={2} name="Prognóza" strokeDasharray="3 7" dot={false} connectNulls />
             <Line type="monotone" dataKey="actual" stroke={theme === 'dark' ? '#9FCAFF' : '#0061A4'} strokeWidth={3} name="Skutočný stav" connectNulls={false} dot={{ r: 4 }} />

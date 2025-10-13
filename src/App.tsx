@@ -11,6 +11,7 @@ import MasterDashboard from './pages/MasterDashboard';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
+import NotificationsContainer from './components/Notifications';
 
 const App: React.FC = () => {
   return (
@@ -21,30 +22,52 @@ const App: React.FC = () => {
 };
 
 const AppContent: React.FC = () => {
-  const { currentProfileId } = useAppContext();
+  const { currentProfileId, isLoading, error, budgetProfiles } = useAppContext();
   const { user } = useAuth();
+
+  const renderContent = () => {
+    if (isLoading) {
+      return <div className="text-center py-20">Načítavam dáta...</div>;
+    }
+
+    if (error) {
+      return <div className="text-center py-20 text-red-500">Chyba: {error.message}</div>;
+    }
+
+    // After loading and no errors, check for profiles
+    if (user && budgetProfiles.length === 0) {
+        return <MasterDashboard />; // MasterDashboard handles the welcome message
+    }
+
+    return (
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<ProtectedRoute />}>
+          {currentProfileId ? (
+            <>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/transactions" element={<Transactions />} />
+              <Route path="/accounts" element={<Accounts />} />
+              <Route path="/budgets" element={<Budgets />} />
+              <Route path="/analysis" element={<Analysis />} />
+            </>
+          ) : (
+            // If the user is logged in but has no profile selected (or exists)
+            // This can happen if they have profiles but haven't selected one yet.
+            <Route path="/" element={<MasterDashboard />} />
+          )}
+        </Route>
+      </Routes>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-light-surface dark:bg-dark-surface text-light-onSurface dark:text-dark-onSurface">
       {user && <Header />}
       <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route element={<ProtectedRoute />}>
-            {currentProfileId ? (
-              <>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/transactions" element={<Transactions />} />
-                <Route path="/accounts" element={<Accounts />} />
-                <Route path="/budgets" element={<Budgets />} />
-                <Route path="/analysis" element={<Analysis />} />
-              </>
-            ) : (
-              <Route path="/" element={<MasterDashboard />} />
-            )}
-          </Route>
-        </Routes>
+        {renderContent()}
       </main>
+      <NotificationsContainer />
     </div>
   );
 };

@@ -41,3 +41,9 @@ export interface Budget {
   month: string; // YYYY-MM
   profileId: string;
 }
+
+export interface Notification {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}

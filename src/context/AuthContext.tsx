@@ -1,12 +1,12 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import pb from '../lib/pocketbase';
-import { RecordModel } from 'pocketbase';
+import { RecordModel, RecordAuthResponse } from 'pocketbase';
 
 interface AuthContextType {
   user: RecordModel | null;
   token: string;
-  login: (email: string, pass: string) => Promise<any>;
+  login: (email: string, pass: string) => Promise<RecordAuthResponse>;
   logout: () => void;
 }
 

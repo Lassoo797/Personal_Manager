@@ -77,6 +77,7 @@ const Accounts: React.FC = () => {
   const { accounts, deleteAccount, getAccountBalance } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
 
   const openAddModal = () => {
     setEditingAccount(null);
@@ -102,7 +103,7 @@ const Accounts: React.FC = () => {
           Pridať účet
         </button>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {accounts.map(account => (
           <div key={account.id} className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex flex-col justify-between">
@@ -114,7 +115,14 @@ const Accounts: React.FC = () => {
             </div>
             <div className="flex justify-end space-x-1 mt-4">
               <button aria-label={`Upraviť účet ${account.name}`} onClick={() => openEditModal(account)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-              <button aria-label={`Zmazať účet ${account.name}`} onClick={() => window.confirm('Naozaj chcete zmazať tento účet?') && deleteAccount(account.id)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+              <button aria-label={`Zmazať účet ${account.name}`} onClick={() => setConfirmModalState({
+                isOpen: true,
+                message: `Naozaj chcete zmazať účet "${account.name}"?`,
+                onConfirm: () => {
+                  deleteAccount(account.id);
+                  setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                }
+              })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
             </div>
           </div>
         ))}
@@ -128,7 +136,35 @@ const Accounts: React.FC = () => {
           onCancel={closeModal} 
         />
       </Modal>
+
+      <ConfirmModal 
+        isOpen={confirmModalState.isOpen} 
+        onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
+        message={confirmModalState.message}
+        onConfirm={confirmModalState.onConfirm}
+      />
     </div>
+  );
+};
+
+const ConfirmModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  message: string;
+  onConfirm: () => void;
+}> = ({ isOpen, onClose, message, onConfirm }) => {
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie zmazania">
+      <div className="space-y-4">
+        <p>{message}</p>
+        <div className="flex justify-end space-x-2 pt-4">
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+          <button type="button" onClick={onConfirm} className="px-6 py-2.5 bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError rounded-full hover:shadow-lg font-medium transition-shadow">Zmazať</button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 

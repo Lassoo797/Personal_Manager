@@ -1,14 +1,14 @@
-import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
+import { RecordModel } from 'pocketbase';import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import pb from '../lib/pocketbase';
-import type { Account, Category, Transaction, Budget, BudgetProfile, TransactionType } from '../types';
+import type { Account, Category, Transaction, Budget, BudgetProfile, TransactionType, Notification } from '../types';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
-const mapPbToProfile = (r: any): BudgetProfile => ({ id: r.id, name: r.name });
-const mapPbToAccount = (r: any): Account => ({ id: r.id, name: r.name, initialBalance: r.initialBalance, profileId: r.profile, currency: r.currency, type: r.type });
-const mapPbToCategory = (r: any): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, profileId: r.profile, order: r.order });
-const mapPbToTransaction = (r: any): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category, accountId: r.account, profileId: r.profile });
-const mapPbToBudget = (r: any): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, profileId: r.profile });
+const mapPbToProfile = (r: RecordModel): BudgetProfile => ({ id: r.id, name: r.name });
+const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, initialBalance: r.initialBalance, profileId: r.profile, currency: r.currency, type: r.type });
+const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, profileId: r.profile, order: r.order });
+const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category, accountId: r.account, profileId: r.profile });
+const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, profileId: r.profile });
 
 // PocketBase options to prevent autocancellation during batch operations
 const noAutoCancel = { '$autoCancel': false };
@@ -41,7 +41,7 @@ interface AppContextType {
   // Actions
   addAccount: (account: Omit<Account, 'id' | 'profileId'>) => Promise<void>;
   updateAccount: (account: Partial<Account> & Pick<Account, 'id'>) => Promise<void>;
-  deleteAccount: (id: string) => Promise<void>;
+  deleteAccount: (id: string) => Promise<string | void>;
   getAccountBalance: (accountId: string) => number;
   
   addCategory: (category: Omit<Category, 'id' | 'profileId' | 'order'>) => Promise<Category | null>;
@@ -61,12 +61,19 @@ interface AppContextType {
   publishBudgetForYear: (categoryId: string, month: string, forAllSubcategories?: boolean) => Promise<void>;
   publishFullBudgetForYear: (month: string) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
+  
+  // Notifications
+  notifications: Notification[];
+  addNotification: (message: string, type: 'success' | 'error' | 'info') => void;
+  removeNotification: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [isGlobalLoading, setIsGlobalLoading] = useState(true);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   const [budgetProfiles, setBudgetProfiles] = useState<BudgetProfile[]>([]);
@@ -76,6 +83,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // States for all profiles data
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
@@ -83,83 +91,136 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [allBudgets, setAllBudgets] = useState<Budget[]>([]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
 
-  // Efekt na načítanie všetkých dát po určení platného profilu
+  // Combined loading state
   useEffect(() => {
-    const loadAppData = async () => {
-      setIsLoading(true);
+    setIsLoading(isGlobalLoading || isProfileLoading);
+  }, [isGlobalLoading, isProfileLoading]);
+
+  // Effect to load global data once on startup
+  useEffect(() => {
+    const loadGlobalData = async () => {
+      setIsGlobalLoading(true);
       setError(null);
-      
       try {
-        // Step 1: Fetch all profiles and global data
         const [profiles, allAccs, allTrans, allBuds, allCats] = await Promise.all([
-            pb.collection('profiles').getFullList(),
-            pb.collection('accounts').getFullList(),
-            pb.collection('transactions').getFullList(),
-            pb.collection('budgets').getFullList(),
-            pb.collection('categories').getFullList(),
-        ]);
+          pb.collection('profiles').getFullList(),
+          pb.collection('accounts').getFullList(),
+          pb.collection('transactions').getFullList(),
+          pb.collection('budgets').getFullList(),
+          pb.collection('categories').getFullList(),
+      ]);
 
         const mappedProfiles = profiles.map(mapPbToProfile);
         setBudgetProfiles(mappedProfiles);
-
         setAllAccounts(allAccs.map(mapPbToAccount));
         setAllTransactions(allTrans.map(mapPbToTransaction));
         setAllBudgets(allBuds.map(mapPbToBudget));
         setAllCategories(allCats.map(mapPbToCategory));
 
-        // Step 2: Check if the stored profile ID is invalid (exists but is not in the fetched list)
-        let activeProfileId = currentProfileId;
-        const isInvalidStoredProfile = activeProfileId && !mappedProfiles.some(p => p.id === activeProfileId);
-
+        // Auto-select profile logic after global data is loaded
+        const isInvalidStoredProfile = currentProfileId && !mappedProfiles.some(p => p.id === currentProfileId);
         if (isInvalidStoredProfile) {
-            // The stored ID is stale/invalid, so switch to the first available profile
-            activeProfileId = mappedProfiles.length > 0 ? mappedProfiles[0].id : null;
-            setCurrentProfileId(activeProfileId);
+          setCurrentProfileId(mappedProfiles.length > 0 ? mappedProfiles[0].id : null);
         }
-        // If currentProfileId was initially null, we let it be, allowing MasterDashboard to be shown.
-
-        // Step 3: Load data for the active profile (if one is selected)
-        if (activeProfileId) {
-            const filter = pb.filter('profile = {:profileId}', { profileId: activeProfileId });
-            const [accs, cats, trans, buds] = await Promise.all([
-              pb.collection('accounts').getFullList({ filter }),
-              pb.collection('categories').getFullList({ filter }),
-              pb.collection('transactions').getFullList({ filter }),
-              pb.collection('budgets').getFullList({ filter }),
-            ]);
-            
-            setAccounts(accs.map(mapPbToAccount));
-            setCategories(cats.map(mapPbToCategory));
-            setTransactions(trans.map(mapPbToTransaction));
-            setBudgets(buds.map(mapPbToBudget));
-        } else {
-            // If no profile is selected, clear profile-specific data
-            setAccounts([]);
-            setCategories([]);
-            setTransactions([]);
-            setBudgets([]);
-        }
-
       } catch (e: any) {
         if (e.name !== 'AbortError' && !e.isAbort) {
-            setError(e);
-            console.error("Chyba pri načítavaní dát:", e);
+          setError(e);
+          console.error("Chyba pri načítavaní globálnych dát:", e);
         }
       } finally {
-        setIsLoading(false);
+        setIsGlobalLoading(false);
+      }
+    };
+    loadGlobalData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once
+
+  // Effect to load profile-specific data when profile changes
+  useEffect(() => {
+    const loadProfileData = async () => {
+      if (currentProfileId) {
+        setIsProfileLoading(true);
+        setError(null);
+        try {
+          const filter = pb.filter('profile = {:profileId}', { profileId: currentProfileId });
+          const [accs, cats, trans, buds] = await Promise.all([
+            pb.collection('accounts').getFullList({ filter }),
+            pb.collection('categories').getFullList({ filter }),
+            pb.collection('transactions').getFullList({ filter }),
+            pb.collection('budgets').getFullList({ filter }),
+          ]);
+          setAccounts(accs.map(mapPbToAccount));
+          setCategories(cats.map(mapPbToCategory));
+          setTransactions(trans.map(mapPbToTransaction));
+          setBudgets(buds.map(mapPbToBudget));
+        } catch (e: any) {
+          if (e.name !== 'AbortError' && !e.isAbort) {
+            setError(e);
+            console.error("Chyba pri načítavaní dát profilu:", e);
+          }
+        } finally {
+          setIsProfileLoading(false);
+        }
+      } else {
+        // If no profile is selected, clear profile-specific data
+        setAccounts([]);
+        setCategories([]);
+        setTransactions([]);
+        setBudgets([]);
       }
     };
 
-    loadAppData();
-    // Only re-run when the profile ID from storage/selection changes
+    // Don't load profile data until global data is ready
+    if (!isGlobalLoading) {
+      loadProfileData();
+    }
+  }, [currentProfileId, isGlobalLoading]);
+  
+  const loadAppData = useCallback(async () => {
+    // This function can be used to manually trigger a full reload of everything.
+     setIsGlobalLoading(true);
+     setError(null);
+     try {
+       const [profiles, allAccs, allTrans, allBuds, allCats] = await Promise.all([
+         pb.collection('profiles').getFullList(),
+         pb.collection('accounts').getFullList(),
+         pb.collection('transactions').getFullList(),
+         pb.collection('budgets').getFullList(),
+         pb.collection('categories').getFullList(),
+       ]);
+
+       const mappedProfiles = profiles.map(mapPbToProfile);
+       setBudgetProfiles(mappedProfiles);
+       setAllAccounts(allAccs.map(mapPbToAccount));
+       setAllTransactions(allTrans.map(mapPbToTransaction));
+       setAllBudgets(allBuds.map(mapPbToBudget));
+       setAllCategories(allCats.map(mapPbToCategory));
+
+       const isInvalidStoredProfile = currentProfileId && !mappedProfiles.some(p => p.id === currentProfileId);
+       if (isInvalidStoredProfile) {
+         setCurrentProfileId(mappedProfiles.length > 0 ? mappedProfiles[0].id : null);
+       }
+     } catch (e: any) {
+       if (e.name !== 'AbortError' && !e.isAbort) {
+         setError(e);
+         console.error("Chyba pri načítavaní globálnych dát:", e);
+       }
+     } finally {
+       setIsGlobalLoading(false);
+     }
   }, [currentProfileId, setCurrentProfileId]);
 
-  const refreshData = useCallback(async () => {
-    // This function will now re-trigger the main loader
-    const currentId = currentProfileId;
-    setCurrentProfileId(null); // Momentary change to trigger effect
-    setCurrentProfileId(currentId);
-  },[currentProfileId, setCurrentProfileId]);
+  const removeNotification = useCallback((id: string) => {
+    setNotifications(prev => prev.filter(n => n.id !== id));
+  }, []);
+
+  const addNotification = useCallback((message: string, type: 'success' | 'error' | 'info') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setNotifications(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      removeNotification(id);
+    }, 5000);
+  }, [removeNotification]);
 
 
 
@@ -181,12 +242,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const mapped = mapPbToProfile(newProfile);
     setBudgetProfiles(prev => [...prev, mapped]);
     setCurrentProfileId(mapped.id);
-  }, [setCurrentProfileId]);
+    addNotification(`Profil "${name}" bol úspešne vytvorený.`, 'success');
+  }, [setCurrentProfileId, addNotification]);
 
   const updateBudgetProfile = useCallback(async (id: string, name: string) => {
     const updated = await pb.collection('profiles').update(id, { name });
     setBudgetProfiles(prev => prev.map(p => p.id === id ? mapPbToProfile(updated) : p));
-  }, []);
+    addNotification(`Profil "${name}" bol aktualizovaný.`, 'success');
+  }, [addNotification]);
 
   const deleteBudgetProfile = useCallback(async (id: string) => {
     try {
@@ -225,10 +288,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setAllCategories(prev => prev.filter(c => c.profileId !== id));
       setAllTransactions(prev => prev.filter(t => t.profileId !== id));
       setAllBudgets(prev => prev.filter(b => b.profileId !== id));
+      addNotification('Profil a všetky jeho dáta boli zmazané.', 'success');
 
     } catch(e: any) {
         setError(e);
         console.error("Chyba pri mazaní profilu:", e);
+        addNotification('Chyba pri mazaní profilu.', 'error');
     } finally {
         setIsLoading(false);
         // We might need to refresh data if something went partially wrong
@@ -238,21 +303,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // If we deleted a background profile, the current view is fine.
         }
     }
-  }, [budgetProfiles, currentProfileId, setCurrentProfileId]);
+  }, [budgetProfiles, currentProfileId, setCurrentProfileId, addNotification]);
 
   // --- Data Management ---
   const addAccount = useCallback(async (account: Omit<Account, 'id' | 'profileId'>) => {
     if (!currentProfileId) return;
     const newAccount = await pb.collection('accounts').create({ ...account, profile: currentProfileId });
     setAccounts(prev => [...prev, mapPbToAccount(newAccount)]);
-  }, [currentProfileId]);
+    addNotification(`Účet "${account.name}" bol pridaný.`, 'success');
+  }, [currentProfileId, addNotification]);
 
   const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
-    const { id, name, currency, type } = accountToUpdate;
+    const { id, name, currency, type, initialBalance } = accountToUpdate;
     const payload: Partial<Account> = {};
     if (name) payload.name = name;
     if (currency) payload.currency = currency;
     if (type) payload.type = type;
+    if (initialBalance !== undefined) payload.initialBalance = initialBalance;
 
     if (Object.keys(payload).length === 0) return; // No fields to update
 
@@ -268,17 +335,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         acc.id === id ? { ...acc, ...payload } : acc
       )
     )
-  }, []);
+    addNotification(`Účet bol aktualizovaný.`, 'success');
+  }, [addNotification]);
 
-  const deleteAccount = useCallback(async (id: string) => {
+  const deleteAccount = useCallback(async (id: string): Promise<string | void> => {
     const hasTransactions = transactions.some(t => t.accountId === id);
     if (hasTransactions) {
-      alert('Nie je možné zmazať účet, ku ktorému sú priradené transakcie.');
-      return;
+      const message = 'Nie je možné zmazať účet, ku ktorému sú priradené transakcie.';
+      addNotification(message, 'error');
+      return message;
     }
     await pb.collection('accounts').delete(id);
     setAccounts(prev => prev.filter(a => a.id !== id));
-  }, [transactions]);
+    addNotification('Účet bol úspešne zmazaný.', 'success');
+  }, [transactions, addNotification]);
   
   const addCategory = useCallback(async (category: Omit<Category, 'id' | 'profileId' | 'order'>): Promise<Category | null> => {
     if (!currentProfileId) return null;
@@ -297,12 +367,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const newCategory = await pb.collection('categories').create(data);
       const mapped = mapPbToCategory(newCategory);
       setCategories(prev => [...prev, mapped]);
+      addNotification(`Kategória "${mapped.name}" bola vytvorená.`, 'success');
       return mapped;
-    } catch (e) {
+    } catch (e: any) {
+      setError(e);
+      addNotification('Nepodarilo sa vytvoriť kategóriu.', 'error');
       console.error("Nepodarilo sa vytvoriť kategóriu:", e);
       return null;
     }
-  }, [currentProfileId, categories]);
+  }, [currentProfileId, categories, addNotification]);
 
   const updateCategory = useCallback(async (updated: Category) => {
     const { id, profileId, ...data } = updated;
@@ -313,7 +386,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const newState = prev.map(c => c.id === id ? mapPbToCategory(updatedCategory) : c)
         return newState.sort((a, b) => a.order - b.order);
     });
-  }, []);
+    addNotification(`Kategória "${updated.name}" bola aktualizovaná.`, 'success');
+  }, [addNotification]);
 
   const updateCategoryOrder = useCallback(async (updatedCategories: Category[]) => {
     try {
@@ -330,9 +404,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch (e) {
         console.error("Failed to update category order:", e);
         // If update fails, refetch to ensure consistency
-        refreshData();
+        loadAppData();
     }
-  }, [refreshData]);
+  }, [loadAppData]);
 
   const deleteCategory = useCallback(async (id: string) => {
     // Delete related budgets first
@@ -344,7 +418,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Update local state
     setCategories(prev => prev.filter(c => c.id !== id));
     setBudgets(prev => prev.filter(b => b.categoryId !== id));
-  }, []);
+    addNotification('Kategória bola zmazaná.', 'success');
+  }, [addNotification]);
 
   const deleteCategoryAndChildren = useCallback(async (id: string) => {
     const children = categories.filter(c => c.parentId === id);
@@ -378,9 +453,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // 4. Delete the category (which also handles budgets)
     await deleteCategory(categoryIdToDelete);
+    addNotification('Transakcie boli presunuté a kategória bola zmazaná.', 'success');
     
-    // No refreshData() needed as we updated the state manually
-  }, [deleteCategory]);
+    // No loadAppData() needed as we updated the state manually
+  }, [deleteCategory, addNotification]);
 
   const moveCategory = useCallback(async (categoryId: string, direction: 'up' | 'down') => {
     const category = categories.find(c => c.id === categoryId);
@@ -415,9 +491,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
     } catch (e) {
       console.error(`Failed to move category ${direction}:`, e);
-      refreshData();
+      loadAppData();
     }
-  }, [categories, refreshData]);
+  }, [categories, loadAppData]);
   
   const moveCategoryUp = useCallback((categoryId: string) => moveCategory(categoryId, 'up'), [moveCategory]);
   const moveCategoryDown = useCallback((categoryId: string) => moveCategory(categoryId, 'down'), [moveCategory]);
@@ -432,7 +508,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     const newTransaction = await pb.collection('transactions').create(data);
     setTransactions(prev => [...prev, mapPbToTransaction(newTransaction)]);
-  }, [currentProfileId]);
+    addNotification('Transakcia bola pridaná.', 'success');
+  }, [currentProfileId, addNotification]);
 
   const updateTransaction = useCallback(async (updated: Transaction) => {
     const { id, profileId, ...data } = updated;
@@ -444,12 +521,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
      };
     const updatedTransaction = await pb.collection('transactions').update(id, payload);
     setTransactions(prev => prev.map(t => t.id === id ? mapPbToTransaction(updatedTransaction) : t));
-  }, []);
+    addNotification('Transakcia bola aktualizovaná.', 'success');
+  }, [addNotification]);
 
   const deleteTransaction = useCallback(async (id: string) => {
     await pb.collection('transactions').delete(id);
     setTransactions(prev => prev.filter(t => t.id !== id));
-  }, []);
+    addNotification('Transakcia bola zmazaná.', 'success');
+  }, [addNotification]);
 
   const addOrUpdateBudget = useCallback(async (budget: Omit<Budget, 'id' | 'profileId'>) => {
     if (!currentProfileId) return;
@@ -471,13 +550,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setBudgets(prev => [...prev, mapped]);
     setAllBudgets(prev => [...prev, mapped]);
   }
-  }, [currentProfileId, budgets]);
+  addNotification('Rozpočet bol uložený.', 'success');
+  }, [currentProfileId, budgets, addNotification]);
   
   const deleteBudget = useCallback(async(id:string) => {
     await pb.collection('budgets').delete(id);
     setBudgets(prev => prev.filter(b => b.id !== id));
     setAllBudgets(prev => prev.filter(b => b.id !== id));
-  }, []);
+    addNotification('Rozpočet bol zmazaný.', 'success');
+  }, [addNotification]);
 
   const publishBudgetForYear = useCallback(async (baseCategoryId: string, baseMonth: string, forAllSubcategories: boolean = false) => {
     if (!currentProfileId) return;
@@ -535,8 +616,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
       return [...prevWithoutUpdated, ...newBudgets];
     });
+    addNotification('Rozpočet bol publikovaný pre nasledujúce mesiace.', 'success');
 
-  }, [currentProfileId, budgets, categories]);
+  }, [currentProfileId, budgets, categories, addNotification]);
 
   const publishFullBudgetForYear = useCallback(async (baseMonth: string) => {
     if (!currentProfileId) return;
@@ -584,14 +666,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
         return [...prevWithoutUpdated, ...created.map(mapPbToBudget)];
       });
+      addNotification('Celý rozpočet bol publikovaný pre nasledujúce mesiace.', 'success');
 
     } catch (e) {
       console.error("Chyba pri hromadnom publikovaní rozpočtu:", e);
+      addNotification('Nastala chyba pri hromadnom publikovaní.', 'error');
       setError(e as Error);
     } finally {
       setIsLoading(false);
     }
-  }, [currentProfileId, categories, budgets]);
+  }, [currentProfileId, categories, budgets, addNotification]);
 
   const value = useMemo(() => ({
     isLoading, error,
@@ -601,13 +685,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
     allAccounts, allTransactions, allBudgets, allCategories,
+    loadAppData, // Expose the loader function
+    notifications, addNotification, removeNotification,
   }), [
     isLoading, error,
     budgetProfiles, currentProfileId, setCurrentProfileId, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile,
     accounts, addAccount, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
-    budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear
+    budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
+    allAccounts, allTransactions, allBudgets, allCategories,
+    loadAppData,
+    notifications, addNotification, removeNotification
   ]);
 
   return (

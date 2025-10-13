@@ -199,6 +199,7 @@ const Budgets: React.FC = () => {
     // State for deletion modal
     const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Zmazať' });
 
     const handleSaveSuccess = (newCategory: Category) => {
         // Ak bola pridaná nová skupina (nemá parentId), rozbaľ ju
@@ -285,7 +286,12 @@ const Budgets: React.FC = () => {
             const hasTransactionsInChildren = transactions.some(t => childIds.includes(t.categoryId));
 
             if (hasTransactionsInChildren) {
-                alert(`Nie je možné zmazať skupinu "${category.name}", pretože jej podkategórie obsahujú transakcie. Najprv presuňte alebo zmažte transakcie z podkategórií.`);
+                setConfirmModalState({
+                    isOpen: true,
+                    message: `Nie je možné zmazať skupinu "${category.name}", pretože jej podkategórie obsahujú transakcie. Najprv presuňte alebo zmažte transakcie z podkategórií.`,
+                    onConfirm: () => setConfirmModalState({ ...confirmModalState, isOpen: false }),
+                    confirmText: 'Rozumiem'
+                });
                 return;
             }
             
@@ -293,18 +299,29 @@ const Budgets: React.FC = () => {
                 ? `Naozaj chcete zmazať skupinu "${category.name}" a všetky jej podkategórie (${subcategories.map(s => s.name).join(', ')})?`
                 : `Naozaj chcete zmazať prázdnu skupinu "${category.name}"?`;
 
-            if (window.confirm(confirmationMessage)) {
-                deleteCategoryAndChildren(category.id);
-            }
+            setConfirmModalState({
+                isOpen: true,
+                message: confirmationMessage,
+                onConfirm: () => {
+                    deleteCategoryAndChildren(category.id);
+                    setConfirmModalState({ ...confirmModalState, isOpen: false });
+                }
+            });
+
         } else { // It's a subcategory
             const hasTransactions = transactions.some(t => t.categoryId === category.id);
             if (hasTransactions) {
                 setCategoryToDelete(category);
                 setIsReassignModalOpen(true);
             } else {
-                if (window.confirm(`Naozaj chcete zmazať kategóriu "${category.name}"?`)) {
-                    deleteCategory(category.id);
-                }
+                setConfirmModalState({
+                    isOpen: true,
+                    message: `Naozaj chcete zmazať kategóriu "${category.name}"?`,
+                    onConfirm: () => {
+                        deleteCategory(category.id);
+                        setConfirmModalState({ ...confirmModalState, isOpen: false });
+                    }
+                });
             }
         }
     };
@@ -391,9 +408,15 @@ const Budgets: React.FC = () => {
                             </button>
                             <button 
                                 onClick={() => {
-                                    if (window.confirm(`Naozaj chcete nastaviť aktuálny plán pre všetky kategórie a podkategórie na všetky nasledujúce mesiace do konca roka?`)) {
-                                        publishFullBudgetForYear(currentMonth);
-                                    }
+                                    setConfirmModalState({
+                                        isOpen: true,
+                                        message: `Naozaj chcete nastaviť aktuálny plán pre všetky kategórie a podkategórie na všetky nasledujúce mesiace do konca roka?`,
+                                        onConfirm: () => {
+                                            publishFullBudgetForYear(currentMonth);
+                                            setConfirmModalState({ ...confirmModalState, isOpen: false });
+                                        },
+                                        confirmText: 'Nastaviť'
+                                    });
                                 }}
                                 className="flex items-center gap-2 px-4 py-2 bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
                             >
@@ -554,6 +577,13 @@ const Budgets: React.FC = () => {
                     category={categoryToDelete} 
                     reassignAnddeleteCategory={reassignAnddeleteCategory}
                 />
+                <ConfirmModal 
+                    isOpen={confirmModalState.isOpen} 
+                    onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
+                    message={confirmModalState.message}
+                    onConfirm={confirmModalState.onConfirm}
+                    confirmText={confirmModalState.confirmText}
+                />
             </div>
         
     );
@@ -573,12 +603,13 @@ interface CategoryGroupProps {
     isExpanded: boolean;
     toggleExpansion: () => void;
     isDragging: boolean;
+    setConfirmModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>>;
 }
 
 const CategoryGroup: React.FC<CategoryGroupProps> = ({ 
     parent, parentIndex, siblingsCount, currentMonth, getActualAmount, onDeleteRequest, 
     onAddSubcategory, isAddingSubcategory, onCancelAddSubcategory, onSaveSubcategorySuccess,
-    isExpanded, toggleExpansion, isDragging 
+    isExpanded, toggleExpansion, isDragging, setConfirmModalState 
 }) => {
     const { categories, budgets, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
@@ -690,9 +721,15 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                                 </button>
                                 <button 
                                     onClick={() => {
-                                        if (window.confirm(`Naozaj chcete nastaviť aktuálny plán pre skupinu "${parent.name}" a všetky jej podkategórie na všetky nasledujúce mesiace do konca roka?`)) {
-                                            publishBudgetForYear(parent.id, currentMonth, true);
-                                        }
+                                        setConfirmModalState({
+                                            isOpen: true,
+                                            message: `Naozaj chcete nastaviť aktuálny plán pre skupinu "${parent.name}" a všetky jej podkategórie na všetky nasledujúce mesiace do konca roka?`,
+                                            onConfirm: () => {
+                                                publishBudgetForYear(parent.id, currentMonth, true);
+                                                setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                            },
+                                            confirmText: 'Nastaviť'
+                                        });
                                     }}
                                     className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5"
                                 >
@@ -753,7 +790,8 @@ const SubcategoryItem: React.FC<{
     getActualAmount: (id: string) => number;
     onDeleteRequest: (e: React.MouseEvent, cat: Category) => void;
     getBarColor: (ratio: number, type: TransactionType) => string;
-}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onDeleteRequest, getBarColor }) => {
+    setConfirmModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>>;
+}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onDeleteRequest, getBarColor, setConfirmModalState }) => {
     const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -855,9 +893,15 @@ const SubcategoryItem: React.FC<{
                             </button>
                              <button 
                                 onClick={() => {
-                                    if (window.confirm(`Naozaj chcete nastaviť aktuálny plán pre kategóriu "${category.name}" na všetky nasledujúce mesiace do konca roka?`)) {
-                                        publishBudgetForYear(category.id, currentMonth, false);
-                                    }
+                                    setConfirmModalState({
+                                        isOpen: true,
+                                        message: `Naozaj chcete nastaviť aktuálny plán pre kategóriu "${category.name}" na všetky nasledujúce mesiace do konca roka?`,
+                                        onConfirm: () => {
+                                            publishBudgetForYear(category.id, currentMonth, false);
+                                            setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                        },
+                                        confirmText: 'Nastaviť'
+                                    });
                                 }}
                                 className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5"
                             >
@@ -879,6 +923,30 @@ const SubcategoryItem: React.FC<{
         </div>
     );
 }
+
+const ConfirmModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    message: string;
+    onConfirm: () => void;
+    confirmText?: string;
+}> = ({ isOpen, onClose, message, onConfirm, confirmText = 'Zmazať' }) => {
+    if (!isOpen) return null;
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie">
+            <div className="space-y-4">
+                <p className="text-light-onSurface dark:text-dark-onSurface">{message}</p>
+                <div className="flex justify-end space-x-2 pt-4">
+                    <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+                    <button type="button" onClick={onConfirm} className={`px-6 py-2.5 rounded-full hover:shadow-lg font-medium transition-shadow ${confirmText === 'Zmazať' || confirmText === 'Rozumiem' ? 'bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError' : 'bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary'}`}>
+                        {confirmText}
+                    </button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
 
 const ReassignAndDeleteModal: React.FC<{ 
     isOpen: boolean; 
@@ -904,7 +972,11 @@ const ReassignAndDeleteModal: React.FC<{
     };
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!targetCategoryId) { alert('Vyberte cieľovú kategóriu.'); return; }
+        if (!targetCategoryId) { 
+            // This is a safeguard, the button should be disabled.
+            // But if it happens, we can show a more integrated error message.
+            return; 
+        }
         reassignAnddeleteCategory(category.id, targetCategoryId);
         onClose();
     };

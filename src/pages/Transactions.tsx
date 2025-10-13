@@ -12,6 +12,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     const [amount, setAmount] = useState<number | string>('');
     const [categoryId, setCategoryId] = useState('');
     const [accountId, setAccountId] = useState('');
+    const [error, setError] = useState<string | null>(null);
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
 
@@ -46,9 +47,10 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!date || !description || !amount || !categoryId || !accountId) {
-            alert('Prosím, vyplňte všetky polia.');
+            setError('Prosím, vyplňte všetky polia.');
             return;
         }
+        setError(null);
 
         const transactionData = {
             date,
@@ -100,6 +102,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                 </select>
             </div>
+            {error && <p className="text-sm text-light-error dark:text-dark-error">{error}</p>}
             <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={onCancel} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
                 <button type="submit" className="px-6 py-2.5 bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary rounded-full hover:shadow-lg font-medium transition-shadow">Uložiť</button>
@@ -113,6 +116,7 @@ const Transactions: React.FC = () => {
   const { transactions, deleteTransaction, categories, accounts } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
   
   const [filters, setFilters] = useState({
     startDate: '',
@@ -151,11 +155,6 @@ const Transactions: React.FC = () => {
       })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, filters]);
-  
-  const sortedTransactions = useMemo(() => 
-    [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [transactions]
-  );
 
   const categoryMap = useMemo(() => 
     new Map(categories.map(c => [c.id, c])), 
@@ -278,7 +277,14 @@ const Transactions: React.FC = () => {
                   <td className="py-4 px-4">
                     <div className="flex items-center space-x-1">
                         <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"><PencilIcon /></button>
-                        <button aria-label="Zmazať transakciu" onClick={() => window.confirm('Naozaj chcete zmazať túto transakciu?') && deleteTransaction(t.id)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                        <button aria-label="Zmazať transakciu" onClick={() => setConfirmModalState({
+                          isOpen: true,
+                          message: `Naozaj chcete zmazať túto transakciu?`,
+                          onConfirm: () => {
+                            deleteTransaction(t.id);
+                            setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                          }
+                        })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
                     </div>
                   </td>
                 </tr>
@@ -291,7 +297,35 @@ const Transactions: React.FC = () => {
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingTransaction ? "Upraviť transakciu" : "Pridať transakciu"}>
         <TransactionForm transaction={editingTransaction} onSave={closeModal} onCancel={closeModal} />
       </Modal>
+      
+      <ConfirmModal 
+        isOpen={confirmModalState.isOpen} 
+        onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
+        message={confirmModalState.message}
+        onConfirm={confirmModalState.onConfirm}
+      />
     </div>
+  );
+};
+
+const ConfirmModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  message: string;
+  onConfirm: () => void;
+}> = ({ isOpen, onClose, message, onConfirm }) => {
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie zmazania">
+      <div className="space-y-4">
+        <p>{message}</p>
+        <div className="flex justify-end space-x-2 pt-4">
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+          <button type="button" onClick={onConfirm} className="px-6 py-2.5 bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError rounded-full hover:shadow-lg font-medium transition-shadow">Zmazať</button>
+        </div>
+      </div>
+    </Modal>
   );
 };
 
