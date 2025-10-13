@@ -7,14 +7,20 @@ WORKDIR /app
 # Nainštalujeme Git
 RUN apk update && apk add git
 
-# Skopírujeme package.json, aby sme mohli nainštalovať závislosti
-COPY src/package.json ./
+# Skopírujeme package.json a package-lock.json z koreňového adresára kontextu
+# Je dobré kopírovať aj lock súbor pre konzistentné inštalácie
+COPY package*.json ./
 
-# Nainštalujeme závislosti s príznakom pre vyriešenie konfliktov
+# Nainštalujeme závislosti
 RUN npm install --legacy-peer-deps
 
-# Skopírujeme zvyšok kódu aplikácie
-COPY src/ .
+# Skopírujeme celý priečinok src do kontajnera, do priečinka /app/src
+COPY src/ ./src/
+
+# Skopírujeme ostatné dôležité súbory z koreňového adresára
+COPY index.html .
+COPY vite.config.ts .
+COPY tsconfig.json .
 
 # Sprístupníme port 3000, na ktorom beží aplikácia
 EXPOSE 3000
