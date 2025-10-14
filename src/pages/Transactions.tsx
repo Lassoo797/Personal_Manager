@@ -13,6 +13,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     const [categoryId, setCategoryId] = useState('');
     const [accountId, setAccountId] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const dateInputRef = React.useRef<HTMLInputElement>(null);
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
 
@@ -46,8 +47,8 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!date || !description || !amount || !categoryId || !accountId) {
-            setError('Prosím, vyplňte všetky polia.');
+        if (!date || !amount || !categoryId || !accountId) {
+            setError('Prosím, vyplňte všetky povinné polia.');
             return;
         }
         setError(null);
@@ -78,13 +79,13 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     <button type="button" onClick={() => setType('income')} className={`px-4 py-2 w-1/2 transition-colors text-sm font-medium ${type === 'income' ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' : 'text-light-onSurface dark:text-dark-onSurface'}`}>Príjem</button>
                 </div>
             </div>
-             <div className="relative">
-                <input type="date" id="date" value={date} onChange={e => setDate(e.target.value)} className={`${formInputStyle} h-14 pt-2`} required placeholder=" " />
-                <label htmlFor="date" className={formLabelStyle}>Dátum</label>
+             <div className="relative" onClick={() => dateInputRef.current?.showPicker()}>
+                <input ref={dateInputRef} type="date" id="date" value={date} onChange={e => setDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required placeholder=" " />
+                <label htmlFor="date" className={`${formLabelStyle} cursor-pointer`}>Dátum</label>
             </div>
             <div className="relative">
-                <input type="text" id="description" value={description} onChange={e => setDescription(e.target.value)} className={`${formInputStyle} h-14`} required placeholder=" "/>
-                <label htmlFor="description" className={formLabelStyle}>Popis</label>
+                <input type="text" id="description" value={description} onChange={e => setDescription(e.target.value)} className={`${formInputStyle} h-14`} placeholder=" "/>
+                <label htmlFor="description" className={formLabelStyle}>Popis (nepovinné)</label>
             </div>
             <div className="relative">
                 <input type="number" id="amount" value={amount} onChange={e => setAmount(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" "/>
@@ -202,48 +203,53 @@ const Transactions: React.FC = () => {
       </div>
 
       <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50">
-        <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
           
-          {/* Skupina: Dátum */}
-          <div className="flex-grow md:flex-grow-0">
-            <label className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Rozsah dátumov</label>
-            <div className="flex items-center gap-2">
-              <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0" placeholder="Od" />
-              <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">-</span>
-              <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0" placeholder="Do" />
-            </div>
+          {/* Dátum od */}
+          <div className="relative">
+            <label htmlFor="startDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Dátum od</label>
+            <input type="date" name="startDate" id="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2" />
           </div>
 
-          {/* Skupina: Kategória a Typ */}
-          <div className="flex-grow md:flex-grow-0">
-            <label htmlFor="category-filter" className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Kategória</label>
-            <select id="category-filter" name="categoryId" value={filters.categoryId} onChange={handleFilterChange} className="w-full md:w-48 bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0">
+          {/* Dátum do */}
+          <div className="relative">
+            <label htmlFor="endDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Dátum do</label>
+            <input type="date" name="endDate" id="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2" />
+          </div>
+
+          {/* Kategória */}
+          <div className="relative">
+            <label htmlFor="category-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Kategória</label>
+            <select id="category-filter" name="categoryId" value={filters.categoryId} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 appearance-none">
                 <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky kategórie</option>
                 {categories.filter(c => c.parentId).sort((a,b) => a.name.localeCompare(b.name)).map(c => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{getCategoryDisplayName(c.id)}</option>)}
             </select>
           </div>
           
-          <div className="flex-grow md:flex-grow-0">
-            <label htmlFor="type-filter" className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Typ</label>
-            <select id="type-filter" name="type" value={filters.type} onChange={handleFilterChange} className="w-full md:w-32 bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0">
+          {/* Typ */}
+          <div className="relative">
+            <label htmlFor="type-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Typ</label>
+            <select id="type-filter" name="type" value={filters.type} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 appearance-none">
                 <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky typy</option>
                 <option value="income" className="dark:bg-dark-surfaceContainerHigh">Príjem</option>
                 <option value="expense" className="dark:bg-dark-surfaceContainerHigh">Výdavok</option>
             </select>
           </div>
 
-          {/* Skupina: Suma */}
-          <div className="flex-grow md:flex-grow-0">
-            <label className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Suma</label>
-            <div className="flex items-center gap-2">
-              <input type="number" name="minAmount" value={filters.minAmount} onChange={handleFilterChange} placeholder="Min" className="w-24 bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0" />
-              <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">-</span>
-              <input type="number" name="maxAmount" value={filters.maxAmount} onChange={handleFilterChange} placeholder="Max" className="w-24 bg-light-surface dark:bg-dark-surface border-2 border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-sm focus:border-light-primary dark:focus:border-dark-primary focus:ring-0" />
-            </div>
+          {/* Suma od */}
+           <div className="relative">
+            <label htmlFor="minAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Suma od</label>
+            <input type="number" name="minAmount" id="minAmount" value={filters.minAmount} onChange={handleFilterChange} placeholder="0,00" className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2" />
+          </div>
+
+          {/* Suma do */}
+           <div className="relative">
+            <label htmlFor="maxAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Suma do</label>
+            <input type="number" name="maxAmount" id="maxAmount" value={filters.maxAmount} onChange={handleFilterChange} placeholder="100,00" className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2" />
           </div>
 
           {/* Tlačidlo na reset */}
-          <div className="flex-grow flex items-end justify-end">
+          <div className="sm:col-start-2 md:col-start-3 lg:col-start-4 flex justify-end">
             <button onClick={resetFilters} className="px-4 py-2 text-sm font-medium text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 self-end">
                 Zrušiť filtre
             </button>
@@ -257,8 +263,8 @@ const Transactions: React.FC = () => {
             <thead>
               <tr className="border-b border-light-outlineVariant dark:border-dark-outlineVariant">
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dátum</th>
-                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Popis</th>
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Kategória</th>
+                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Popis</th>
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Účet</th>
                 <th className="py-3 px-4 text-sm font-medium text-right text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Suma</th>
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Akcie</th>
@@ -268,8 +274,8 @@ const Transactions: React.FC = () => {
               {filteredTransactions.map(t => (
                 <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
                   <td className="py-4 px-4">{new Date(t.date).toLocaleDateString('sk-SK')}</td>
-                  <td className="py-4 px-4">{t.description}</td>
                   <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{getCategoryDisplayName(t.categoryId)}</td>
+                  <td className="py-4 px-4">{t.description}</td>
                   <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{accountMap.get(t.accountId)}</td>
                   <td className={`py-4 px-4 text-right font-semibold ${t.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error'}`}>
                     {t.type === 'expense' && '- '}{t.amount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}

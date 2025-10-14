@@ -53,15 +53,15 @@ const AccountForm: React.FC<{
             
             <div className="relative">
                 <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as 'EUR' | 'USD' | 'CZK')} className={`${formInputStyle} h-14`} required>
-                    <option value="EUR">EUR</option>
-                    <option value="USD">USD</option>
-                    <option value="CZK">CZK</option>
+                    <option value="EUR" className="dark:bg-dark-surfaceContainerHigh">EUR</option>
+                    <option value="USD" className="dark:bg-dark-surfaceContainerHigh">USD</option>
+                    <option value="CZK" className="dark:bg-dark-surfaceContainerHigh">CZK</option>
                 </select>
                 <label htmlFor="currency" className={formLabelStyle}>Mena</label>
             </div>
             <div className="relative">
                 <select id="type" value={type} onChange={e => setType(e.target.value as 'Bankový účet')} className={`${formInputStyle} h-14`} required>
-                    <option value="Bankový účet">Bankový účet</option>
+                    <option value="Bankový účet" className="dark:bg-dark-surfaceContainerHigh">Bankový účet</option>
                 </select>
                 <label htmlFor="type" className={formLabelStyle}>Typ účtu</label>
             </div>

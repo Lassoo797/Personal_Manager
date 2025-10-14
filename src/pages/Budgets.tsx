@@ -665,15 +665,15 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                 className={`relative ${headerBgClass} ${headerTextClass} p-4 cursor-pointer`}
                 onClick={() => !isEditingName && toggleExpansion()}
             >
-                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 w-full">
+                <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 w-full">
                     {/* Left Side: Icon and Name */}
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 overflow-hidden">
                         {isIncome ? <ArrowUpCircleIcon className="h-6 w-6 flex-shrink-0" /> : <ArrowDownCircleIcon className="h-6 w-6 flex-shrink-0" />}
                         <EditableCategoryName category={parent} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                     </div>
 
                     {/* Middle: Summary */}
-                    <div className="flex items-center justify-center">
+                    <div className="flex items-center">
                          <div className="grid grid-cols-3 gap-x-4 sm:gap-x-6 text-center w-full max-w-sm">
                             {/* Plán */}
                             <div>
@@ -829,14 +829,14 @@ const SubcategoryItem: React.FC<{
 
     return (
         <div className="p-4 group">
-            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 w-full">
+            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 w-full">
                 {/* Názov */}
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 overflow-hidden">
                     <EditableCategoryName category={category} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                 </div>
 
                 {/* Súhrn */}
-                <div className="flex items-center justify-center">
+                <div className="flex items-center">
                      <div className="grid grid-cols-3 gap-x-4 sm:gap-x-6 text-center w-full max-w-sm">
                         {/* Plán */}
                         <div onClick={() => !isEditingBudget && setIsEditingBudget(true)} className="cursor-pointer">
@@ -956,6 +956,7 @@ const ReassignAndDeleteModal: React.FC<{
 }> = ({ isOpen, onClose, category, reassignAnddeleteCategory }) => {
     const { categories, transactions } = useAppContext();
     const [targetCategoryId, setTargetCategoryId] = useState('');
+
     const formInputStyle = "mt-1 block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 h-14 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0";
     const transactionCount = useMemo(() => category ? transactions.filter(t => t.categoryId === category.id).length : 0, [transactions, category]);
     const potentialTargetCategories = useMemo(() => {
@@ -988,11 +989,11 @@ const ReassignAndDeleteModal: React.FC<{
                     <p className="text-light-onSurface dark:text-dark-onSurface">Kategória <span className="font-bold">"{category.name}"</span> obsahuje <span className="font-bold">{transactionCount}</span> transakcií.</p>
                     <p className="mt-2 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Pre jej zmazanie je potrebné presunúť tieto transakcie do inej kategórie.</p>
                 </div>
-                <div>
-                    <label htmlFor="target-category" className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Presunúť do:</label>
+                <div className="relative pt-2">
+                    <label htmlFor="target-category" className="absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-5 z-10 origin-[0] left-4">Presunúť do:</label>
                     <select id="target-category" value={targetCategoryId} onChange={e => setTargetCategoryId(e.target.value)} className={formInputStyle} required>
-                        <option value="">Vyberte kategóriu</option>
-                        {potentialTargetCategories.map(c => (<option key={c.id} value={c.id}>{getCategoryDisplayName(c)}</option>))}
+                        <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
+                        {potentialTargetCategories.map(c => (<option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{getCategoryDisplayName(c)}</option>))}
                     </select>
                 </div>
                 <div className="flex justify-end space-x-2 pt-4">
