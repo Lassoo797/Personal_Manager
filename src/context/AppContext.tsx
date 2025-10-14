@@ -1,6 +1,7 @@
 import { RecordModel } from 'pocketbase';import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import pb from '../lib/pocketbase';
 import type { Account, Category, Transaction, Budget, BudgetProfile, TransactionType, Notification } from '../types';
+import { useAuth } from './AuthContext';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
@@ -71,6 +72,7 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { user } = useAuth(); // Get the user from AuthContext
   const [isLoading, setIsLoading] = useState(true);
   const [isGlobalLoading, setIsGlobalLoading] = useState(true);
   const [isProfileLoading, setIsProfileLoading] = useState(false);
@@ -99,6 +101,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Effect to load global data once on startup
   useEffect(() => {
     const loadGlobalData = async () => {
+      if (!user) {
+        // If user is logged out, clear all data and stop loading
+        setBudgetProfiles([]);
+        setAllAccounts([]);
+        setAllTransactions([]);
+        setAllBudgets([]);
+        setAllCategories([]);
+        setIsGlobalLoading(false);
+        return;
+      }
+
       setIsGlobalLoading(true);
       setError(null);
       try {
@@ -119,7 +132,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         // Auto-select profile logic after global data is loaded
         const isInvalidStoredProfile = currentProfileId && !mappedProfiles.some(p => p.id === currentProfileId);
-        if (isInvalidStoredProfile) {
+        if (isInvalidStoredProfile || !currentProfileId) { // Also auto-select if no profile was selected
           setCurrentProfileId(mappedProfiles.length > 0 ? mappedProfiles[0].id : null);
         }
       } catch (e: any) {
@@ -131,9 +144,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsGlobalLoading(false);
       }
     };
+
     loadGlobalData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once
+  }, [user]); // Re-run this effect when the user object changes
 
   // Effect to load profile-specific data when profile changes
   useEffect(() => {

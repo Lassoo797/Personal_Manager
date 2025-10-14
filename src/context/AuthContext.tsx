@@ -24,9 +24,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           // Verify with the server
           await pb.collection('users').authRefresh();
-        } catch (_) {
-          // If refresh fails, clear the auth store
-          pb.authStore.clear();
+        } catch (err: any) {
+          // If refresh fails, clear the auth store only if it's not an abort error
+          if (!err.isAbort) {
+            pb.authStore.clear();
+          }
         }
       }
     };

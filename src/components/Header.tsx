@@ -70,10 +70,9 @@ const Header: React.FC = () => {
                     <div className="origin-top-left absolute left-0 mt-2 w-56 rounded-xl shadow-lg bg-light-surfaceContainer dark:bg-dark-surfaceContainer ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
                       <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
                         {currentProfileId && (
-                           <a
-                            href="#"
+                           <NavLink
+                            to="/"
                             onClick={(e) => {
-                              e.preventDefault();
                               setCurrentProfileId(null);
                               setIsProfileDropdownOpen(false);
                             }}
@@ -81,7 +80,7 @@ const Header: React.FC = () => {
                             role="menuitem"
                           >
                             &larr; Celkový prehľad
-                          </a>
+                          </NavLink>
                         )}
                         {budgetProfiles.filter(p => p.id !== currentProfileId).map(profile => (
                           <a
