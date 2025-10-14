@@ -118,6 +118,8 @@ const Transactions: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
+  const startDateRef = React.useRef<HTMLInputElement>(null);
+  const endDateRef = React.useRef<HTMLInputElement>(null);
   
   const [filters, setFilters] = useState({
     startDate: '',
@@ -206,15 +208,15 @@ const Transactions: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
           
           {/* Dátum od */}
-          <div className="relative">
+          <div className="relative cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
             <label htmlFor="startDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Dátum od</label>
-            <input type="date" name="startDate" id="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2" />
+            <input ref={startDateRef} type="date" name="startDate" id="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 cursor-pointer" />
           </div>
 
           {/* Dátum do */}
-          <div className="relative">
+          <div className="relative cursor-pointer" onClick={() => endDateRef.current?.showPicker()}>
             <label htmlFor="endDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Dátum do</label>
-            <input type="date" name="endDate" id="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2" />
+            <input ref={endDateRef} type="date" name="endDate" id="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 cursor-pointer" />
           </div>
 
           {/* Kategória */}

@@ -665,34 +665,34 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                 className={`relative ${headerBgClass} ${headerTextClass} p-4 cursor-pointer`}
                 onClick={() => !isEditingName && toggleExpansion()}
             >
-                <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 w-full">
-                    {/* Left Side: Icon and Name */}
-                    <div className="flex items-center space-x-3 overflow-hidden">
+                <div className="flex items-center gap-4 w-full">
+                    {/* Left Side: Icon and Name (fixed width) */}
+                    <div className="w-1/3 flex-shrink-0 flex items-center space-x-3 overflow-hidden">
                         {isIncome ? <ArrowUpCircleIcon className="h-6 w-6 flex-shrink-0" /> : <ArrowDownCircleIcon className="h-6 w-6 flex-shrink-0" />}
                         <EditableCategoryName category={parent} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                     </div>
-
-                    {/* Middle: Summary */}
-                    <div className="flex items-center">
-                         <div className="grid grid-cols-3 gap-x-4 sm:gap-x-6 text-center w-full max-w-sm">
+                    
+                    {/* Middle: Financial Summary (takes remaining space) */}
+                    <div className="flex-grow">
+                        <div className="grid grid-cols-3 gap-x-2 sm:gap-x-4 text-center w-full">
                             {/* Plán */}
                             <div>
-                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Plán</p>
-                                <span className="text-xs font-medium text-light-onSurface dark:text-dark-onSurface">
+                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">Plán</p>
+                                <span className="text-base font-medium text-light-onSurface dark:text-dark-onSurface">
                                     {parentTotalBudget.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
                                 </span>
                             </div>
                             {/* Skutočnosť */}
                             <div>
-                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Skutočnosť</p>
-                                <span className={`text-xs font-medium ${actualColor}`}>
+                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">Skutočnosť</p>
+                                <span className={`text-base font-medium ${actualColor}`}>
                                     {parentTotalActual.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
                                 </span>
                             </div>
                             {/* Rozdiel */}
                             <div>
-                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{summaryLabel}</p>
-                                <span className={`text-xs font-medium ${summaryColor}`}>
+                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">{summaryLabel}</p>
+                                <span className={`text-base font-medium ${summaryColor}`}>
                                     {isIncome 
                                         ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always'})
                                         : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR'})
@@ -700,10 +700,17 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                                 </span>
                             </div>
                         </div>
+
+                        {/* Progress Bar */}
+                        {subcategories.length > 0 && parentTotalBudget > 0 && (
+                            <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-1.5 mt-2">
+                                <div className={`h-1.5 rounded-full ${getBarColor(ratio, parent.type)}`} style={{ width: progressWidth }}></div>
+                            </div>
+                        )}
                     </div>
-                    
-                    {/* Right Side: Controls */}
-                    <div className="flex items-center space-x-1">
+
+                    {/* Right Side: Controls (fixed width) */}
+                    <div className="flex-shrink-0 flex items-center space-x-1">
                         <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10">
                             <DotsVerticalIcon className="h-5 w-5" />
                         </button>
@@ -747,13 +754,6 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                         </button>
                     </div>
                 </div>
-                
-                {/* Progress Bar */}
-                {subcategories.length > 0 && parentTotalBudget > 0 && (
-                    <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-1.5 mt-3">
-                        <div className={`h-1.5 rounded-full ${getBarColor(ratio, parent.type)}`} style={{ width: progressWidth }}></div>
-                    </div>
-                )}
             </div>
             
             {isExpanded && (
@@ -780,7 +780,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
             )}
         </div>
     );
-};
+};;
 
 const SubcategoryItem: React.FC<{
     category: Category;
@@ -829,43 +829,43 @@ const SubcategoryItem: React.FC<{
 
     return (
         <div className="p-4 group">
-            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-4 w-full">
-                {/* Názov */}
-                <div className="flex items-center space-x-2 overflow-hidden">
+            <div className="flex items-center gap-4 w-full">
+                {/* Názov kategórie */}
+                <div className="w-1/4 flex-shrink-0">
                     <EditableCategoryName category={category} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                 </div>
 
-                {/* Súhrn */}
-                <div className="flex items-center">
-                     <div className="grid grid-cols-3 gap-x-4 sm:gap-x-6 text-center w-full max-w-sm">
+                {/* Finančná časť */}
+                <div className="flex-grow">
+                    <div className="grid grid-cols-3 gap-x-2 sm:gap-x-4 text-center w-full">
                         {/* Plán */}
                         <div onClick={() => !isEditingBudget && setIsEditingBudget(true)} className="cursor-pointer">
-                            <p className="text-xs opacity-80">Plán</p>
+                            <p className="text-xs opacity-80 truncate">Plán</p>
                             {isEditingBudget ? (
                                 <input ref={budgetInputRef} type="number" value={budgetValue} 
                                     onChange={(e) => setBudgetValue(e.target.value)} 
                                     onBlur={handleBudgetSave} 
                                     onKeyDown={(e) => { if(e.key === 'Enter') handleBudgetSave(); if(e.key === 'Escape') setIsEditingBudget(false); }}
                                     onClick={e => e.stopPropagation()}
-                                    className="w-full bg-black/10 dark:bg-white/10 text-current rounded-md border-light-primary dark:border-dark-primary border-2 px-1 py-0 text-xs font-medium text-center"
+                                    className="w-full bg-black/10 dark:bg-white/10 text-current rounded-md border-light-primary dark:border-dark-primary border-2 px-1 py-0 text-sm font-medium text-center"
                                 />
                             ) : (
-                                <span className="text-xs font-medium text-light-onSurface dark:text-dark-onSurface">
+                                <span className="text-sm font-medium text-light-onSurface dark:text-dark-onSurface">
                                     {budgetAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
                                 </span>
                             )}
                         </div>
                         {/* Skutočnosť */}
                         <div>
-                            <p className="text-xs opacity-80">Skutočnosť</p>
-                            <span className={`text-xs font-medium ${actualColor}`}>
+                            <p className="text-xs opacity-80 truncate">Skutočnosť</p>
+                            <span className={`text-sm font-medium ${actualColor}`}>
                                 {actualAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
                             </span>
                         </div>
                         {/* Rozdiel */}
                         <div>
-                            <p className="text-xs opacity-80">{summaryLabel}</p>
-                            <span className={`text-xs font-medium ${differenceColor}`}>
+                            <p className="text-xs opacity-80 truncate">{summaryLabel}</p>
+                            <span className={`text-sm font-medium ${differenceColor}`}>
                                 {isIncome 
                                     ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always'})
                                     : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR'})
@@ -873,10 +873,14 @@ const SubcategoryItem: React.FC<{
                             </span>
                         </div>
                     </div>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-1.5 mt-1">
+                        <div className={`h-1.5 rounded-full ${getBarColor(ratio, category.type)}`} style={{ width: progressWidth }}></div>
+                    </div>
                 </div>
                 
                 {/* Ovládacie prvky */}
-                <div className="flex items-center">
+                <div className="flex-shrink-0">
                     <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10">
                         <DotsVerticalIcon className="h-4 w-4" />
                     </button>
@@ -914,11 +918,6 @@ const SubcategoryItem: React.FC<{
                         </div>
                     </ActionMenu>
                 </div>
-            </div>
-            
-            {/* Progress Bar */}
-            <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-1.5 mt-2">
-                <div className={`h-1.5 rounded-full ${getBarColor(ratio, category.type)}`} style={{ width: progressWidth }}></div>
             </div>
         </div>
     );
