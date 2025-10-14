@@ -831,7 +831,7 @@ const SubcategoryItem: React.FC<{
         <div className="p-4 group">
             <div className="flex items-center gap-4 w-full">
                 {/* Názov kategórie */}
-                <div className="w-1/4 flex-shrink-0">
+                <div className="w-1/3 flex-shrink-0 pl-[2.25rem]">
                     <EditableCategoryName category={category} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                 </div>
 
@@ -880,9 +880,9 @@ const SubcategoryItem: React.FC<{
                 </div>
                 
                 {/* Ovládacie prvky */}
-                <div className="flex-shrink-0">
-                    <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10">
-                        <DotsVerticalIcon className="h-4 w-4" />
+                <div className="flex-shrink-0 flex items-center space-x-1">
+                    <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10">
+                        <DotsVerticalIcon className="h-5 w-5" />
                     </button>
                     <ActionMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} triggerRef={triggerRef}>
                         <div className="py-2">
@@ -917,6 +917,7 @@ const SubcategoryItem: React.FC<{
                             </button>
                         </div>
                     </ActionMenu>
+                    <div className="w-10 h-10"></div>
                 </div>
             </div>
         </div>
