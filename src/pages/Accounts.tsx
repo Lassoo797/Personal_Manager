@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
+import { ConfirmModal } from './Transactions';
 import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
 import type { Account, AccountType, AccountSubtype } from '../types';
 
@@ -195,29 +196,9 @@ const Accounts: React.FC = () => {
         onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
         message={confirmModalState.message}
         onConfirm={confirmModalState.onConfirm}
+        title="Potvrdenie zmazania"
       />
     </div>
-  );
-};
-
-const ConfirmModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  message: string;
-  onConfirm: () => void;
-}> = ({ isOpen, onClose, message, onConfirm }) => {
-  if (!isOpen) return null;
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie zmazania">
-      <div className="space-y-4">
-        <p>{message}</p>
-        <div className="flex justify-end space-x-2 pt-4">
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
-          <button type="button" onClick={onConfirm} className="px-6 py-2.5 bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError rounded-full hover:shadow-lg font-medium transition-shadow">Zmazať</button>
-        </div>
-      </div>
-    </Modal>
   );
 };
 

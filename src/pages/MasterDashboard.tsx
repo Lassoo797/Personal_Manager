@@ -3,15 +3,24 @@ import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 
 const MasterDashboard: React.FC = () => {
-  const { budgetProfiles, allAccounts, allTransactions } = useAppContext();
+  const { budgetProfiles, allAccounts, allTransactions, getFinancialSummary } = useAppContext();
   const { theme } = useTheme();
 
   const getAccountBalance = (account: { initialBalance: number; id: string; }, transactions: any[]) => {
-    return transactions.reduce((acc, t) => {
-      if (t.accountId === account.id) {
-        return t.type === 'income' ? acc + t.amount : acc - t.amount;
-      }
-      return acc;
+    return transactions.reduce((balance, t) => {
+        if (t.type === 'transfer') {
+            if (t.accountId === account.id) {
+                return balance - t.amount;
+            }
+            if (t.destinationAccountId === account.id) {
+                return balance + t.amount;
+            }
+        } else {
+            if (t.accountId === account.id) {
+                return t.type === 'income' ? balance + t.amount : balance - t.amount;
+            }
+        }
+        return balance;
     }, account.initialBalance);
   };
   
@@ -33,34 +42,17 @@ const MasterDashboard: React.FC = () => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
-    let income = 0;
-    let expenses = 0;
-    let totalYearIncome = 0;
-    let totalYearExpenses = 0;
-    const monthsPassed = now.getMonth() + 1;
     
-    allTransactions.forEach(t => {
-      const transactionDate = new Date(t.date);
-      const transactionMonth = transactionDate.getMonth();
-      const transactionYear = transactionDate.getFullYear();
-
-      if (transactionYear === currentYear) {
-        if (t.type === 'income') {
-            totalYearIncome += t.amount;
-        } else {
-            totalYearExpenses += t.amount;
-        }
-      }
-      
-      if (transactionMonth === currentMonth && transactionYear === currentYear) {
-        if (t.type === 'income') {
-          income += t.amount;
-        } else {
-          expenses += t.amount;
-        }
-    }
+    const monthlyTransactions = allTransactions.filter(t => {
+        const d = new Date(t.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
+    const { actualIncome: income, actualExpense: expenses } = getFinancialSummary(monthlyTransactions);
+
+    const yearlyTransactions = allTransactions.filter(t => new Date(t.date).getFullYear() === currentYear);
+    const { actualIncome: totalYearIncome, actualExpense: totalYearExpenses } = getFinancialSummary(yearlyTransactions);
     
+    const monthsPassed = now.getMonth() + 1;
     const avgIncome = monthsPassed > 0 ? totalYearIncome / monthsPassed : 0;
     const avgExpense = monthsPassed > 0 ? totalYearExpenses / monthsPassed : 0;
 
@@ -73,7 +65,7 @@ const MasterDashboard: React.FC = () => {
       averageMonthlyIncome: avgIncome,
       averageMonthlyExpense: avgExpense
     };
-  }, [allAccounts, allTransactions]);
+  }, [allAccounts, allTransactions, getFinancialSummary]);
 
   if (budgetProfiles.length === 0) {
     return (

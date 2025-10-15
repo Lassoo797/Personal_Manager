@@ -6,26 +6,28 @@ import type { Transaction, TransactionType, Category } from '../types';
 
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
     const { accounts, categories, addTransaction, updateTransaction } = useAppContext();
-    const [type, setType] = useState<TransactionType>('expense');
-    const [date, setDate] = useState('');
-    const [description, setDescription] = useState('');
-    const [amount, setAmount] = useState<number | string>('');
-    const [categoryId, setCategoryId] = useState('');
-    const [accountId, setAccountId] = useState('');
+    const [type, setType] = useState<TransactionType>(transaction?.type || 'expense');
+    const [date, setDate] = useState(transaction?.date.slice(0, 10) || new Date().toISOString().slice(0, 10));
+    const [description, setDescription] = useState(transaction?.description || '');
+    const [amount, setAmount] = useState<number | string>(transaction?.amount || '');
+    const [categoryId, setCategoryId] = useState(transaction?.categoryId || '');
+    const [accountId, setAccountId] = useState(transaction?.accountId || '');
+    const [destinationAccountId, setDestinationAccountId] = useState(transaction?.destinationAccountId || '');
     const [error, setError] = useState<string | null>(null);
     const dateInputRef = React.useRef<HTMLInputElement>(null);
+
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
 
     useEffect(() => {
         if (transaction) {
             setType(transaction.type);
-            // PocketBase date contains time, slice to get only YYYY-MM-DD
             setDate(transaction.date.slice(0, 10));
             setDescription(transaction.description);
             setAmount(transaction.amount);
-            setCategoryId(transaction.categoryId);
+            setCategoryId(transaction.categoryId || '');
             setAccountId(transaction.accountId);
+            setDestinationAccountId(transaction.destinationAccountId || '');
         } else {
             // Reset form for a new transaction
             setType('expense');
@@ -34,32 +36,51 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             setAmount('');
             setCategoryId('');
             setAccountId('');
+            setDestinationAccountId('');
         }
     }, [transaction]);
-
-
 
     const filteredCategories = useMemo(() => {
         return categories
             .filter(c => c.type === type && c.parentId) 
             .sort((a,b) => a.name.localeCompare(b.name));
     }, [categories, type]);
+    
+    // Filter accounts for transfers - only standard accounts
+    const standardAccounts = useMemo(() => 
+        accounts.filter(a => a.accountType === 'Štandardný účet'),
+    [accounts]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!date || !amount || !categoryId || !accountId) {
-            setError('Prosím, vyplňte všetky povinné polia.');
-            return;
-        }
         setError(null);
+        
+        let isValid = true;
+        if (type === 'transfer') {
+            if (!date || !amount || !accountId || !destinationAccountId) {
+                setError('Prosím, vyplňte všetky polia pre prevod.');
+                isValid = false;
+            } else if (accountId === destinationAccountId) {
+                setError('Zdrojový a cieľový účet nemôžu byť rovnaké.');
+                isValid = false;
+            }
+        } else {
+            if (!date || !amount || !categoryId || !accountId) {
+                setError('Prosím, vyplňte všetky povinné polia.');
+                isValid = false;
+            }
+        }
+
+        if (!isValid) return;
 
         const transactionData = {
             date,
             description,
             amount: parseFloat(String(amount)),
             type,
-            categoryId,
+            categoryId: type !== 'transfer' ? categoryId : null,
             accountId,
+            destinationAccountId: type === 'transfer' ? destinationAccountId : null,
         };
 
         if (transaction) {
@@ -75,8 +96,9 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             <div>
                 <label className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-2">Typ transakcie</label>
                 <div className="flex rounded-full border-2 border-light-outline dark:border-dark-outline overflow-hidden">
-                    <button type="button" onClick={() => setType('expense')} className={`px-4 py-2 w-1/2 transition-colors text-sm font-medium ${type === 'expense' ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' : 'text-light-onSurface dark:text-dark-onSurface'}`}>Výdavok</button>
-                    <button type="button" onClick={() => setType('income')} className={`px-4 py-2 w-1/2 transition-colors text-sm font-medium ${type === 'income' ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' : 'text-light-onSurface dark:text-dark-onSurface'}`}>Príjem</button>
+                    <button type="button" onClick={() => setType('expense')} className={`px-4 py-2 w-1/3 transition-colors text-sm font-medium ${type === 'expense' ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' : 'text-light-onSurface dark:text-dark-onSurface'}`}>Výdavok</button>
+                    <button type="button" onClick={() => setType('income')} className={`px-4 py-2 w-1/3 transition-colors text-sm font-medium ${type === 'income' ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' : 'text-light-onSurface dark:text-dark-onSurface'}`}>Príjem</button>
+                    <button type="button" onClick={() => setType('transfer')} className={`px-4 py-2 w-1/3 transition-colors text-sm font-medium ${type === 'transfer' ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' : 'text-light-onSurface dark:text-dark-onSurface'}`}>Prevod</button>
                 </div>
             </div>
              <div className="relative" onClick={() => dateInputRef.current?.showPicker()}>
@@ -91,18 +113,39 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                 <input type="number" id="amount" value={amount} onChange={e => setAmount(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" "/>
                 <label htmlFor="amount" className={formLabelStyle}>Suma</label>
             </div>
-             <div className="relative">
-                <select id="category" value={categoryId} onChange={e => setCategoryId(e.target.value)} className={`${formInputStyle} h-14`} required>
-                    <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
-                    {filteredCategories.map(c => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{categories.find(p=>p.id === c.parentId)?.name} - {c.name}</option>)}
-                </select>
-            </div>
-            <div className="relative">
-                <select id="account" value={accountId} onChange={e => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
-                    <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte účet</option>
-                    {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
-                </select>
-            </div>
+
+            {type === 'transfer' ? (
+                <>
+                    <div className="relative">
+                        <select id="account" value={accountId} onChange={e => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
+                            <option value="" className="dark:bg-dark-surfaceContainerHigh">Z účtu...</option>
+                            {standardAccounts.map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="relative">
+                        <select id="destinationAccount" value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
+                            <option value="" className="dark:bg-dark-surfaceContainerHigh">Na účet...</option>
+                            {standardAccounts.filter(a => a.id !== accountId).map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                        </select>
+                    </div>
+                </>
+            ) : (
+                <>
+                    <div className="relative">
+                        <select id="category" value={categoryId} onChange={e => setCategoryId(e.target.value)} className={`${formInputStyle} h-14`} required>
+                            <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
+                            {filteredCategories.map(c => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{categories.find(p=>p.id === c.parentId)?.name} - {c.name}</option>)}
+                        </select>
+                    </div>
+                    <div className="relative">
+                        <select id="account" value={accountId} onChange={e => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
+                            <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte účet</option>
+                            {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                        </select>
+                    </div>
+                </>
+            )}
+
             {error && <p className="text-sm text-light-error dark:text-dark-error">{error}</p>}
             <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={onCancel} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
@@ -150,7 +193,10 @@ const Transactions: React.FC = () => {
       .filter(t => {
         if (filters.startDate && new Date(t.date) < new Date(filters.startDate)) return false;
         if (filters.endDate && new Date(t.date) > new Date(filters.endDate)) return false;
-        if (filters.categoryId && t.categoryId !== filters.categoryId) return false;
+        // Filter transfers based on category filter
+        if (filters.categoryId && t.type !== 'transfer' && t.categoryId !== filters.categoryId) return false;
+        if (filters.categoryId && t.type === 'transfer') return false; // Hide transfers if a category is selected
+
         if (filters.minAmount && t.amount < parseFloat(filters.minAmount)) return false;
         if (filters.maxAmount && t.amount > parseFloat(filters.maxAmount)) return false;
         if (filters.type && t.type !== filters.type) return false;
@@ -169,7 +215,8 @@ const Transactions: React.FC = () => {
     [accounts]
   );
   
-  const getCategoryDisplayName = (categoryId: string) => {
+  const getCategoryDisplayName = (categoryId: string | null) => {
+    if (!categoryId) return 'N/A';
     const category = categoryMap.get(categoryId);
     if (!category) return 'Neznáma kategória';
     if (category.parentId) {
@@ -194,6 +241,15 @@ const Transactions: React.FC = () => {
     setEditingTransaction(null);
   };
   
+  const getAmountClass = (type: TransactionType) => {
+    switch(type) {
+        case 'income': return 'text-green-600 dark:text-green-400';
+        case 'expense': return 'text-light-error dark:text-dark-error';
+        case 'transfer': return 'text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant';
+        default: return '';
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -235,6 +291,7 @@ const Transactions: React.FC = () => {
                 <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky typy</option>
                 <option value="income" className="dark:bg-dark-surfaceContainerHigh">Príjem</option>
                 <option value="expense" className="dark:bg-dark-surfaceContainerHigh">Výdavok</option>
+                <option value="transfer" className="dark:bg-dark-surfaceContainerHigh">Prevod</option>
             </select>
           </div>
 
@@ -273,30 +330,37 @@ const Transactions: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredTransactions.map(t => (
-                <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
-                  <td className="py-4 px-4">{new Date(t.date).toLocaleDateString('sk-SK')}</td>
-                  <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{getCategoryDisplayName(t.categoryId)}</td>
-                  <td className="py-4 px-4">{t.description}</td>
-                  <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{accountMap.get(t.accountId)}</td>
-                  <td className={`py-4 px-4 text-right font-semibold ${t.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error'}`}>
-                    {t.type === 'expense' && '- '}{t.amount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center space-x-1">
-                        <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"><PencilIcon /></button>
-                        <button aria-label="Zmazať transakciu" onClick={() => setConfirmModalState({
-                          isOpen: true,
-                          message: `Naozaj chcete zmazať túto transakciu?`,
-                          onConfirm: () => {
-                            deleteTransaction(t.id);
-                            setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-                          }
-                        })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredTransactions.map(t => {
+                const isTransfer = t.type === 'transfer';
+                return (
+                  <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
+                    <td className="py-4 px-4">{new Date(t.date).toLocaleDateString('sk-SK')}</td>
+                    <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{isTransfer ? 'Prevod' : getCategoryDisplayName(t.categoryId)}</td>
+                    <td className="py-4 px-4">{t.description}</td>
+                    <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                      {isTransfer 
+                        ? `${accountMap.get(t.accountId)} → ${accountMap.get(t.destinationAccountId || '')}` 
+                        : accountMap.get(t.accountId)}
+                    </td>
+                    <td className={`py-4 px-4 text-right font-semibold ${getAmountClass(t.type)}`}>
+                      {t.type === 'expense' && '- '}{t.amount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-1">
+                          <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"><PencilIcon /></button>
+                          <button aria-label="Zmazať transakciu" onClick={() => setConfirmModalState({
+                            isOpen: true,
+                            message: `Naozaj chcete zmazať túto transakciu?`,
+                            onConfirm: () => {
+                              deleteTransaction(t.id);
+                              setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                            }
+                          })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -316,16 +380,17 @@ const Transactions: React.FC = () => {
   );
 };
 
-const ConfirmModal: React.FC<{
+export const ConfirmModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   message: string;
   onConfirm: () => void;
-}> = ({ isOpen, onClose, message, onConfirm }) => {
+  title?: string;
+}> = ({ isOpen, onClose, message, onConfirm, title="Potvrdenie zmazania" }) => {
   if (!isOpen) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie zmazania">
+    <Modal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-4">
         <p>{message}</p>
         <div className="flex justify-end space-x-2 pt-4">

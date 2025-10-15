@@ -187,7 +187,7 @@ const Budgets: React.FC = () => {
         categories, budgets, transactions, 
         deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, 
         updateCategoryOrder, isLoading, error, 
-        publishBudgetForYear, publishFullBudgetForYear
+        publishBudgetForYear, publishFullBudgetForYear, getFinancialSummary
     } = useAppContext();
     
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -245,7 +245,8 @@ const Budgets: React.FC = () => {
         // --- VÝPOČET ZÁKLADNÝCH HODNÔT ---
         const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
         
-        let plannedIncome = 0, actualIncome = 0, plannedExpense = 0, actualExpense = 0;
+        let plannedIncome = 0;
+        let plannedExpense = 0;
 
         // Iterácia cez všetky rozpočty pre aktuálny mesiac
         budgets.forEach(b => {
@@ -259,22 +260,15 @@ const Budgets: React.FC = () => {
             }
         });
 
-        // Iterácia cez všetky transakcie pre aktuálny mesiac
-        transactions.forEach(t => {
-            if (t.date.startsWith(currentMonth)) {
-                if (t.type === 'income') {
-                    actualIncome += t.amount;
-                } else {
-                    actualExpense += t.amount;
-                }
-            }
-        });
+        // Použitie novej centrálnej funkcie
+        const monthlyTransactions = transactions.filter(t => t.date.startsWith(currentMonth));
+        const { actualIncome, actualExpense } = getFinancialSummary(monthlyTransactions);
         
         const plannedBalance = plannedIncome - plannedExpense;
         const actualBalance = actualIncome - actualExpense;
 
         return { plannedIncome, actualIncome, plannedExpense, actualExpense, plannedBalance, actualBalance };
-    }, [budgets, transactions, currentMonth, categories]);
+    }, [budgets, transactions, currentMonth, categories, getFinancialSummary]);
 
     const handleDeleteRequest = (e: React.MouseEvent, category: Category) => {
         e.stopPropagation();

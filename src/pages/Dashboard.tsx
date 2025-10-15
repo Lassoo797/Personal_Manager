@@ -7,7 +7,7 @@ import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 
 const Dashboard: React.FC = () => {
-  const { accounts, transactions, categories, budgets, getAccountBalance } = useAppContext();
+  const { accounts, transactions, categories, budgets, getAccountBalance, getFinancialSummary } = useAppContext();
   const { theme } = useTheme();
 
   const { currentMonthName, previousMonthLabel } = useMemo(() => {
@@ -73,46 +73,38 @@ const Dashboard: React.FC = () => {
 
     let totalYearIncome = 0;
     let totalYearExpenses = 0;
+    
+    const yearlyTransactions = budgetTransactions.filter(t => new Date(t.date).getFullYear() === currentYear);
+    const yearlySummary = getFinancialSummary(yearlyTransactions);
+    totalYearIncome = yearlySummary.actualIncome;
+    totalYearExpenses = yearlySummary.actualExpense;
+
     const monthsPassed = new Date().getMonth() + 1;
 
     for (let i = 5; i >= 0; i--) {
         const d = new Date(currentYear, currentMonth - i, 1);
         const monthKey = d.toLocaleString('sk-SK', { month: 'short', year: 'numeric' });
-        lastSixMonthsData[monthKey] = { income: 0, expenses: 0 };
+        const monthTransactions = budgetTransactions.filter(t => {
+            const tDate = new Date(t.date);
+            return tDate.getFullYear() === d.getFullYear() && tDate.getMonth() === d.getMonth();
+        });
+        const { actualIncome, actualExpense } = getFinancialSummary(monthTransactions);
+        lastSixMonthsData[monthKey] = { income: actualIncome, expenses: actualExpense };
     }
 
-    budgetTransactions.forEach(t => {
-      const transactionDate = new Date(t.date);
-      const transactionMonth = transactionDate.getMonth();
-      const transactionYear = transactionDate.getFullYear();
-      
-      const monthKey = transactionDate.toLocaleString('sk-SK', { month: 'short', year: 'numeric' });
-      if (lastSixMonthsData[monthKey]) {
-          if (t.type === 'income') {
-              lastSixMonthsData[monthKey].income += t.amount;
-          } else {
-              lastSixMonthsData[monthKey].expenses += t.amount;
-          }
-      }
+    const currentMonthTransactions = budgetTransactions.filter(t => {
+        const transactionDate = new Date(t.date);
+        return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
+    });
 
-      if (transactionYear === currentYear) {
-        if (t.type === 'income') {
-            totalYearIncome += t.amount;
-        } else {
-            totalYearExpenses += t.amount;
-        }
-      }
-      
-      if (transactionMonth === currentMonth && transactionYear === currentYear) {
-        if (t.type === 'income') {
-          income += t.amount;
-        } else {
-          expenses += t.amount;
-          const category = categories.find(c => c.id === t.categoryId);
-          const parentCategory = category?.parentId ? categories.find(c => c.id === category.parentId) : category;
-          if (parentCategory) {
-            byCategory[parentCategory.name] = (byCategory[parentCategory.name] || 0) + t.amount;
-          }
+    const { actualIncome: monthlyIncome, actualExpense: monthlyExpenses } = getFinancialSummary(currentMonthTransactions);
+
+    currentMonthTransactions.forEach(t => {
+      if (t.type === 'expense') {
+        const category = categories.find(c => c.id === t.categoryId);
+        const parentCategory = category?.parentId ? categories.find(c => c.id === category.parentId) : category;
+        if (parentCategory) {
+          byCategory[parentCategory.name] = (byCategory[parentCategory.name] || 0) + t.amount;
         }
       }
     });
@@ -123,14 +115,14 @@ const Dashboard: React.FC = () => {
     const avgExpense = monthsPassed > 0 ? totalYearExpenses / monthsPassed : 0;
 
     return { 
-        monthlyIncome: income, 
-        monthlyExpenses: expenses, 
+        monthlyIncome, 
+        monthlyExpenses, 
         expenseByCategory: expenseData, 
         monthlyChartData: chartData,
         averageMonthlyIncome: avgIncome,
         averageMonthlyExpense: avgExpense
     };
-  }, [budgetTransactions, categories]);
+  }, [budgetTransactions, categories, getFinancialSummary]);
 
   const recentTransactions = useMemo(() => 
     [...budgetTransactions]
@@ -147,7 +139,18 @@ const Dashboard: React.FC = () => {
     let yearStartBalance = operatingAccounts.reduce((sum, acc) => sum + acc.initialBalance, 0);
     budgetTransactions.forEach(t => {
         if (new Date(t.date).getFullYear() < currentYear) {
-            yearStartBalance += t.type === 'income' ? t.amount : -t.amount;
+            if (t.type === 'transfer') {
+                if (operatingAccountIds.has(t.accountId)) {
+                    yearStartBalance -= t.amount;
+                }
+                if (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)) {
+                    yearStartBalance += t.amount;
+                }
+            } else if (t.type === 'income') {
+                yearStartBalance += t.amount;
+            } else { // expense
+                yearStartBalance -= t.amount;
+            }
         }
     });
     
@@ -188,7 +191,18 @@ const Dashboard: React.FC = () => {
                 const tDate = new Date(t.date);
                 return tDate.getFullYear() === currentYear && tDate.getMonth() === i;
             });
-            const monthlyDelta = monthlyTransactions.reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
+            const monthlyDelta = monthlyTransactions.reduce((sum, t) => {
+                if (t.type === 'transfer') {
+                    if (operatingAccountIds.has(t.accountId)) {
+                        sum -= t.amount;
+                    }
+                    if (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)) {
+                        sum += t.amount;
+                    }
+                    return sum;
+                }
+                return sum + (t.type === 'income' ? t.amount : -t.amount);
+            }, 0);
             runningActualBalance += monthlyDelta;
             chartData[i + 1].actual = runningActualBalance;
         }

@@ -2,29 +2,7 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { PencilIcon, TrashIcon, PlusIcon } from './icons';
 import type { BudgetProfile } from '../types';
-import Modal from './Modal'; // Import the main Modal component
-
-// --- Reusable Confirm Modal ---
-const ConfirmModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  message: string;
-  onConfirm: () => void;
-}> = ({ isOpen, onClose, message, onConfirm }) => {
-  if (!isOpen) return null;
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie zmazania">
-      <div className="space-y-4">
-        <p>{message}</p>
-        <div className="flex justify-end space-x-2 pt-4">
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
-          <button type="button" onClick={onConfirm} className="px-6 py-2.5 bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError rounded-full hover:shadow-lg font-medium transition-shadow">Zmazať</button>
-        </div>
-      </div>
-    </Modal>
-  );
-};
+import { ConfirmModal } from '../pages/Transactions';
 
 
 const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -130,6 +108,7 @@ const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })}
                 message={confirmModalState.message}
                 onConfirm={confirmModalState.onConfirm}
+                title="Potvrdenie zmazania profilu"
             />
         </>
     );

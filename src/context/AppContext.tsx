@@ -8,7 +8,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 const mapPbToProfile = (r: RecordModel): BudgetProfile => ({ id: r.id, name: r.name });
 const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, initialBalance: r.initialBalance, profileId: r.profile, currency: r.currency, accountType: r.accountType, type: r.type });
 const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, profileId: r.profile, order: r.order });
-const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category, accountId: r.account, profileId: r.profile });
+const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.account, destinationAccountId: r.destinationAccountId || null, profileId: r.profile });
 const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, profileId: r.profile });
 
 // PocketBase options to prevent autocancellation during batch operations
@@ -62,6 +62,8 @@ interface AppContextType {
   publishBudgetForYear: (categoryId: string, month: string, forAllSubcategories?: boolean) => Promise<void>;
   publishFullBudgetForYear: (month: string) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
+  
+  getFinancialSummary: (transactions: Transaction[]) => { actualIncome: number, actualExpense: number };
   
   // Notifications
   notifications: Notification[];
@@ -234,18 +236,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
 
-
   const getAccountBalance = useCallback((accountId: string) => {
     const account = accounts.find(a => a.id === accountId);
     if (!account) return 0;
 
-    return transactions.reduce((acc, t) => {
-      if (t.accountId === accountId) {
-        return t.type === 'income' ? acc + t.amount : acc - t.amount;
-      }
-      return acc;
+    return transactions.reduce((balance, t) => {
+        if (t.type === 'transfer') {
+            if (t.accountId === accountId) {
+                // Zdrojový účet prevodu -> odčítať
+                return balance - t.amount;
+            }
+            if (t.destinationAccountId === accountId) {
+                // Cieľový účet prevodu -> pričítať
+                return balance + t.amount;
+            }
+        } else { // Pôvodná logika pre príjem/výdavok
+            if (t.accountId === accountId) {
+                return t.type === 'income' ? balance + t.amount : balance - t.amount;
+            }
+        }
+        return balance;
     }, account.initialBalance);
   }, [accounts, transactions]);
+
+  const getFinancialSummary = useCallback((transactionsToSummarize: Transaction[]): { actualIncome: number, actualExpense: number } => {
+    return transactionsToSummarize.reduce((summary, t) => {
+        if (t.type === 'income') {
+            summary.actualIncome += t.amount;
+        } else if (t.type === 'expense') {
+            summary.actualExpense += t.amount;
+        }
+        return summary;
+    }, { actualIncome: 0, actualExpense: 0 });
+  }, []);
 
   // --- Profile Management ---
   const addBudgetProfile = useCallback(async (name: string) => {
@@ -512,12 +535,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'profileId'>) => {
     if (!currentProfileId) return;
+    
     const data = {
         ...transaction,
         profile: currentProfileId,
         account: transaction.accountId,
-        category: transaction.categoryId
+        category: transaction.type !== 'transfer' ? transaction.categoryId : null,
+        destinationAccountId: transaction.type === 'transfer' ? transaction.destinationAccountId : null,
     };
+
     const newTransaction = await pb.collection('transactions').create(data);
     setTransactions(prev => [...prev, mapPbToTransaction(newTransaction)]);
     addNotification('Transakcia bola pridaná.', 'success');
@@ -529,7 +555,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ...data,
         profile: profileId,
         account: data.accountId,
-        category: data.categoryId,
+        category: data.type !== 'transfer' ? data.categoryId : null,
+        destinationAccountId: data.type === 'transfer' ? data.destinationAccountId : null,
      };
     const updatedTransaction = await pb.collection('transactions').update(id, payload);
     setTransactions(prev => prev.map(t => t.id === id ? mapPbToTransaction(updatedTransaction) : t));
@@ -699,6 +726,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     allAccounts, allTransactions, allBudgets, allCategories,
     loadAppData, // Expose the loader function
     notifications, addNotification, removeNotification,
+    getFinancialSummary,
   }), [
     isLoading, error,
     budgetProfiles, currentProfileId, setCurrentProfileId, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile,
@@ -708,7 +736,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
     allAccounts, allTransactions, allBudgets, allCategories,
     loadAppData,
-    notifications, addNotification, removeNotification
+    notifications, addNotification, removeNotification,
+    getFinancialSummary
   ]);
 
   return (

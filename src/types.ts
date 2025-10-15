@@ -1,4 +1,4 @@
-export type TransactionType = 'income' | 'expense';
+export type TransactionType = 'income' | 'expense' | 'transfer';
 export type AccountType = 'Štandardný účet' | 'Sporiaci účet';
 export type AccountSubtype = 'Bankový účet' | 'Hotovosť';
 
@@ -32,8 +32,9 @@ export interface Transaction {
   description: string;
   amount: number;
   type: TransactionType;
-  categoryId: string;
-  accountId: string;
+  categoryId: string | null; // Can be null for transfers
+  accountId: string; // Source account
+  destinationAccountId?: string | null; // Destination account for transfers
   profileId: string;
 }
 

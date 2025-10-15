@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
+import { ConfirmModal } from './Transactions';
 import { PlusIcon, PencilIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons';
 import type { Category, TransactionType } from '../types';
 
@@ -351,30 +352,6 @@ const Categories: React.FC = () => {
             />
         </div>
     );
-};
-
-const ConfirmModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  message: string;
-  onConfirm: () => void;
-  confirmText?: string;
-}> = ({ isOpen, onClose, message, onConfirm, confirmText = 'Zmazať' }) => {
-  if (!isOpen) return null;
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie">
-      <div className="space-y-4">
-        <p className="text-light-onSurface dark:text-dark-onSurface">{message}</p>
-        <div className="flex justify-end space-x-2 pt-4">
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
-          <button type="button" onClick={onConfirm} className={`px-6 py-2.5 rounded-full hover:shadow-lg font-medium transition-shadow ${confirmText === 'Zmazať' ? 'bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError' : 'bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary'}`}>
-            {confirmText}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
 };
 
 export default Categories;
