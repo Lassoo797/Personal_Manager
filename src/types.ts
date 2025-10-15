@@ -1,4 +1,6 @@
 export type TransactionType = 'income' | 'expense';
+export type AccountType = 'Štandardný účet' | 'Sporiaci účet';
+export type AccountSubtype = 'Bankový účet' | 'Hotovosť';
 
 export interface BudgetProfile {
   id: string;
@@ -11,7 +13,8 @@ export interface Account {
   initialBalance: number;
   profileId: string;
   currency: 'EUR' | 'USD' | 'CZK';
-  type: 'Bankový účet';
+  accountType: AccountType;
+  type: AccountSubtype;
 }
 
 export interface Category {

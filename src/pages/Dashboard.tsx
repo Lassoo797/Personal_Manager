@@ -28,9 +28,31 @@ const Dashboard: React.FC = () => {
     return { currentMonthName: currentName, previousMonthLabel: previousLabel };
   }, []);
 
-  const totalBalance = useMemo(() => {
-    return accounts.reduce((sum, account) => sum + getAccountBalance(account.id), 0);
-  }, [accounts, getAccountBalance]);
+  const { 
+    operatingAccounts,
+    savingsAccounts
+  } = useMemo(() => {
+    const operating = accounts.filter(a => a.accountType === 'Štandardný účet');
+    const savings = accounts.filter(a => a.accountType === 'Sporiaci účet');
+    return { operatingAccounts: operating, savingsAccounts: savings };
+  }, [accounts]);
+  
+  const operatingBalance = useMemo(() => {
+    return operatingAccounts.reduce((sum, account) => sum + getAccountBalance(account.id), 0);
+  }, [operatingAccounts, getAccountBalance]);
+
+  const savingsBalance = useMemo(() => {
+    return savingsAccounts.reduce((sum, account) => sum + getAccountBalance(account.id), 0);
+  }, [savingsAccounts, getAccountBalance]);
+  
+  const totalBalance = operatingBalance + savingsBalance;
+  
+  const operatingAccountIds = useMemo(() => new Set(operatingAccounts.map(a => a.id)), [operatingAccounts]);
+
+  const budgetTransactions = useMemo(() => 
+    transactions.filter(t => operatingAccountIds.has(t.accountId)),
+    [transactions, operatingAccountIds]
+  );
   
   const { 
     monthlyIncome, 
@@ -59,7 +81,7 @@ const Dashboard: React.FC = () => {
         lastSixMonthsData[monthKey] = { income: 0, expenses: 0 };
     }
 
-    transactions.forEach(t => {
+    budgetTransactions.forEach(t => {
       const transactionDate = new Date(t.date);
       const transactionMonth = transactionDate.getMonth();
       const transactionYear = transactionDate.getFullYear();
@@ -108,13 +130,13 @@ const Dashboard: React.FC = () => {
         averageMonthlyIncome: avgIncome,
         averageMonthlyExpense: avgExpense
     };
-  }, [transactions, categories]);
+  }, [budgetTransactions, categories]);
 
   const recentTransactions = useMemo(() => 
-    [...transactions]
+    [...budgetTransactions]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5), 
-    [transactions]
+    [budgetTransactions]
   );
   
       const { chartData, months, currentMonthIndex } = useMemo(() => {
@@ -122,8 +144,8 @@ const Dashboard: React.FC = () => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-11
 
-    let yearStartBalance = accounts.reduce((sum, acc) => sum + acc.initialBalance, 0);
-    transactions.forEach(t => {
+    let yearStartBalance = operatingAccounts.reduce((sum, acc) => sum + acc.initialBalance, 0);
+    budgetTransactions.forEach(t => {
         if (new Date(t.date).getFullYear() < currentYear) {
             yearStartBalance += t.type === 'income' ? t.amount : -t.amount;
         }
@@ -162,7 +184,7 @@ const Dashboard: React.FC = () => {
         chartData[i + 1].plan = runningPlanBalance;
 
         if (i < currentMonth) { // Iba pre celé mesiace, ktoré už prešli
-            const monthlyTransactions = transactions.filter(t => {
+            const monthlyTransactions = budgetTransactions.filter(t => {
                 const tDate = new Date(t.date);
                 return tDate.getFullYear() === currentYear && tDate.getMonth() === i;
             });
@@ -192,7 +214,7 @@ const Dashboard: React.FC = () => {
     }
     
     return { chartData, months, currentMonthIndex: currentMonth };
-}, [accounts, transactions, budgets, categories]);
+}, [operatingAccounts, budgetTransactions, budgets, categories]);
 
 
   const COLORS = ['#0061A4', '#535F70', '#6B5778', '#00C49F', '#FFBB28', '#FF8042'];
@@ -209,6 +231,21 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Nástenka</h1>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dostupné v rozpočte</h2>
+          <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-1">{operatingBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+        </div>
+        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Sporenia</h2>
+          <p className="text-3xl font-bold text-light-secondary dark:text-dark-secondary mt-1">{savingsBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+        </div>
+        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový majetok</h2>
+          <p className="text-3xl font-bold text-light-tertiary dark:text-dark-tertiary mt-1">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+        </div>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">

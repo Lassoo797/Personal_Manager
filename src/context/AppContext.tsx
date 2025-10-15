@@ -6,7 +6,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
 const mapPbToProfile = (r: RecordModel): BudgetProfile => ({ id: r.id, name: r.name });
-const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, initialBalance: r.initialBalance, profileId: r.profile, currency: r.currency, type: r.type });
+const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, initialBalance: r.initialBalance, profileId: r.profile, currency: r.currency, accountType: r.accountType, type: r.type });
 const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, profileId: r.profile, order: r.order });
 const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category, accountId: r.account, profileId: r.profile });
 const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, profileId: r.profile });
@@ -328,10 +328,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [currentProfileId, addNotification]);
 
   const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
-    const { id, name, currency, type, initialBalance } = accountToUpdate;
-    const payload: Partial<Account> = {};
+    const { id, name, currency, accountType, type, initialBalance } = accountToUpdate;
+    const payload: Partial<Omit<Account, 'id' | 'profileId'>> = {};
     if (name) payload.name = name;
     if (currency) payload.currency = currency;
+    if (accountType) payload.accountType = accountType;
     if (type) payload.type = type;
     if (initialBalance !== undefined) payload.initialBalance = initialBalance;
 

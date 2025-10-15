@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
-import type { Account } from '../types';
+import type { Account, AccountType, AccountSubtype } from '../types';
+
+const ACCOUNT_TYPES: AccountType[] = ['Štandardný účet', 'Sporiaci účet'];
+const ACCOUNT_SUBTYPES: AccountSubtype[] = ['Bankový účet', 'Hotovosť'];
 
 const AccountForm: React.FC<{
   account?: Account | null;
@@ -12,26 +15,31 @@ const AccountForm: React.FC<{
 }> = ({ account, isEditing, onSave, onCancel }) => {
     const { addAccount, updateAccount } = useAppContext();
     const [name, setName] = useState(account?.name || '');
-    // Conditionally manage initialBalance state. For edits, it's not needed in the form.
     const [initialBalance, setInitialBalance] = useState(isEditing ? '' : (account?.initialBalance ?? ''));
     const [currency, setCurrency] = useState<'EUR' | 'USD' | 'CZK'>(account?.currency || 'EUR');
-    const [type, setType] = useState<'Bankový účet'>(account?.type || 'Bankový účet');
+    const [accountType, setAccountType] = useState<AccountType>(account?.accountType || 'Štandardný účet');
+    const [type, setType] = useState<AccountSubtype>(account?.type || 'Bankový účet');
     
-    // ... styles remain the same
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
-
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         
         if (isEditing) {
             if (!name || !account) return;
-            updateAccount({ id: account.id, name, currency, type });
+            updateAccount({ id: account.id, name, currency, accountType, type });
         } else {
+            // Explicitne kontrolujeme, či je string prázdny. 
+            // Hodnota 0 sa tak bude považovať za platnú.
             if (!name || initialBalance === '') return;
+            
             const balanceValue = parseFloat(String(initialBalance));
-            addAccount({ name, initialBalance: balanceValue, currency, type });
+            
+            // Finálna kontrola, či je hodnota naozaj číslo
+            if (isNaN(balanceValue)) return;
+
+            addAccount({ name, initialBalance: balanceValue, currency, accountType, type });
         }
         
         onSave();
@@ -60,10 +68,20 @@ const AccountForm: React.FC<{
                 <label htmlFor="currency" className={formLabelStyle}>Mena</label>
             </div>
             <div className="relative">
-                <select id="type" value={type} onChange={e => setType(e.target.value as 'Bankový účet')} className={`${formInputStyle} h-14`} required>
-                    <option value="Bankový účet" className="dark:bg-dark-surfaceContainerHigh">Bankový účet</option>
+                <select id="accountType" value={accountType} onChange={e => setAccountType(e.target.value as AccountType)} className={`${formInputStyle} h-14`} required>
+                  {ACCOUNT_TYPES.map(t => (
+                    <option key={t} value={t} className="dark:bg-dark-surfaceContainerHigh">{t}</option>
+                  ))}
                 </select>
-                <label htmlFor="type" className={formLabelStyle}>Typ účtu</label>
+                <label htmlFor="accountType" className={formLabelStyle}>Typ účtu</label>
+            </div>
+            <div className="relative">
+                <select id="type" value={type} onChange={e => setType(e.target.value as AccountSubtype)} className={`${formInputStyle} h-14`} required>
+                  {ACCOUNT_SUBTYPES.map(t => (
+                    <option key={t} value={t} className="dark:bg-dark-surfaceContainerHigh">{t}</option>
+                  ))}
+                </select>
+                <label htmlFor="type" className={formLabelStyle}>Podtyp účtu</label>
             </div>
             <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={onCancel} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
@@ -93,6 +111,9 @@ const Accounts: React.FC = () => {
     setIsModalOpen(false);
     setEditingAccount(null);
   };
+  
+  const operatingAccounts = accounts.filter(a => a.accountType === 'Štandardný účet');
+  const savingsAccounts = accounts.filter(a => a.accountType === 'Sporiaci účet');
 
   return (
     <div className="space-y-6">
@@ -104,28 +125,60 @@ const Accounts: React.FC = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {accounts.map(account => (
-          <div key={account.id} className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex flex-col justify-between">
-            <div>
-              <h2 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">{account.name}</h2>
-              <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-2">
-                {getAccountBalance(account.id).toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}
-              </p>
+      <div>
+        <h2 className="text-2xl font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pb-4">Bežné účty</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {operatingAccounts.map(account => (
+            <div key={account.id} className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex flex-col justify-between">
+              <div>
+                <h3 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">{account.name}</h3>
+                <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{account.type}</p>
+                <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-2">
+                  {getAccountBalance(account.id).toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}
+                </p>
+              </div>
+              <div className="flex justify-end space-x-1 mt-4">
+                <button aria-label={`Upraviť účet ${account.name}`} onClick={() => openEditModal(account)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
+                <button aria-label={`Zmazať účet ${account.name}`} onClick={() => setConfirmModalState({
+                  isOpen: true,
+                  message: `Naozaj chcete zmazať účet "${account.name}"?`,
+                  onConfirm: () => {
+                    deleteAccount(account.id);
+                    setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                  }
+                })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+              </div>
             </div>
-            <div className="flex justify-end space-x-1 mt-4">
-              <button aria-label={`Upraviť účet ${account.name}`} onClick={() => openEditModal(account)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-              <button aria-label={`Zmazať účet ${account.name}`} onClick={() => setConfirmModalState({
-                isOpen: true,
-                message: `Naozaj chcete zmazať účet "${account.name}"?`,
-                onConfirm: () => {
-                  deleteAccount(account.id);
-                  setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-                }
-              })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+          ))}
+        </div>
+      </div>
+      
+      <div>
+        <h2 className="text-2xl font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pt-6 pb-4">Sporiace účty</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {savingsAccounts.map(account => (
+            <div key={account.id} className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex flex-col justify-between">
+              <div>
+                <h3 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">{account.name}</h3>
+                <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{account.type}</p>
+                <p className="text-3xl font-bold text-light-secondary dark:text-dark-secondary mt-2">
+                  {getAccountBalance(account.id).toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}
+                </p>
+              </div>
+              <div className="flex justify-end space-x-1 mt-4">
+                <button aria-label={`Upraviť účet ${account.name}`} onClick={() => openEditModal(account)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
+                <button aria-label={`Zmazať účet ${account.name}`} onClick={() => setConfirmModalState({
+                  isOpen: true,
+                  message: `Naozaj chcete zmazať účet "${account.name}"?`,
+                  onConfirm: () => {
+                    deleteAccount(account.id);
+                    setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                  }
+                })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+              </div>
             </div>
-          </div>
         ))}
+        </div>
       </div>
       
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingAccount ? "Upraviť účet" : "Pridať účet"}>
