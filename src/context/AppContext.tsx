@@ -230,11 +230,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const addNotification = useCallback((message: string, type: 'success' | 'error' | 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
-    setNotifications(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      removeNotification(id);
-    }, 5000);
-  }, [removeNotification]);
+    setNotifications(prev => [{ id, message, type }, ...prev]);
+  }, []);
 
 
 
@@ -307,7 +304,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } catch(e: any) {
         setError(e);
         console.error("Chyba pri mazaní profilu:", e);
-        addNotification('Chyba pri mazaní profilu.', 'error');
+        addNotification('Chyba pri mazaní profilu. Skontrolujte, či nie sú k profilu priradené nejaké dáta.', 'error');
     } finally {
         setIsLoading(false);
         // We might need to refresh data if something went partially wrong
@@ -728,3 +725,4 @@ export const useAppContext = () => {
   }
   return context;
 };
+;

@@ -1,33 +1,69 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { XIcon, CheckCircleIcon, ExclamationCircleIcon, InformationCircleIcon } from './icons'; // Assuming you have these icons
+import { XIcon, CheckCircleIcon, ExclamationCircleIcon, InformationCircleIcon } from './icons';
+import { Notification as NotificationType } from '../types';
 
-const Notification: React.FC<{ notification: { id: string; message: string; type: 'success' | 'error' | 'info' } }> = ({ notification }) => {
+const Notification: React.FC<{ notification: NotificationType }> = ({ notification }) => {
   const { removeNotification } = useAppContext();
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Make it visible after mount to trigger transition
+    setIsVisible(true);
+    
+    const timer = setTimeout(() => {
+      handleClose();
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    // Wait for the fade-out animation to finish before removing from DOM
+    setTimeout(() => removeNotification(notification.id), 300);
+  };
   
-  const baseClasses = "flex items-center w-full max-w-xs p-4 space-x-4 text-gray-500 bg-white divide-x divide-gray-200 rounded-lg shadow dark:text-gray-400 dark:divide-gray-700 dark:bg-gray-800";
-  
-  const typeClasses = {
-    success: 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200',
-    error: 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200',
-    info: 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200',
+  const typeStyles = {
+    success: {
+      bg: 'bg-green-500 dark:bg-green-600',
+      icon: <CheckCircleIcon className="w-6 h-6 text-white" />,
+    },
+    error: {
+      bg: 'bg-light-error dark:bg-dark-error',
+      icon: <ExclamationCircleIcon className="w-6 h-6 text-light-onError dark:text-dark-onError" />,
+    },
+    info: {
+      bg: 'bg-light-secondary dark:bg-dark-secondary',
+      icon: <InformationCircleIcon className="w-6 h-6 text-light-onSecondary dark:text-dark-onSecondary" />,
+    },
   };
 
-  const Icon = ({ type }: { type: 'success' | 'error' | 'info' }) => {
-    switch (type) {
-      case 'success': return <CheckCircleIcon className="w-6 h-6" />;
-      case 'error': return <ExclamationCircleIcon className="w-6 h-6" />;
-      case 'info': return <InformationCircleIcon className="w-6 h-6" />;
-    }
-  };
+  const styles = typeStyles[notification.type];
 
   return (
-    <div className={`${baseClasses} ${typeClasses[notification.type]}`} role="alert">
-      <div className={`inline-flex items-center justify-center flex-shrink-0 w-8 h-8 rounded-lg`}>
-        <Icon type={notification.type} />
+    <div 
+      className={`
+        flex items-center w-full max-w-sm rounded-xl shadow-lg overflow-hidden
+        transition-all duration-300 ease-in-out
+        ${isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
+      `}
+      role="alert"
+    >
+      <div className={`p-3 ${styles.bg}`}>
+        {styles.icon}
       </div>
-      <div className="pl-4 text-sm font-normal">{notification.message}</div>
-      <button onClick={() => removeNotification(notification.id)} className="p-1.5 -m-1.5 ml-auto inline-flex items-center justify-center h-8 w-8 rounded-lg hover:bg-black/10 dark:hover:bg-white/10" aria-label="Close">
+      <div className="px-4 py-2 bg-light-surfaceContainer dark:bg-dark-surfaceContainer flex-grow">
+        <p className="text-sm font-medium text-light-onSurface dark:text-dark-onSurface">
+          {notification.message}
+        </p>
+      </div>
+       <button 
+        onClick={handleClose} 
+        className="p-2 bg-light-surfaceContainer dark:bg-dark-surfaceContainer text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh" 
+        aria-label="Close"
+      >
         <XIcon className="w-5 h-5" />
       </button>
     </div>
@@ -38,7 +74,7 @@ const NotificationsContainer: React.FC = () => {
   const { notifications } = useAppContext();
 
   return (
-    <div className="fixed top-5 right-5 z-50 space-y-4">
+    <div className="fixed top-5 right-5 z-50 space-y-3">
       {notifications.map(n => (
         <Notification key={n.id} notification={n} />
       ))}

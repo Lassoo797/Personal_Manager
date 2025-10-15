@@ -2,26 +2,45 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { PencilIcon, TrashIcon, PlusIcon } from './icons';
 import type { BudgetProfile } from '../types';
+import Modal from './Modal'; // Import the main Modal component
+
+// --- Reusable Confirm Modal ---
+const ConfirmModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  message: string;
+  onConfirm: () => void;
+}> = ({ isOpen, onClose, message, onConfirm }) => {
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie zmazania">
+      <div className="space-y-4">
+        <p>{message}</p>
+        <div className="flex justify-end space-x-2 pt-4">
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+          <button type="button" onClick={onConfirm} className="px-6 py-2.5 bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError rounded-full hover:shadow-lg font-medium transition-shadow">Zmazať</button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
 
 const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { budgetProfiles, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile } = useAppContext();
     const [newProfileName, setNewProfileName] = useState('');
     const [editingProfile, setEditingProfile] = useState<BudgetProfile | null>(null);
     const [editingName, setEditingName] = useState('');
+    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0";
 
     const handleAddProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newProfileName.trim()) {
-            try {
-                await addBudgetProfile(newProfileName.trim());
-                setNewProfileName('');
-                alert(`Profil "${newProfileName.trim()}" bol úspešne vytvorený.`);
-                onClose(); // Zavrie modálne okno po úspešnom pridaní
-            } catch (error) {
-                console.error("Failed to add profile:", error);
-                alert("Nepodarilo sa vytvoriť profil. Skúste to prosím znova.");
-            }
+            await addBudgetProfile(newProfileName.trim());
+            setNewProfileName('');
+            onClose();
         }
     };
 
@@ -38,69 +57,81 @@ const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setEditingName('');
     };
     
-    const handleDelete = (profile: BudgetProfile) => {
-        const confirmationMessage = `Naozaj chcete natrvalo zmazať profil "${profile.name}"? Týmto sa zmažú všetky súvisiace účty, transakcie a rozpočty.`;
-        if (window.confirm(confirmationMessage)) {
-            deleteBudgetProfile(profile.id);
-        }
+    const handleDeleteRequest = (profile: BudgetProfile) => {
+        setConfirmModalState({
+            isOpen: true,
+            message: `Naozaj chcete natrvalo zmazať profil "${profile.name}"? Týmto sa zmažú všetky súvisiace účty, transakcie a rozpočty.`,
+            onConfirm: () => {
+                deleteBudgetProfile(profile.id);
+                setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+            }
+        });
     };
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface mb-2">Existujúce profily</h3>
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                    {budgetProfiles.map(profile => (
-                        <div key={profile.id} className="flex items-center justify-between bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-3 rounded-lg">
-                            {editingProfile?.id === profile.id ? (
-                                <input
-                                    type="text"
-                                    value={editingName}
-                                    onChange={(e) => setEditingName(e.target.value)}
-                                    onBlur={handleSaveEdit}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit() }}
-                                    className="w-full bg-light-surface dark:bg-dark-surface text-light-onSurface dark:text-dark-onSurface rounded-md border-light-primary dark:border-dark-primary border-2 px-2 py-1 outline-none"
-                                    autoFocus
-                                />
-                            ) : (
-                                <span className="text-light-onSurface dark:text-dark-onSurface">{profile.name}</span>
-                            )}
-                            
-                            <div className="flex items-center space-x-1 ml-4">
-                                <button aria-label={`Upraviť profil ${profile.name}`} onClick={() => handleEdit(profile)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                                {budgetProfiles.length > 1 && (
-                                    <button aria-label={`Zmazať profil ${profile.name}`} onClick={() => handleDelete(profile)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+        <>
+            <div className="space-y-6">
+                <div>
+                    <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface mb-2">Existujúce profily</h3>
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                        {budgetProfiles.map(profile => (
+                            <div key={profile.id} className="flex items-center justify-between bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-3 rounded-lg">
+                                {editingProfile?.id === profile.id ? (
+                                    <input
+                                        type="text"
+                                        value={editingName}
+                                        onChange={(e) => setEditingName(e.target.value)}
+                                        onBlur={handleSaveEdit}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit() }}
+                                        className="w-full bg-light-surface dark:bg-dark-surface text-light-onSurface dark:text-dark-onSurface rounded-md border-light-primary dark:border-dark-primary border-2 px-2 py-1 outline-none"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <span className="text-light-onSurface dark:text-dark-onSurface">{profile.name}</span>
                                 )}
+                                
+                                <div className="flex items-center space-x-1 ml-4">
+                                    <button aria-label={`Upraviť profil ${profile.name}`} onClick={() => handleEdit(profile)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
+                                    {budgetProfiles.length > 1 && (
+                                        <button aria-label={`Zmazať profil ${profile.name}`} onClick={() => handleDeleteRequest(profile)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                                    )}
+                                </div>
                             </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="border-t border-light-outlineVariant dark:border-dark-outlineVariant pt-4">
+                    <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface mb-2">Vytvoriť nový profil</h3>
+                    <form onSubmit={handleAddProfile} className="flex items-center space-x-2">
+                        <div className="relative flex-grow">
+                            <input
+                                type="text"
+                                id="new-profile-name"
+                                value={newProfileName}
+                                onChange={(e) => setNewProfileName(e.target.value)}
+                                className={`${formInputStyle} peer h-12 pt-2`}
+                                required
+                                placeholder=" "
+                            />
+                            <label htmlFor="new-profile-name" className="absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3">Názov nového profilu</label>
                         </div>
-                    ))}
+                        <button type="submit" aria-label="Pridať nový profil" className="flex-shrink-0 p-3 bg-light-primary text-light-onPrimary rounded-full hover:shadow-lg transition-shadow">
+                            <PlusIcon className="h-6 w-6" />
+                        </button>
+                    </form>
+                </div>
+                <div className="flex justify-end pt-4">
+                    <button type="button" onClick={onClose} className="px-4 py-2 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zavrieť</button>
                 </div>
             </div>
-
-            <div className="border-t border-light-outlineVariant dark:border-dark-outlineVariant pt-4">
-                 <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface mb-2">Vytvoriť nový profil</h3>
-                <form onSubmit={handleAddProfile} className="flex items-center space-x-2">
-                    <div className="relative flex-grow">
-                        <input
-                            type="text"
-                            id="new-profile-name"
-                            value={newProfileName}
-                            onChange={(e) => setNewProfileName(e.target.value)}
-                            className={`${formInputStyle} peer h-12 pt-2`}
-                            required
-                            placeholder=" "
-                        />
-                         <label htmlFor="new-profile-name" className="absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3">Názov nového profilu</label>
-                    </div>
-                    <button type="submit" aria-label="Pridať nový profil" className="flex-shrink-0 p-3 bg-light-primary text-light-onPrimary rounded-full hover:shadow-lg transition-shadow">
-                        <PlusIcon className="h-6 w-6" />
-                    </button>
-                </form>
-            </div>
-             <div className="flex justify-end pt-4">
-                <button type="button" onClick={onClose} className="px-4 py-2 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zavrieť</button>
-            </div>
-        </div>
+            <ConfirmModal 
+                isOpen={confirmModalState.isOpen}
+                onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })}
+                message={confirmModalState.message}
+                onConfirm={confirmModalState.onConfirm}
+            />
+        </>
     );
 };
 

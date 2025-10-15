@@ -235,11 +235,12 @@ const CategoryList: React.FC<{ type: TransactionType, onEdit: (cat: Category) =>
 };
 
 const Categories: React.FC = () => {
-    const { categories, transactions, deleteCategory } = useAppContext();
+    const { categories, transactions, deleteCategory, deleteCategoryAndChildren } = useAppContext();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
     const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
     const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Zmazať' });
 
     const openAddModal = () => {
         setEditingCategory(null);
@@ -262,19 +263,51 @@ const Categories: React.FC = () => {
     };
 
     const handleDeleteRequest = (category: Category) => {
-        const hasSubcategories = categories.some(c => c.parentId === category.id);
-        if (hasSubcategories) {
-            alert('Nie je možné zmazať kategóriu, ktorá má podkategórie. Najprv zmažte alebo presuňte podkategórie.');
-            return;
-        }
+        const isParent = !category.parentId;
+        if (isParent) {
+            const subcategories = categories.filter(c => c.parentId === category.id);
+            const childIds = subcategories.map(sc => sc.id);
+            const hasTransactionsInChildren = transactions.some(t => childIds.includes(t.categoryId));
 
-        const hasTransactions = transactions.some(t => t.categoryId === category.id);
-        if (hasTransactions) {
-            setCategoryToDelete(category);
-            setIsReassignModalOpen(true);
-        } else {
-            if (window.confirm(`Naozaj chcete zmazať kategóriu "${category.name}"?`)) {
-                deleteCategory(category.id);
+            if (hasTransactionsInChildren) {
+                setConfirmModalState({
+                    isOpen: true,
+                    message: `Nie je možné zmazať skupinu "${category.name}", pretože jej podkategórie obsahujú transakcie. Najprv presuňte alebo zmažte transakcie.`,
+                    onConfirm: () => setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} }),
+                    confirmText: 'Rozumiem'
+                });
+                return;
+            }
+
+            const confirmationMessage = subcategories.length > 0
+                ? `Naozaj chcete zmazať skupinu "${category.name}" a všetky jej podkategórie?`
+                : `Naozaj chcete zmazať prázdnu skupinu "${category.name}"?`;
+            
+            setConfirmModalState({
+                isOpen: true,
+                message: confirmationMessage,
+                onConfirm: () => {
+                    deleteCategoryAndChildren(category.id);
+                    setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                },
+                confirmText: 'Zmazať'
+            });
+
+        } else { // It's a subcategory
+            const hasTransactions = transactions.some(t => t.categoryId === category.id);
+            if (hasTransactions) {
+                setCategoryToDelete(category);
+                setIsReassignModalOpen(true);
+            } else {
+                setConfirmModalState({
+                    isOpen: true,
+                    message: `Naozaj chcete zmazať kategóriu "${category.name}"?`,
+                    onConfirm: () => {
+                        deleteCategory(category.id);
+                        setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                    },
+                    confirmText: 'Zmazať'
+                });
             }
         }
     };
@@ -309,8 +342,39 @@ const Categories: React.FC = () => {
                 onClose={closeReassignModal} 
                 category={categoryToDelete} 
             />
+            <ConfirmModal 
+                isOpen={confirmModalState.isOpen}
+                onClose={() => setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} })}
+                message={confirmModalState.message}
+                onConfirm={confirmModalState.onConfirm}
+                confirmText={confirmModalState.confirmText}
+            />
         </div>
     );
+};
+
+const ConfirmModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  message: string;
+  onConfirm: () => void;
+  confirmText?: string;
+}> = ({ isOpen, onClose, message, onConfirm, confirmText = 'Zmazať' }) => {
+  if (!isOpen) return null;
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Potvrdenie">
+      <div className="space-y-4">
+        <p className="text-light-onSurface dark:text-dark-onSurface">{message}</p>
+        <div className="flex justify-end space-x-2 pt-4">
+          <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+          <button type="button" onClick={onConfirm} className={`px-6 py-2.5 rounded-full hover:shadow-lg font-medium transition-shadow ${confirmText === 'Zmazať' ? 'bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError' : 'bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary'}`}>
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
 };
 
 export default Categories;
