@@ -244,18 +244,6 @@
         "type": "text"
       },
       {
-        "hidden": false,
-        "id": "number3819855389",
-        "max": null,
-        "min": null,
-        "name": "initialBalance",
-        "onlyInt": false,
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "number"
-      },
-      {
         "cascadeDelete": false,
         "collectionId": "pbc_3414089001",
         "hidden": false,
@@ -751,6 +739,15 @@
         "required": false,
         "system": false,
         "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "bool0123456789",
+        "name": "isInitial",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "bool"
       },
       {
         "hidden": false,

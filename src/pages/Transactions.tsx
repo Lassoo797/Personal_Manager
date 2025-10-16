@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
-import type { Transaction, TransactionType, Category } from '../types';
+import type { Transaction, TransactionType, Account, Category } from '../types';
 
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
     const { accounts, categories, addTransaction, updateTransaction } = useAppContext();
@@ -42,14 +42,14 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
 
     const filteredCategories = useMemo(() => {
         return categories
-            .filter(c => c.type === type && c.parentId) 
-            .sort((a,b) => a.name.localeCompare(b.name));
+            .filter((c: Category) => c.type === type && c.parentId)
+            .sort((a: Category, b: Category) => a.name.localeCompare(b.name));
     }, [categories, type]);
     
     // Filter accounts for transfers - only standard accounts
-    const standardAccounts = useMemo(() => 
-        accounts.filter(a => a.accountType === 'Štandardný účet'),
-    [accounts]);
+    const standardAccounts = useMemo(() =>
+        accounts.filter((a: Account) => a.accountType === 'Štandardný účet'),
+        [accounts]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -102,45 +102,45 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                 </div>
             </div>
              <div className="relative" onClick={() => dateInputRef.current?.showPicker()}>
-                <input ref={dateInputRef} type="date" id="date" value={date} onChange={e => setDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required placeholder=" " />
+                <input ref={dateInputRef} type="date" id="date" value={date} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required placeholder=" " />
                 <label htmlFor="date" className={`${formLabelStyle} cursor-pointer`}>Dátum</label>
             </div>
             <div className="relative">
-                <input type="text" id="description" value={description} onChange={e => setDescription(e.target.value)} className={`${formInputStyle} h-14`} placeholder=" "/>
+                <input type="text" id="description" value={description} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)} className={`${formInputStyle} h-14`} placeholder=" "/>
                 <label htmlFor="description" className={formLabelStyle}>Popis (nepovinné)</label>
             </div>
             <div className="relative">
-                <input type="number" id="amount" value={amount} onChange={e => setAmount(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" "/>
+                <input type="number" id="amount" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" "/>
                 <label htmlFor="amount" className={formLabelStyle}>Suma</label>
             </div>
 
             {type === 'transfer' ? (
                 <>
                     <div className="relative">
-                        <select id="account" value={accountId} onChange={e => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
+                        <select id="account" value={accountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Z účtu...</option>
-                            {standardAccounts.map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                            {standardAccounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                         </select>
                     </div>
                     <div className="relative">
-                        <select id="destinationAccount" value={destinationAccountId} onChange={e => setDestinationAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
+                        <select id="destinationAccount" value={destinationAccountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDestinationAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Na účet...</option>
-                            {standardAccounts.filter(a => a.id !== accountId).map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                            {standardAccounts.filter((a: Account) => a.id !== accountId).map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                         </select>
                     </div>
                 </>
             ) : (
                 <>
                     <div className="relative">
-                        <select id="category" value={categoryId} onChange={e => setCategoryId(e.target.value)} className={`${formInputStyle} h-14`} required>
+                        <select id="category" value={categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCategoryId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
-                            {filteredCategories.map(c => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{categories.find(p=>p.id === c.parentId)?.name} - {c.name}</option>)}
+                            {filteredCategories.map((c: Category) => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{categories.find((p: Category) => p.id === c.parentId)?.name} - {c.name}</option>)}
                         </select>
                     </div>
                     <div className="relative">
-                        <select id="account" value={accountId} onChange={e => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
+                        <select id="account" value={accountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte účet</option>
-                            {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                            {accounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                         </select>
                     </div>
                 </>
@@ -171,10 +171,17 @@ const Transactions: React.FC = () => {
     minAmount: '',
     maxAmount: '',
     type: '',
+    showSystem: false,
   });
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') {
+        const checkbox = e.target as HTMLInputElement;
+        setFilters(prev => ({ ...prev, [name]: checkbox.checked }));
+    } else {
+        setFilters(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const resetFilters = () => {
@@ -185,12 +192,18 @@ const Transactions: React.FC = () => {
       minAmount: '',
       maxAmount: '',
       type: '',
+      showSystem: false,
     });
   };
 
   const filteredTransactions = useMemo(() => {
     return [...transactions]
       .filter(t => {
+        // Filter system transactions based on the toggle
+        if (!filters.showSystem && t.systemType) {
+            return false;
+        }
+
         if (filters.startDate && new Date(t.date) < new Date(filters.startDate)) return false;
         if (filters.endDate && new Date(t.date) > new Date(filters.endDate)) return false;
         // Filter transfers based on category filter
@@ -205,19 +218,20 @@ const Transactions: React.FC = () => {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, filters]);
 
-  const categoryMap = useMemo(() => 
-    new Map(categories.map(c => [c.id, c])), 
+  const categoryMap = useMemo(() =>
+    new Map(categories.map((c: Category) => [c.id, c])),
     [categories]
   );
 
   const accountMap = useMemo(() =>
-    new Map(accounts.map(a => [a.id, a.name])),
+    new Map(accounts.map((a: Account) => [a.id, a.name])),
     [accounts]
   );
   
-  const getCategoryDisplayName = (categoryId: string | null) => {
-    if (!categoryId) return 'N/A';
-    const category = categoryMap.get(categoryId);
+  const getCategoryDisplayName = (transaction: Transaction) => {
+    if (transaction.systemType === 'initial_balance') return 'Počiatočný zostatok';
+    if (!transaction.categoryId) return 'N/A';
+    const category = categoryMap.get(transaction.categoryId);
     if (!category) return 'Neznáma kategória';
     if (category.parentId) {
         const parent = categoryMap.get(category.parentId);
@@ -280,7 +294,11 @@ const Transactions: React.FC = () => {
             <label htmlFor="category-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Kategória</label>
             <select id="category-filter" name="categoryId" value={filters.categoryId} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 appearance-none">
                 <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky kategórie</option>
-                {categories.filter(c => c.parentId).sort((a,b) => a.name.localeCompare(b.name)).map(c => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{getCategoryDisplayName(c.id)}</option>)}
+                {categories.filter((c: Category) => c.parentId).sort((a: Category, b: Category) => a.name.localeCompare(b.name)).map((c: Category) => {
+                    const parent = categoryMap.get(c.parentId!);
+                    const displayName = `${parent ? parent.name : '...'} - ${c.name}`;
+                    return <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{displayName}</option>
+                })}
             </select>
           </div>
           
@@ -293,6 +311,12 @@ const Transactions: React.FC = () => {
                 <option value="expense" className="dark:bg-dark-surfaceContainerHigh">Výdavok</option>
                 <option value="transfer" className="dark:bg-dark-surfaceContainerHigh">Prevod</option>
             </select>
+          </div>
+
+          {/* Zobraziť systémové */}
+          <div className="flex items-center justify-self-start pt-5">
+            <input type="checkbox" name="showSystem" id="showSystem" checked={filters.showSystem} onChange={handleFilterChange} className="h-4 w-4 rounded border-gray-300 text-light-primary focus:ring-light-primary" />
+            <label htmlFor="showSystem" className="ml-2 block text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Zobraziť systémové</label>
           </div>
 
           {/* Suma od */}
@@ -335,7 +359,7 @@ const Transactions: React.FC = () => {
                 return (
                   <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
                     <td className="py-4 px-4">{new Date(t.date).toLocaleDateString('sk-SK')}</td>
-                    <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{isTransfer ? 'Prevod' : getCategoryDisplayName(t.categoryId)}</td>
+                    <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{isTransfer ? 'Prevod' : getCategoryDisplayName(t)}</td>
                     <td className="py-4 px-4">{t.description}</td>
                     <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
                       {isTransfer 
@@ -347,7 +371,7 @@ const Transactions: React.FC = () => {
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-1">
-                          <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"><PencilIcon /></button>
+                          <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest" disabled={!!t.systemType}><PencilIcon /></button>
                           <button aria-label="Zmazať transakciu" onClick={() => setConfirmModalState({
                             isOpen: true,
                             message: `Naozaj chcete zmazať túto transakciu?`,
@@ -355,7 +379,7 @@ const Transactions: React.FC = () => {
                               deleteTransaction(t.id);
                               setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
                             }
-                          })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                          })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer" disabled={!!t.systemType}><TrashIcon /></button>
                       </div>
                     </td>
                   </tr>

@@ -10,7 +10,6 @@ export interface BudgetProfile {
 export interface Account {
   id: string;
   name: string;
-  initialBalance: number;
   profileId: string;
   currency: 'EUR' | 'USD' | 'CZK';
   accountType: AccountType;
@@ -36,6 +35,7 @@ export interface Transaction {
   accountId: string; // Source account
   destinationAccountId?: string | null; // Destination account for transfers
   profileId: string;
+  systemType?: 'initial_balance' | null;
 }
 
 export interface Budget {

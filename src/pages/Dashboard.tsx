@@ -50,7 +50,7 @@ const Dashboard: React.FC = () => {
   const operatingAccountIds = useMemo(() => new Set(operatingAccounts.map(a => a.id)), [operatingAccounts]);
 
   const budgetTransactions = useMemo(() => 
-    transactions.filter(t => operatingAccountIds.has(t.accountId)),
+    transactions.filter(t => operatingAccountIds.has(t.accountId) && !t.systemType),
     [transactions, operatingAccountIds]
   );
   
@@ -136,8 +136,11 @@ const Dashboard: React.FC = () => {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-11
 
-    let yearStartBalance = operatingAccounts.reduce((sum, acc) => sum + acc.initialBalance, 0);
-    budgetTransactions.forEach(t => {
+    // Správny výpočet počiatočného zostatku k 1.1. aktuálneho roka
+    let yearStartBalance = 0;
+    const allOperatingTransactions = transactions.filter(t => operatingAccountIds.has(t.accountId) || (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)));
+    
+    allOperatingTransactions.forEach(t => {
         if (new Date(t.date).getFullYear() < currentYear) {
             if (t.type === 'transfer') {
                 if (operatingAccountIds.has(t.accountId)) {
@@ -146,10 +149,8 @@ const Dashboard: React.FC = () => {
                 if (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)) {
                     yearStartBalance += t.amount;
                 }
-            } else if (t.type === 'income') {
-                yearStartBalance += t.amount;
-            } else { // expense
-                yearStartBalance -= t.amount;
+            } else if (operatingAccountIds.has(t.accountId)) { // Pre income/expense
+                yearStartBalance += (t.type === 'income' ? t.amount : -t.amount);
             }
         }
     });
@@ -187,7 +188,7 @@ const Dashboard: React.FC = () => {
         chartData[i + 1].plan = runningPlanBalance;
 
         if (i < currentMonth) { // Iba pre celé mesiace, ktoré už prešli
-            const monthlyTransactions = budgetTransactions.filter(t => {
+            const monthlyTransactions = allOperatingTransactions.filter(t => {
                 const tDate = new Date(t.date);
                 return tDate.getFullYear() === currentYear && tDate.getMonth() === i;
             });
@@ -201,21 +202,15 @@ const Dashboard: React.FC = () => {
                     }
                     return sum;
                 }
-                return sum + (t.type === 'income' ? t.amount : -t.amount);
+                 if (operatingAccountIds.has(t.accountId)) {
+                    return sum + (t.type === 'income' ? t.amount : -t.amount);
+                }
+                return sum;
             }, 0);
             runningActualBalance += monthlyDelta;
             chartData[i + 1].actual = runningActualBalance;
         }
     }
-    
-    // // Pre aktuálny, neukončený mesiac, zoberieme transakcie do dnešného dňa
-    // const currentMonthTransactions = transactions.filter(t => {
-    //     const tDate = new Date(t.date);
-    //     return tDate.getFullYear() === currentYear && tDate.getMonth() === currentMonth;
-    // });
-    // const currentMonthDelta = currentMonthTransactions.reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
-    // chartData[currentMonth + 1].actual = runningActualBalance + currentMonthDelta;
-
 
     // Prognóza začína od posledného známeho stavu (koniec minulého mesiaca)
     const lastKnownActualBalance = chartData[currentMonth].actual ?? yearStartBalance;
@@ -228,7 +223,7 @@ const Dashboard: React.FC = () => {
     }
     
     return { chartData, months, currentMonthIndex: currentMonth };
-}, [operatingAccounts, budgetTransactions, budgets, categories]);
+}, [accounts, transactions, budgets, categories, operatingAccountIds]);
 
 
   const COLORS = ['#0061A4', '#535F70', '#6B5778', '#00C49F', '#FFBB28', '#FF8042'];

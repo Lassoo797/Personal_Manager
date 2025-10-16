@@ -6,9 +6,9 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
 const mapPbToProfile = (r: RecordModel): BudgetProfile => ({ id: r.id, name: r.name });
-const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, initialBalance: r.initialBalance, profileId: r.profile, currency: r.currency, accountType: r.accountType, type: r.type });
+const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, profileId: r.profile, currency: r.currency, accountType: r.accountType, type: r.type });
 const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, profileId: r.profile, order: r.order });
-const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.account, destinationAccountId: r.destinationAccountId || null, profileId: r.profile });
+const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.account, destinationAccountId: r.destinationAccountId || null, profileId: r.profile, systemType: r.systemType || null });
 const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, profileId: r.profile });
 
 // PocketBase options to prevent autocancellation during batch operations
@@ -40,7 +40,7 @@ interface AppContextType {
   allCategories: Category[];
 
   // Actions
-  addAccount: (account: Omit<Account, 'id' | 'profileId'>) => Promise<void>;
+  addAccountWithInitialTransaction: (account: Omit<Account, 'id' | 'profileId'>, initialBalance: number, initialBalanceDate: string) => Promise<void>;
   updateAccount: (account: Partial<Account> & Pick<Account, 'id'>) => Promise<void>;
   deleteAccount: (id: string) => Promise<string | void>;
   getAccountBalance: (accountId: string) => number;
@@ -256,11 +256,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         }
         return balance;
-    }, account.initialBalance);
+    }, 0);
   }, [accounts, transactions]);
 
   const getFinancialSummary = useCallback((transactionsToSummarize: Transaction[]): { actualIncome: number, actualExpense: number } => {
     return transactionsToSummarize.reduce((summary, t) => {
+        if (t.systemType) { // Ignore all system transactions
+            return summary;
+        }
         if (t.type === 'income') {
             summary.actualIncome += t.amount;
         } else if (t.type === 'expense') {
@@ -340,21 +343,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [budgetProfiles, currentProfileId, setCurrentProfileId, addNotification]);
 
   // --- Data Management ---
-  const addAccount = useCallback(async (account: Omit<Account, 'id' | 'profileId'>) => {
+  const addAccountWithInitialTransaction = useCallback(async (account: Omit<Account, 'id' | 'profileId'>, initialBalance: number, initialBalanceDate: string) => {
     if (!currentProfileId) return;
-    const newAccount = await pb.collection('accounts').create({ ...account, profile: currentProfileId });
-    setAccounts(prev => [...prev, mapPbToAccount(newAccount)]);
-    addNotification(`Účet "${account.name}" bol pridaný.`, 'success');
+
+    try {
+      const newAccountRecord = await pb.collection('accounts').create({ ...account, profile: currentProfileId });
+      const newAccount = mapPbToAccount(newAccountRecord);
+      
+      if (initialBalance !== 0) {
+        const initialTransactionData = {
+          date: initialBalanceDate,
+          description: 'Počiatočný zostatok',
+          amount: Math.abs(initialBalance),
+          type: initialBalance >= 0 ? 'income' : 'expense',
+          systemType: 'initial_balance',
+          account: newAccount.id,
+          profile: currentProfileId,
+          category: null,
+        };
+        const newTransactionRecord = await pb.collection('transactions').create(initialTransactionData);
+        const newTransaction = mapPbToTransaction(newTransactionRecord);
+        setTransactions(prev => [...prev, newTransaction]);
+      }
+
+      setAccounts(prev => [...prev, newAccount]);
+      addNotification(`Účet "${account.name}" bol pridaný.`, 'success');
+    } catch (e: any) {
+        console.error("Chyba pri vytváraní účtu s počiatočnou transakciou:", e);
+        addNotification('Nastala chyba pri vytváraní účtu.', 'error');
+    }
   }, [currentProfileId, addNotification]);
 
   const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
-    const { id, name, currency, accountType, type, initialBalance } = accountToUpdate;
+    const { id, name, currency, accountType, type } = accountToUpdate;
     const payload: Partial<Omit<Account, 'id' | 'profileId'>> = {};
     if (name) payload.name = name;
     if (currency) payload.currency = currency;
     if (accountType) payload.accountType = accountType;
     if (type) payload.type = type;
-    if (initialBalance !== undefined) payload.initialBalance = initialBalance;
 
     if (Object.keys(payload).length === 0) return; // No fields to update
 
@@ -374,16 +400,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [addNotification]);
 
   const deleteAccount = useCallback(async (id: string): Promise<string | void> => {
-    const hasTransactions = transactions.some(t => t.accountId === id);
-    if (hasTransactions) {
-      const message = 'Nie je možné zmazať účet, ku ktorému sú priradené transakcie.';
+    const balance = getAccountBalance(id);
+    if (Math.abs(balance) > 0.001) {
+      const message = `Účet nie je možné zmazať, pretože jeho zostatok je ${balance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}. Pred zmazaním musíte zostatok vynulovať.`;
       addNotification(message, 'error');
       return message;
     }
-    await pb.collection('accounts').delete(id);
-    setAccounts(prev => prev.filter(a => a.id !== id));
-    addNotification('Účet bol úspešne zmazaný.', 'success');
-  }, [transactions, addNotification]);
+    
+    const associatedTransactions = transactions.filter(t => t.accountId === id || t.destinationAccountId === id);
+    const nonSystemTransactions = associatedTransactions.filter(t => !t.systemType);
+
+    if (nonSystemTransactions.length > 0) {
+        const message = 'Nie je možné zmazať účet, ku ktorému sú priradené bežné transakcie.';
+        addNotification(message, 'error');
+        return message;
+    }
+    
+    try {
+        await Promise.all(associatedTransactions.map(t => pb.collection('transactions').delete(t.id)));
+        await pb.collection('accounts').delete(id);
+        setAccounts(prev => prev.filter(a => a.id !== id));
+        setTransactions(prev => prev.filter(t => t.accountId !== id && t.destinationAccountId !== id));
+        addNotification('Účet bol úspešne zmazaný.', 'success');
+    } catch (e: any) {
+        console.error("Chyba pri mazaní účtu:", e);
+        addNotification('Nastala chyba pri mazaní účtu.', 'error');
+    }
+  }, [transactions, addNotification, getAccountBalance]);
   
   const addCategory = useCallback(async (category: Omit<Category, 'id' | 'profileId' | 'order'>): Promise<Category | null> => {
     if (!currentProfileId) return null;
@@ -719,7 +762,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = useMemo(() => ({
     isLoading, error,
     budgetProfiles, currentProfileId, setCurrentProfileId, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile,
-    accounts, addAccount, updateAccount, deleteAccount, getAccountBalance,
+    accounts, addAccountWithInitialTransaction, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
@@ -730,7 +773,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }), [
     isLoading, error,
     budgetProfiles, currentProfileId, setCurrentProfileId, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile,
-    accounts, addAccount, updateAccount, deleteAccount, getAccountBalance,
+    accounts, addAccountWithInitialTransaction, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,

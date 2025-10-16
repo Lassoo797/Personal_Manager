@@ -14,9 +14,10 @@ const AccountForm: React.FC<{
   onSave: () => void;
   onCancel: () => void;
 }> = ({ account, isEditing, onSave, onCancel }) => {
-    const { addAccount, updateAccount } = useAppContext();
+    const { addAccountWithInitialTransaction, updateAccount } = useAppContext();
     const [name, setName] = useState(account?.name || '');
-    const [initialBalance, setInitialBalance] = useState(isEditing ? '' : (account?.initialBalance ?? ''));
+    const [initialBalance, setInitialBalance] = useState('');
+    const [initialBalanceDate, setInitialBalanceDate] = useState(new Date().toISOString().slice(0, 10));
     const [currency, setCurrency] = useState<'EUR' | 'USD' | 'CZK'>(account?.currency || 'EUR');
     const [accountType, setAccountType] = useState<AccountType>(account?.accountType || 'Štandardný účet');
     const [type, setType] = useState<AccountSubtype>(account?.type || 'Bankový účet');
@@ -31,8 +32,7 @@ const AccountForm: React.FC<{
             if (!name || !account) return;
             updateAccount({ id: account.id, name, currency, accountType, type });
         } else {
-            // Explicitne kontrolujeme, či je string prázdny. 
-            // Hodnota 0 sa tak bude považovať za platnú.
+            // Hodnota 0 sa bude považovať za platnú.
             if (!name || initialBalance === '') return;
             
             const balanceValue = parseFloat(String(initialBalance));
@@ -40,7 +40,7 @@ const AccountForm: React.FC<{
             // Finálna kontrola, či je hodnota naozaj číslo
             if (isNaN(balanceValue)) return;
 
-            addAccount({ name, initialBalance: balanceValue, currency, accountType, type });
+            addAccountWithInitialTransaction({ name, currency, accountType, type }, balanceValue, initialBalanceDate);
         }
         
         onSave();
@@ -54,10 +54,16 @@ const AccountForm: React.FC<{
             </div>
             
             {!isEditing && (
-              <div className="relative">
-                  <input type="number" id="initialBalance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" " />
-                  <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
-              </div>
+              <>
+                <div className="relative">
+                    <input type="number" id="initialBalance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" " />
+                    <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
+                </div>
+                <div className="relative">
+                    <input type="date" id="initialBalanceDate" value={initialBalanceDate} onChange={e => setInitialBalanceDate(e.target.value)} className={`${formInputStyle} h-14`} required />
+                    <label htmlFor="initialBalanceDate" className={formLabelStyle}>Dátum počiatočného zostatku</label>
+                </div>
+              </>
             )}
             
             <div className="relative">
