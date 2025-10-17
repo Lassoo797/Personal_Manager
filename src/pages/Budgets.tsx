@@ -231,7 +231,9 @@ const Budgets: React.FC = () => {
     }, []);
 
     const getActualAmount = useCallback((categoryId: string) => {
-        return transactions.filter(t => t.categoryId === categoryId && t.date.startsWith(currentMonth)).reduce((sum, t) => sum + t.amount, 0);
+        return transactions
+            .filter(t => t.categoryId === categoryId && t.transactionDate && t.transactionDate.startsWith(currentMonth))
+            .reduce((sum, t) => sum + t.amount, 0);
     }, [transactions, currentMonth]);
     
     const parentCategories = useMemo(() => ({
@@ -261,7 +263,7 @@ const Budgets: React.FC = () => {
         });
 
         // Použitie novej centrálnej funkcie
-        const monthlyTransactions = transactions.filter(t => t.date.startsWith(currentMonth));
+        const monthlyTransactions = transactions.filter(t => t.transactionDate && t.transactionDate.startsWith(currentMonth));
         const { actualIncome, actualExpense } = getFinancialSummary(monthlyTransactions);
         
         const plannedBalance = plannedIncome - plannedExpense;

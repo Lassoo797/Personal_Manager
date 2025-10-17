@@ -301,6 +301,29 @@
       },
       {
         "hidden": false,
+        "id": "number12345678",
+        "max": null,
+        "min": null,
+        "name": "initialBalance",
+        "onlyInt": false,
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "number"
+      },
+      {
+        "hidden": false,
+        "id": "date87654321",
+        "max": "",
+        "min": "",
+        "name": "initialBalanceDate",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "date"
+      },
+      {
+        "hidden": false,
         "id": "autodate2990389176",
         "name": "created",
         "onCreate": true,
@@ -579,7 +602,7 @@
         "id": "date2862495610",
         "max": "",
         "min": "",
-        "name": "date",
+        "name": "transactionDate",
         "presentable": false,
         "required": true,
         "system": false,
@@ -591,11 +614,11 @@
         "id": "text1843675174",
         "max": 0,
         "min": 0,
-        "name": "description",
+        "name": "notes",
         "pattern": "",
         "presentable": false,
         "primaryKey": false,
-        "required": true,
+        "required": false,
         "system": false,
         "type": "text"
       },
@@ -646,7 +669,7 @@
         "id": "relation2100713124",
         "maxSelect": 1,
         "minSelect": 0,
-        "name": "account",
+        "name": "accountId",
         "presentable": false,
         "required": true,
         "system": false,
@@ -677,15 +700,6 @@
         "required": false,
         "system": false,
         "type": "relation"
-      },
-      {
-        "hidden": false,
-        "id": "bool0123456789",
-        "name": "isInitial",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "bool"
       },
       {
         "hidden": false,
@@ -765,6 +779,81 @@
         "name": "updated",
         "onCreate": true,
         "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [],
+    "system": false
+  },
+  {
+    "id": "pbc_1234567890",
+    "listRule": "",
+    "viewRule": "",
+    "createRule": "",
+    "updateRule": "",
+    "deleteRule": "",
+    "name": "system_events",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text9876543210",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_3414089001",
+        "hidden": false,
+        "id": "relation8765432109",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "workspace",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
+        "id": "select8765432109",
+        "maxSelect": 1,
+        "name": "type",
+        "presentable": false,
+        "required": true,
+        "system": false,
+        "type": "select",
+        "values": [
+          "account_created",
+          "account_deleted",
+          "initial_balance_set"
+        ]
+      },
+      {
+        "hidden": false,
+        "id": "json8765432109",
+        "name": "details",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "json"
+      },
+      {
+        "hidden": false,
+        "id": "autodate8765432109",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
         "presentable": false,
         "system": false,
         "type": "autodate"

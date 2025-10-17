@@ -7,8 +7,8 @@ import type { Transaction, TransactionType, Account, Category } from '../types';
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
     const { accounts, categories, addTransaction, updateTransaction } = useAppContext();
     const [type, setType] = useState<TransactionType>(transaction?.type || 'expense');
-    const [date, setDate] = useState(transaction?.date.slice(0, 10) || new Date().toISOString().slice(0, 10));
-    const [description, setDescription] = useState(transaction?.description || '');
+    const [transactionDate, setTransactionDate] = useState(transaction?.transactionDate.slice(0, 10) || new Date().toISOString().slice(0, 10));
+    const [notes, setNotes] = useState(transaction?.notes || '');
     const [amount, setAmount] = useState<number | string>(transaction?.amount || '');
     const [categoryId, setCategoryId] = useState(transaction?.categoryId || '');
     const [accountId, setAccountId] = useState(transaction?.accountId || '');
@@ -22,8 +22,8 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     useEffect(() => {
         if (transaction) {
             setType(transaction.type);
-            setDate(transaction.date.slice(0, 10));
-            setDescription(transaction.description);
+            setTransactionDate(transaction.transactionDate.slice(0, 10));
+            setNotes(transaction.notes);
             setAmount(transaction.amount);
             setCategoryId(transaction.categoryId || '');
             setAccountId(transaction.accountId);
@@ -31,8 +31,8 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         } else {
             // Reset form for a new transaction
             setType('expense');
-            setDate(new Date().toISOString().slice(0, 10));
-            setDescription('');
+            setTransactionDate(new Date().toISOString().slice(0, 10));
+            setNotes('');
             setAmount('');
             setCategoryId('');
             setAccountId('');
@@ -57,7 +57,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         
         let isValid = true;
         if (type === 'transfer') {
-            if (!date || !amount || !accountId || !destinationAccountId) {
+            if (!transactionDate || !amount || !accountId || !destinationAccountId) {
                 setError('Prosím, vyplňte všetky polia pre prevod.');
                 isValid = false;
             } else if (accountId === destinationAccountId) {
@@ -65,7 +65,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                 isValid = false;
             }
         } else {
-            if (!date || !amount || !categoryId || !accountId) {
+            if (!transactionDate || !amount || !categoryId || !accountId) {
                 setError('Prosím, vyplňte všetky povinné polia.');
                 isValid = false;
             }
@@ -74,8 +74,8 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         if (!isValid) return;
 
         const transactionData = {
-            date,
-            description,
+            transactionDate,
+            notes,
             amount: parseFloat(String(amount)),
             type,
             categoryId: type !== 'transfer' ? categoryId : null,
@@ -102,12 +102,12 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                 </div>
             </div>
              <div className="relative" onClick={() => dateInputRef.current?.showPicker()}>
-                <input ref={dateInputRef} type="date" id="date" value={date} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required placeholder=" " />
-                <label htmlFor="date" className={`${formLabelStyle} cursor-pointer`}>Dátum</label>
+                <input ref={dateInputRef} type="date" id="transactionDate" value={transactionDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTransactionDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required placeholder=" " />
+                <label htmlFor="transactionDate" className={`${formLabelStyle} cursor-pointer`}>Dátum</label>
             </div>
             <div className="relative">
-                <input type="text" id="description" value={description} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDescription(e.target.value)} className={`${formInputStyle} h-14`} placeholder=" "/>
-                <label htmlFor="description" className={formLabelStyle}>Popis (nepovinné)</label>
+                <input type="text" id="notes" value={notes} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNotes(e.target.value)} className={`${formInputStyle} h-14`} placeholder=" "/>
+                <label htmlFor="notes" className={formLabelStyle}>Poznámky</label>
             </div>
             <div className="relative">
                 <input type="number" id="amount" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" "/>
@@ -171,17 +171,11 @@ const Transactions: React.FC = () => {
     minAmount: '',
     maxAmount: '',
     type: '',
-    showSystem: false,
   });
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    if (type === 'checkbox') {
-        const checkbox = e.target as HTMLInputElement;
-        setFilters(prev => ({ ...prev, [name]: checkbox.checked }));
-    } else {
-        setFilters(prev => ({ ...prev, [name]: value }));
-    }
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
   };
 
   const resetFilters = () => {
@@ -192,20 +186,14 @@ const Transactions: React.FC = () => {
       minAmount: '',
       maxAmount: '',
       type: '',
-      showSystem: false,
     });
   };
 
   const filteredTransactions = useMemo(() => {
     return [...transactions]
       .filter(t => {
-        // Filter system transactions based on the toggle
-        if (!filters.showSystem && t.systemType) {
-            return false;
-        }
-
-        if (filters.startDate && new Date(t.date) < new Date(filters.startDate)) return false;
-        if (filters.endDate && new Date(t.date) > new Date(filters.endDate)) return false;
+        if (filters.startDate && new Date(t.transactionDate) < new Date(filters.startDate)) return false;
+        if (filters.endDate && new Date(t.transactionDate) > new Date(filters.endDate)) return false;
         // Filter transfers based on category filter
         if (filters.categoryId && t.type !== 'transfer' && t.categoryId !== filters.categoryId) return false;
         if (filters.categoryId && t.type === 'transfer') return false; // Hide transfers if a category is selected
@@ -215,7 +203,7 @@ const Transactions: React.FC = () => {
         if (filters.type && t.type !== filters.type) return false;
         return true;
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
   }, [transactions, filters]);
 
   const categoryMap = useMemo(() =>
@@ -229,7 +217,6 @@ const Transactions: React.FC = () => {
   );
   
   const getCategoryDisplayName = (transaction: Transaction) => {
-    if (transaction.systemType === 'initial_balance') return 'Počiatočný zostatok';
     if (!transaction.categoryId) return 'N/A';
     const category = categoryMap.get(transaction.categoryId);
     if (!category) return 'Neznáma kategória';
@@ -313,12 +300,6 @@ const Transactions: React.FC = () => {
             </select>
           </div>
 
-          {/* Zobraziť systémové */}
-          <div className="flex items-center justify-self-start pt-5">
-            <input type="checkbox" name="showSystem" id="showSystem" checked={filters.showSystem} onChange={handleFilterChange} className="h-4 w-4 rounded border-gray-300 text-light-primary focus:ring-light-primary" />
-            <label htmlFor="showSystem" className="ml-2 block text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Zobraziť systémové</label>
-          </div>
-
           {/* Suma od */}
            <div className="relative">
             <label htmlFor="minAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Suma od</label>
@@ -347,7 +328,7 @@ const Transactions: React.FC = () => {
               <tr className="border-b border-light-outlineVariant dark:border-dark-outlineVariant">
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dátum</th>
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Kategória</th>
-                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Popis</th>
+                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Poznámky</th>
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Účet</th>
                 <th className="py-3 px-4 text-sm font-medium text-right text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Suma</th>
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Akcie</th>
@@ -358,9 +339,9 @@ const Transactions: React.FC = () => {
                 const isTransfer = t.type === 'transfer';
                 return (
                   <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
-                    <td className="py-4 px-4">{new Date(t.date).toLocaleDateString('sk-SK')}</td>
+                    <td className="py-4 px-4">{new Date(t.transactionDate).toLocaleDateString('sk-SK')}</td>
                     <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{isTransfer ? 'Prevod' : getCategoryDisplayName(t)}</td>
-                    <td className="py-4 px-4">{t.description}</td>
+                    <td className="py-4 px-4">{t.notes}</td>
                     <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
                       {isTransfer 
                         ? `${accountMap.get(t.accountId)} → ${accountMap.get(t.destinationAccountId || '')}` 
@@ -371,7 +352,7 @@ const Transactions: React.FC = () => {
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center space-x-1">
-                          <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest" disabled={!!t.systemType}><PencilIcon /></button>
+                          <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"><PencilIcon /></button>
                           <button aria-label="Zmazať transakciu" onClick={() => setConfirmModalState({
                             isOpen: true,
                             message: `Naozaj chcete zmazať túto transakciu?`,
@@ -379,7 +360,7 @@ const Transactions: React.FC = () => {
                               deleteTransaction(t.id);
                               setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
                             }
-                          })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer" disabled={!!t.systemType}><TrashIcon /></button>
+                          })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
                       </div>
                     </td>
                   </tr>

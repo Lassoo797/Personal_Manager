@@ -6,9 +6,9 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
 const mapPbToWorkspace = (r: RecordModel): Workspace => ({ id: r.id, name: r.workspace_name });
-const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, workspaceId: r.workspace, currency: r.currency, accountType: r.accountType, type: r.type });
+const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, workspaceId: r.workspace, currency: r.currency, accountType: r.accountType, type: r.type, initialBalance: r.initialBalance || 0, initialBalanceDate: r.initialBalanceDate });
 const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order });
-const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.account, destinationAccountId: r.destinationAccountId || null, workspaceId: r.workspace, systemType: r.systemType || null });
+const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, transactionDate: r.transactionDate, notes: r.notes, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.accountId, destinationAccountId: r.destinationAccountId || null, workspaceId: r.workspace });
 const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, workspaceId: r.workspace });
 
 // PocketBase options to prevent autocancellation during batch operations
@@ -27,20 +27,14 @@ interface AppContextType {
   updateWorkspace: (id: string, name: string) => Promise<void>;
   deleteWorkspace: (id: string) => Promise<void>;
   
-  // Data for current profile
+  // Data for current workspace
   accounts: Account[];
   categories: Category[];
   transactions: Transaction[];
   budgets: Budget[];
 
-  // Data for all profiles (for MasterDashboard)
-  allAccounts: Account[];
-  allTransactions: Transaction[];
-  allBudgets: Budget[];
-  allCategories: Category[];
-
   // Actions
-  addAccountWithInitialTransaction: (account: Omit<Account, 'id' | 'workspaceId'>, initialBalance: number, initialBalanceDate: string) => Promise<void>;
+  createAccount: (account: Omit<Account, 'id' | 'workspaceId'>) => Promise<void>;
   updateAccount: (account: Partial<Account> & Pick<Account, 'id'>) => Promise<void>;
   deleteAccount: (id: string) => Promise<string | void>;
   getAccountBalance: (accountId: string) => number;
@@ -89,12 +83,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // States for all profiles data
-  const [allAccounts, setAllAccounts] = useState<Account[]>([]);
-  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
-  const [allBudgets, setAllBudgets] = useState<Budget[]>([]);
-  const [allCategories, setAllCategories] = useState<Category[]>([]);
-
   // Combined loading state
   useEffect(() => {
     setIsLoading(isGlobalLoading || isWorkspaceLoading);
@@ -106,10 +94,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!user) {
         // If user is logged out, clear all data and stop loading
         setWorkspaces([]);
-        setAllAccounts([]);
-        setAllTransactions([]);
-        setAllBudgets([]);
-        setAllCategories([]);
         setIsGlobalLoading(false);
         return;
       }
@@ -117,20 +101,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsGlobalLoading(true);
       setError(null);
       try {
-        const [workspacesData, allAccs, allTrans, allBuds, allCats] = await Promise.all([
-          pb.collection('workspaces').getFullList(),
-          pb.collection('accounts').getFullList(),
-          pb.collection('transactions').getFullList(),
-          pb.collection('budgets').getFullList(),
-          pb.collection('categories').getFullList(),
-      ]);
+        const workspacesData = await pb.collection('workspaces').getFullList();
 
         const mappedWorkspaces = workspacesData.map(mapPbToWorkspace);
         setWorkspaces(mappedWorkspaces);
-        setAllAccounts(allAccs.map(mapPbToAccount));
-        setAllTransactions(allTrans.map(mapPbToTransaction));
-        setAllBudgets(allBuds.map(mapPbToBudget));
-        setAllCategories(allCats.map(mapPbToCategory));
 
         // Auto-select workspace logic after global data is loaded
         const isInvalidStoredWorkspace = currentWorkspaceId && !mappedWorkspaces.some(p => p.id === currentWorkspaceId);
@@ -151,7 +125,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]); // Re-run this effect when the user object changes
 
-  // Effect to load profile-specific data when profile changes
+  // Effect to load workspace-specific data when workspace changes
   useEffect(() => {
     const loadWorkspaceData = async () => {
       if (currentWorkspaceId) {
@@ -197,20 +171,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
      setIsGlobalLoading(true);
      setError(null);
      try {
-       const [workspacesData, allAccs, allTrans, allBuds, allCats] = await Promise.all([
-         pb.collection('workspaces').getFullList(),
-         pb.collection('accounts').getFullList(),
-         pb.collection('transactions').getFullList(),
-         pb.collection('budgets').getFullList(),
-         pb.collection('categories').getFullList(),
-       ]);
+       const workspacesData = await pb.collection('workspaces').getFullList();
 
        const mappedWorkspaces = workspacesData.map(mapPbToWorkspace);
        setWorkspaces(mappedWorkspaces);
-       setAllAccounts(allAccs.map(mapPbToAccount));
-       setAllTransactions(allTrans.map(mapPbToTransaction));
-       setAllBudgets(allBuds.map(mapPbToBudget));
-       setAllCategories(allCats.map(mapPbToCategory));
 
        const isInvalidStoredWorkspace = currentWorkspaceId && !mappedWorkspaces.some(p => p.id === currentWorkspaceId);
        if (isInvalidStoredWorkspace) {
@@ -240,7 +204,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const account = accounts.find(a => a.id === accountId);
     if (!account) return 0;
 
-    return transactions.reduce((balance, t) => {
+    const transactionsTotal = transactions.reduce((balance, t) => {
         if (t.type === 'transfer') {
             if (t.accountId === accountId) {
                 // Zdrojový účet prevodu -> odčítať
@@ -257,13 +221,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         return balance;
     }, 0);
+
+    return (account.initialBalance || 0) + transactionsTotal;
   }, [accounts, transactions]);
 
   const getFinancialSummary = useCallback((transactionsToSummarize: Transaction[]): { actualIncome: number, actualExpense: number } => {
     return transactionsToSummarize.reduce((summary, t) => {
-        if (t.systemType) { // Ignore all system transactions
-            return summary;
-        }
         if (t.type === 'income') {
             summary.actualIncome += t.amount;
         } else if (t.type === 'expense') {
@@ -320,11 +283,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setCurrentWorkspaceId(remaining.length > 0 ? remaining[0].id : null);
       }
       
-      // Also update the 'all' states to reflect the deletion without a full reload
-      setAllAccounts(prev => prev.filter(a => a.workspaceId !== id));
-      setAllCategories(prev => prev.filter(c => c.workspaceId !== id));
-      setAllTransactions(prev => prev.filter(t => t.workspaceId !== id));
-      setAllBudgets(prev => prev.filter(b => b.workspaceId !== id));
       addNotification('Pracovný priestor a všetky jeho dáta boli zmazané.', 'success');
 
     } catch(e: any) {
@@ -343,33 +301,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [workspaces, currentWorkspaceId, setCurrentWorkspaceId, addNotification]);
 
   // --- Data Management ---
-  const addAccountWithInitialTransaction = useCallback(async (account: Omit<Account, 'id' | 'workspaceId'>, initialBalance: number, initialBalanceDate: string) => {
+  const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId'>) => {
     if (!currentWorkspaceId) return;
 
     try {
       const newAccountRecord = await pb.collection('accounts').create({ ...account, workspace: currentWorkspaceId });
       const newAccount = mapPbToAccount(newAccountRecord);
       
-      if (initialBalance !== 0) {
-        const initialTransactionData = {
-          date: initialBalanceDate,
-          description: 'Počiatočný zostatok',
-          amount: Math.abs(initialBalance),
-          type: initialBalance >= 0 ? 'income' : 'expense',
-          systemType: 'initial_balance',
-          account: newAccount.id,
+      // Vytvorenie system eventu
+      await pb.collection('system_events').create({
+        workspace: currentWorkspaceId,
+        type: 'account_created',
+        details: { accountId: newAccount.id, accountName: newAccount.name }
+      });
+
+      if (account.initialBalance && account.initialBalance !== 0) {
+        await pb.collection('system_events').create({
           workspace: currentWorkspaceId,
-          category: null,
-        };
-        const newTransactionRecord = await pb.collection('transactions').create(initialTransactionData);
-        const newTransaction = mapPbToTransaction(newTransactionRecord);
-        setTransactions(prev => [...prev, newTransaction]);
+          type: 'initial_balance_set',
+          details: { accountId: newAccount.id, balance: account.initialBalance }
+        });
       }
 
       setAccounts(prev => [...prev, newAccount]);
       addNotification(`Účet "${account.name}" bol pridaný.`, 'success');
     } catch (e: any) {
-        console.error("Chyba pri vytváraní účtu s počiatočnou transakciou:", e);
+        console.error("Chyba pri vytváraní účtu:", e);
         addNotification('Nastala chyba pri vytváraní účtu.', 'error');
     }
   }, [currentWorkspaceId, addNotification]);
@@ -391,11 +348,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         acc.id === id ? { ...acc, ...payload } : acc
       )
     );
-    setAllAccounts(prev => 
-      prev.map(acc => 
-        acc.id === id ? { ...acc, ...payload } : acc
-      )
-    )
     addNotification(`Účet bol aktualizovaný.`, 'success');
   }, [addNotification]);
 
@@ -408,25 +360,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     
     const associatedTransactions = transactions.filter(t => t.accountId === id || t.destinationAccountId === id);
-    const nonSystemTransactions = associatedTransactions.filter(t => !t.systemType);
 
-    if (nonSystemTransactions.length > 0) {
-        const message = 'Nie je možné zmazať účet, ku ktorému sú priradené bežné transakcie.';
+    if (associatedTransactions.length > 0) {
+        const message = 'Nie je možné zmazať účet, ku ktorému sú priradené transakcie.';
         addNotification(message, 'error');
         return message;
     }
     
     try {
-        await Promise.all(associatedTransactions.map(t => pb.collection('transactions').delete(t.id)));
         await pb.collection('accounts').delete(id);
+        
+        // Vytvorenie system eventu
+        if(currentWorkspaceId) {
+            const account = accounts.find(a => a.id === id);
+            await pb.collection('system_events').create({
+                workspace: currentWorkspaceId,
+                type: 'account_deleted',
+                details: { accountId: id, accountName: account?.name }
+            });
+        }
+
         setAccounts(prev => prev.filter(a => a.id !== id));
-        setTransactions(prev => prev.filter(t => t.accountId !== id && t.destinationAccountId !== id));
         addNotification('Účet bol úspešne zmazaný.', 'success');
     } catch (e: any) {
         console.error("Chyba pri mazaní účtu:", e);
         addNotification('Nastala chyba pri mazaní účtu.', 'error');
     }
-  }, [transactions, addNotification, getAccountBalance]);
+  }, [transactions, addNotification, getAccountBalance, currentWorkspaceId, accounts]);
   
   const addCategory = useCallback(async (category: Omit<Category, 'id' | 'workspaceId' | 'order'>): Promise<Category | null> => {
     if (!currentWorkspaceId) return null;
@@ -582,7 +542,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const data = {
         ...transaction,
         workspace: currentWorkspaceId,
-        account: transaction.accountId,
+        accountId: transaction.accountId,
         category: transaction.type !== 'transfer' ? transaction.categoryId : null,
         destinationAccountId: transaction.type === 'transfer' ? transaction.destinationAccountId : null,
     };
@@ -597,7 +557,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const payload = { 
         ...data,
         workspace: workspaceId,
-        account: data.accountId,
+        accountId: data.accountId,
         category: data.type !== 'transfer' ? data.categoryId : null,
         destinationAccountId: data.type === 'transfer' ? data.destinationAccountId : null,
      };
@@ -619,26 +579,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (existing) {
       const updated = await pb.collection('budgets').update(existing.id, { amount: budget.amount });
-    setBudgets(prev => prev.map(b => b.id === existing.id ? mapPbToBudget(updated) : b));
-    setAllBudgets(prev => prev.map(b => b.id === existing.id ? mapPbToBudget(updated) : b));
-  } else {
-    const data = {
-        ...budget,
-        workspace: currentWorkspaceId,
-        category: budget.categoryId
-    };
-    const newBudget = await pb.collection('budgets').create(data);
-    const mapped = mapPbToBudget(newBudget);
-    setBudgets(prev => [...prev, mapped]);
-    setAllBudgets(prev => [...prev, mapped]);
-  }
-  addNotification('Rozpočet bol uložený.', 'success');
+      setBudgets(prev => prev.map(b => b.id === existing.id ? mapPbToBudget(updated) : b));
+    } else {
+      const data = {
+          ...budget,
+          workspace: currentWorkspaceId,
+          category: budget.categoryId
+      };
+      const newBudget = await pb.collection('budgets').create(data);
+      const mapped = mapPbToBudget(newBudget);
+      setBudgets(prev => [...prev, mapped]);
+    }
+    addNotification('Rozpočet bol uložený.', 'success');
   }, [currentWorkspaceId, budgets, addNotification]);
   
   const deleteBudget = useCallback(async(id:string) => {
     await pb.collection('budgets').delete(id);
     setBudgets(prev => prev.filter(b => b.id !== id));
-    setAllBudgets(prev => prev.filter(b => b.id !== id));
     addNotification('Rozpočet bol zmazaný.', 'success');
   }, [addNotification]);
 
@@ -693,11 +650,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return [...prevWithoutUpdated, ...newBudgets];
     });
 
-    setAllBudgets(prev => {
-      const updatedMap = new Map(updatedBudgets.map(b => [b.id, b]));
-      const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
-      return [...prevWithoutUpdated, ...newBudgets];
-    });
     addNotification('Rozpočet bol publikovaný pre nasledujúce mesiace.', 'success');
 
   }, [currentWorkspaceId, budgets, categories, addNotification]);
@@ -743,11 +695,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
         return [...prevWithoutUpdated, ...created.map(mapPbToBudget)];
       });
-      setAllBudgets(prev => {
-        const updatedMap = new Map(updated.map(b => [b.id, mapPbToBudget(b)]));
-        const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
-        return [...prevWithoutUpdated, ...created.map(mapPbToBudget)];
-      });
       addNotification('Celý rozpočet bol publikovaný pre nasledujúce mesiace.', 'success');
 
     } catch (e) {
@@ -762,22 +709,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = useMemo(() => ({
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
-    accounts, addAccountWithInitialTransaction, updateAccount, deleteAccount, getAccountBalance,
+    accounts, createAccount, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
-    allAccounts, allTransactions, allBudgets, allCategories,
     loadAppData, // Expose the loader function
     notifications, addNotification, removeNotification,
     getFinancialSummary,
   }), [
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
-    accounts, addAccountWithInitialTransaction, updateAccount, deleteAccount, getAccountBalance,
+    accounts, createAccount, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
-    allAccounts, allTransactions, allBudgets, allCategories,
     loadAppData,
     notifications, addNotification, removeNotification,
     getFinancialSummary

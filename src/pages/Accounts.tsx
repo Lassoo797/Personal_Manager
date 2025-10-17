@@ -14,10 +14,10 @@ const AccountForm: React.FC<{
   onSave: () => void;
   onCancel: () => void;
 }> = ({ account, isEditing, onSave, onCancel }) => {
-    const { addAccountWithInitialTransaction, updateAccount } = useAppContext();
+    const { createAccount, updateAccount } = useAppContext();
     const [name, setName] = useState(account?.name || '');
-    const [initialBalance, setInitialBalance] = useState('');
-    const [initialBalanceDate, setInitialBalanceDate] = useState(new Date().toISOString().slice(0, 10));
+    const [initialBalance, setInitialBalance] = useState(account?.initialBalance?.toString() || '0');
+    const [initialBalanceDate, setInitialBalanceDate] = useState(account?.initialBalanceDate?.slice(0,10) || new Date().toISOString().slice(0, 10));
     const [currency, setCurrency] = useState<'EUR' | 'USD' | 'CZK'>(account?.currency || 'EUR');
     const [accountType, setAccountType] = useState<AccountType>(account?.accountType || 'Štandardný účet');
     const [type, setType] = useState<AccountSubtype>(account?.type || 'Bankový účet');
@@ -30,17 +30,23 @@ const AccountForm: React.FC<{
         
         if (isEditing) {
             if (!name || !account) return;
+            // Note: Editing initial balance might need more complex logic, e.g., creating a corrective transaction.
+            // For now, we only allow updating descriptive fields.
             updateAccount({ id: account.id, name, currency, accountType, type });
         } else {
-            // Hodnota 0 sa bude považovať za platnú.
-            if (!name || initialBalance === '') return;
+            if (!name) return;
             
             const balanceValue = parseFloat(String(initialBalance));
-            
-            // Finálna kontrola, či je hodnota naozaj číslo
-            if (isNaN(balanceValue)) return;
+            if (isNaN(balanceValue)) return; // Ensure it's a valid number
 
-            addAccountWithInitialTransaction({ name, currency, accountType, type }, balanceValue, initialBalanceDate);
+            createAccount({ 
+              name, 
+              currency, 
+              accountType, 
+              type, 
+              initialBalance: balanceValue, 
+              initialBalanceDate 
+            });
         }
         
         onSave();
@@ -60,8 +66,8 @@ const AccountForm: React.FC<{
                     <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
                 </div>
                 <div className="relative">
-                    <input type="date" id="initialBalanceDate" value={initialBalanceDate} onChange={e => setInitialBalanceDate(e.target.value)} className={`${formInputStyle} h-14`} required />
-                    <label htmlFor="initialBalanceDate" className={formLabelStyle}>Dátum počiatočného zostatku</label>
+                    <input type="date" id="initialBalanceDate" value={initialBalanceDate} onChange={e => setInitialBalanceDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required />
+                    <label htmlFor="initialBalanceDate" className={`${formLabelStyle} cursor-pointer`}>Dátum počiatočného zostatku</label>
                 </div>
               </>
             )}

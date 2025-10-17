@@ -14,6 +14,8 @@ export interface Account {
   currency: 'EUR' | 'USD' | 'CZK';
   accountType: AccountType;
   type: AccountSubtype;
+  initialBalance: number;
+  initialBalanceDate: string;
 }
 
 export interface Category {
@@ -27,15 +29,14 @@ export interface Category {
 
 export interface Transaction {
   id: string;
-  date: string; // YYYY-MM-DD
-  description: string;
+  transactionDate: string; // YYYY-MM-DD
+  notes: string;
   amount: number;
   type: TransactionType;
   categoryId: string | null; // Can be null for transfers
   accountId: string; // Source account
   destinationAccountId?: string | null; // Destination account for transfers
   workspaceId: string;
-  systemType?: 'initial_balance' | null;
 }
 
 export interface Budget {

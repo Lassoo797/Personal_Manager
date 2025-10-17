@@ -64,25 +64,12 @@ const Header: React.FC = () => {
                     onClick={() => setIsWorkspaceDropdownOpen((prev: boolean) => !prev)}
                     className="flex items-center text-light-onSurface dark:text-dark-onSurface text-lg font-medium p-2 rounded-lg hover:bg-light-surfaceContainer dark:hover:bg-dark-surfaceContainer transition-colors"
                   >
-                    <span className="font-bold">{currentWorkspace?.name || 'Celkový prehľad'}</span>
+                    <span className="font-bold">{currentWorkspace?.name || 'Vyberte priestor'}</span>
                     <ChevronDownIcon className={`h-5 w-5 ml-1 transition-transform ${isWorkspaceDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
                   {isWorkspaceDropdownOpen && (
                     <div className="origin-top-left absolute left-0 mt-2 w-56 rounded-xl shadow-lg bg-light-surfaceContainer dark:bg-dark-surfaceContainer ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
                       <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                        {currentWorkspaceId && (
-                           <NavLink
-                            to="/"
-                            onClick={() => {
-                              setCurrentWorkspaceId(null);
-                              setIsWorkspaceDropdownOpen(false);
-                            }}
-                            className="block px-4 py-2 text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh font-semibold"
-                            role="menuitem"
-                          >
-                            &larr; Celkový prehľad
-                          </NavLink>
-                        )}
                         {workspaces.filter((p: Workspace) => p.id !== currentWorkspaceId).map((workspace: Workspace) => (
                           <a
                             key={workspace.id}

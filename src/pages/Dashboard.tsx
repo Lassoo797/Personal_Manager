@@ -50,7 +50,7 @@ const Dashboard: React.FC = () => {
   const operatingAccountIds = useMemo(() => new Set(operatingAccounts.map(a => a.id)), [operatingAccounts]);
 
   const budgetTransactions = useMemo(() => 
-    transactions.filter(t => operatingAccountIds.has(t.accountId) && !t.systemType),
+    transactions.filter(t => operatingAccountIds.has(t.accountId)),
     [transactions, operatingAccountIds]
   );
   
@@ -66,15 +66,13 @@ const Dashboard: React.FC = () => {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    let income = 0;
-    let expenses = 0;
     const byCategory: { [key: string]: number } = {};
     const lastSixMonthsData: { [key: string]: { income: number, expenses: number }} = {};
 
     let totalYearIncome = 0;
     let totalYearExpenses = 0;
     
-    const yearlyTransactions = budgetTransactions.filter(t => new Date(t.date).getFullYear() === currentYear);
+    const yearlyTransactions = budgetTransactions.filter(t => new Date(t.transactionDate).getFullYear() === currentYear);
     const yearlySummary = getFinancialSummary(yearlyTransactions);
     totalYearIncome = yearlySummary.actualIncome;
     totalYearExpenses = yearlySummary.actualExpense;
@@ -85,7 +83,7 @@ const Dashboard: React.FC = () => {
         const d = new Date(currentYear, currentMonth - i, 1);
         const monthKey = d.toLocaleString('sk-SK', { month: 'short', year: 'numeric' });
         const monthTransactions = budgetTransactions.filter(t => {
-            const tDate = new Date(t.date);
+            const tDate = new Date(t.transactionDate);
             return tDate.getFullYear() === d.getFullYear() && tDate.getMonth() === d.getMonth();
         });
         const { actualIncome, actualExpense } = getFinancialSummary(monthTransactions);
@@ -93,7 +91,7 @@ const Dashboard: React.FC = () => {
     }
 
     const currentMonthTransactions = budgetTransactions.filter(t => {
-        const transactionDate = new Date(t.date);
+        const transactionDate = new Date(t.transactionDate);
         return transactionDate.getMonth() === currentMonth && transactionDate.getFullYear() === currentYear;
     });
 
@@ -126,32 +124,46 @@ const Dashboard: React.FC = () => {
 
   const recentTransactions = useMemo(() => 
     [...budgetTransactions]
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())
       .slice(0, 5), 
     [budgetTransactions]
   );
   
-      const { chartData, months, currentMonthIndex } = useMemo(() => {
+const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); // 0-11
+    const yearStartDate = new Date(currentYear, 0, 1);
 
-    // Správny výpočet počiatočného zostatku k 1.1. aktuálneho roka
+    // Filter once for performance
+    const allOperatingTransactions = transactions.filter(t => 
+        operatingAccountIds.has(t.accountId) || (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId))
+    );
+
+    // 1. Calculate the precise balance at the beginning of the year
     let yearStartBalance = 0;
-    const allOperatingTransactions = transactions.filter(t => operatingAccountIds.has(t.accountId) || (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)));
-    
-    allOperatingTransactions.forEach(t => {
-        if (new Date(t.date).getFullYear() < currentYear) {
-            if (t.type === 'transfer') {
-                if (operatingAccountIds.has(t.accountId)) {
-                    yearStartBalance -= t.amount;
+    operatingAccounts.forEach(acc => {
+        if (!acc.initialBalanceDate) return;
+        const initialDate = new Date(acc.initialBalanceDate);
+        if (initialDate < yearStartDate) {
+            yearStartBalance += acc.initialBalance || 0;
+            
+            const pastTransactions = allOperatingTransactions.filter(t => {
+                const tDate = new Date(t.transactionDate);
+                const isForThisAccount = t.accountId === acc.id || t.destinationAccountId === acc.id;
+                return isForThisAccount && tDate >= initialDate && tDate < yearStartDate;
+            });
+
+            const balanceChange = pastTransactions.reduce((sum, t) => {
+                if (t.type === 'transfer') {
+                    if (t.accountId === acc.id) return sum - t.amount;
+                    if (t.destinationAccountId === acc.id) return sum + t.amount;
+                } else if (t.accountId === acc.id) {
+                    return sum + (t.type === 'income' ? t.amount : -t.amount);
                 }
-                if (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)) {
-                    yearStartBalance += t.amount;
-                }
-            } else if (operatingAccountIds.has(t.accountId)) { // Pre income/expense
-                yearStartBalance += (t.type === 'income' ? t.amount : -t.amount);
-            }
+                return sum;
+            }, 0);
+            yearStartBalance += balanceChange;
         }
     });
     
@@ -169,61 +181,101 @@ const Dashboard: React.FC = () => {
         forecast: null as number | null
     }))];
 
+    // --- Plan Calculation ---
     const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
     const monthlyBudgetDeltas = Array(12).fill(0);
     budgets.forEach(b => {
         const [bYear, bMonth] = b.month.split('-').map(Number);
         if (bYear === currentYear) {
             const monthIndex = bMonth - 1;
-            const amount = incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount;
-            monthlyBudgetDeltas[monthIndex] += amount;
+            monthlyBudgetDeltas[monthIndex] += incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount;
         }
     });
 
     let runningPlanBalance = yearStartBalance;
-    let runningActualBalance = yearStartBalance;
-
-    for (let i = 0; i < 12; i++) { // i=0 pre Január
+    for (let i = 0; i < 12; i++) {
+        operatingAccounts.forEach(acc => {
+            if (!acc.initialBalanceDate) return;
+            const initialDate = new Date(acc.initialBalanceDate);
+            if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
+                runningPlanBalance += acc.initialBalance || 0;
+            }
+        });
         runningPlanBalance += monthlyBudgetDeltas[i];
         chartData[i + 1].plan = runningPlanBalance;
-
-        if (i < currentMonth) { // Iba pre celé mesiace, ktoré už prešli
-            const monthlyTransactions = allOperatingTransactions.filter(t => {
-                const tDate = new Date(t.date);
-                return tDate.getFullYear() === currentYear && tDate.getMonth() === i;
-            });
-            const monthlyDelta = monthlyTransactions.reduce((sum, t) => {
-                if (t.type === 'transfer') {
-                    if (operatingAccountIds.has(t.accountId)) {
-                        sum -= t.amount;
-                    }
-                    if (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)) {
-                        sum += t.amount;
-                    }
-                    return sum;
-                }
-                 if (operatingAccountIds.has(t.accountId)) {
-                    return sum + (t.type === 'income' ? t.amount : -t.amount);
-                }
-                return sum;
-            }, 0);
-            runningActualBalance += monthlyDelta;
-            chartData[i + 1].actual = runningActualBalance;
-        }
     }
 
-    // Prognóza začína od posledného známeho stavu (koniec minulého mesiaca)
+    // --- Actual Balance Calculation (for past months ONLY) ---
+    let runningActualBalance = yearStartBalance;
+    for (let i = 0; i < currentMonth; i++) { // Loop up to, but NOT including, the current month
+        operatingAccounts.forEach(acc => {
+             if (!acc.initialBalanceDate) return;
+            const initialDate = new Date(acc.initialBalanceDate);
+            if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
+                runningActualBalance += acc.initialBalance || 0;
+            }
+        });
+        
+        const monthlyTransactions = allOperatingTransactions.filter(t => {
+            const tDate = new Date(t.transactionDate);
+            return tDate.getFullYear() === currentYear && tDate.getMonth() === i;
+        });
+
+        const monthlyDelta = monthlyTransactions.reduce((sum, t) => {
+            if (t.type === 'transfer') {
+                if (operatingAccountIds.has(t.accountId)) sum -= t.amount;
+                if (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)) sum += t.amount;
+            } else if (operatingAccountIds.has(t.accountId)) {
+                sum += (t.type === 'income' ? t.amount : -t.amount);
+            }
+            return sum;
+        }, 0);
+        
+        runningActualBalance += monthlyDelta;
+        chartData[i + 1].actual = runningActualBalance;
+    }
+
+    // --- Forecast Calculation ---
     const lastKnownActualBalance = chartData[currentMonth].actual ?? yearStartBalance;
     let runningForecastBalance = lastKnownActualBalance;
-    chartData[currentMonth].forecast = lastKnownActualBalance;
+    chartData[currentMonth].forecast = lastKnownActualBalance; // Connect forecast to the last actual point
 
     for (let i = currentMonth; i < 12; i++) {
+        operatingAccounts.forEach(acc => {
+             if (!acc.initialBalanceDate) return;
+            const initialDate = new Date(acc.initialBalanceDate);
+            if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
+                runningForecastBalance += acc.initialBalance || 0;
+            }
+        });
         runningForecastBalance += monthlyBudgetDeltas[i];
         chartData[i + 1].forecast = runningForecastBalance;
     }
     
-    return { chartData, months, currentMonthIndex: currentMonth };
-}, [accounts, transactions, budgets, categories, operatingAccountIds]);
+    // --- Y-Axis Domain and Ticks Calculation ---
+    const allValues = chartData
+        .flatMap(d => [d.actual, d.plan, d.forecast])
+        .filter((v): v is number => typeof v === 'number');
+
+    let yAxisDomain: [number, number] = [0, 5000];
+    let yAxisTicks: number[] = [0, 1000, 2000, 3000, 4000, 5000];
+
+    if (allValues.length > 0) {
+        const dataMin = Math.min(...allValues);
+        const dataMax = Math.max(...allValues);
+        const bottom = Math.floor(dataMin / 1000) * 1000;
+        const top = Math.ceil(dataMax / 1000) * 1000;
+        yAxisDomain = [bottom, top];
+        
+        const ticks = [];
+        for (let i = bottom; i <= top; i += 1000) {
+            ticks.push(i);
+        }
+        yAxisTicks = ticks;
+    }
+
+    return { chartData, months, currentMonthIndex: currentMonth, yAxisDomain, yAxisTicks };
+}, [accounts, transactions, budgets, categories, operatingAccountIds, operatingAccounts]);
 
 
   const COLORS = ['#0061A4', '#535F70', '#6B5778', '#00C49F', '#FFBB28', '#FF8042'];
@@ -320,7 +372,7 @@ const Dashboard: React.FC = () => {
             <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#43474E' : '#C3C7CF'} />
             <XAxis dataKey="name" tick={{ fill: tickColor, fontSize: 12 }} axisLine={{ stroke: tickColor }} tickLine={{ stroke: tickColor }} />
-            <YAxis tick={{ fill: tickColor, fontSize: 12 }} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k €`} axisLine={{ stroke: tickColor }} tickLine={{ stroke: tickColor }} />
+            <YAxis domain={yAxisDomain} ticks={yAxisTicks} allowDataOverflow={false} tick={{ fill: tickColor, fontSize: 12 }} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k €`} axisLine={{ stroke: tickColor }} tickLine={{ stroke: tickColor }} />
             <Tooltip 
                 {...tooltipStyles} 
                 formatter={(value: number, name: string, props) => {
@@ -361,8 +413,8 @@ const Dashboard: React.FC = () => {
             <tbody>
               {recentTransactions.map(t => (
                 <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
-                  <td className="py-3 px-4 text-light-onSurface dark:text-dark-onSurface">{new Date(t.date).toLocaleDateString('sk-SK')}</td>
-                  <td className="py-3 px-4 text-light-onSurface dark:text-dark-onSurface">{t.description}</td>
+                  <td className="py-3 px-4 text-light-onSurface dark:text-dark-onSurface">{new Date(t.transactionDate).toLocaleDateString('sk-SK')}</td>
+                  <td className="py-3 px-4 text-light-onSurface dark:text-dark-onSurface">{t.notes}</td>
                   <td className="py-3 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{categories.find(c => c.id === t.categoryId)?.name}</td>
                   <td className={`py-3 px-4 text-right font-semibold ${t.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error'}`}>
                     {t.amount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}

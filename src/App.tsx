@@ -7,7 +7,6 @@ import Accounts from './pages/Accounts';
 import Budgets from './pages/Budgets';
 import Analysis from './pages/Analysis';
 import { useAppContext } from './context/AppContext';
-import MasterDashboard from './pages/MasterDashboard';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -18,6 +17,17 @@ const App: React.FC = () => {
     <AuthProvider>
       <AppContent />
     </AuthProvider>
+  );
+};
+
+const WelcomeScreen: React.FC = () => {
+  // TODO: Add a form to create the first workspace
+  return (
+    <div className="text-center py-20">
+      <h1 className="text-2xl mb-4">Vitajte!</h1>
+      <p>Vyzerá to, že zatiaľ nemáte vytvorený žiadny pracovný priestor.</p>
+      {/* Neskôr tu bude formulár na vytvorenie workspace */}
+    </div>
   );
 };
 
@@ -34,9 +44,9 @@ const AppContent: React.FC = () => {
       return <div className="text-center py-20 text-red-500">Chyba: {error.message}</div>;
     }
 
-    // After loading and no errors, check for profiles
+    // After loading and no errors, check for workspaces
     if (user && workspaces.length === 0) {
-        return <MasterDashboard />; // MasterDashboard handles the welcome message
+        return <WelcomeScreen />;
     }
 
     return (
@@ -52,9 +62,8 @@ const AppContent: React.FC = () => {
               <Route path="/analysis" element={<Analysis />} />
             </>
           ) : (
-            // If the user is logged in but has no profile selected (or exists)
-            // This can happen if they have profiles but haven't selected one yet.
-            <Route path="/" element={<MasterDashboard />} />
+            // If the user is logged in but has no workspace selected (or exists)
+            <Route path="/" element={<WelcomeScreen />} />
           )}
         </Route>
       </Routes>
