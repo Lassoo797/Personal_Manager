@@ -122,13 +122,6 @@ const Dashboard: React.FC = () => {
     };
   }, [budgetTransactions, categories, getFinancialSummary]);
 
-  const recentTransactions = useMemo(() => 
-    [...budgetTransactions]
-      .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime())
-      .slice(0, 5), 
-    [budgetTransactions]
-  );
-  
 const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -396,34 +389,6 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
             <Line type="monotone" dataKey="actual" stroke={theme === 'dark' ? '#9FCAFF' : '#0061A4'} strokeWidth={3} name="Skutočný stav" connectNulls={false} dot={{ r: 4 }} />
             </ComposedChart>
         </ResponsiveContainer>
-      </div>
-
-      <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-        <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface">Posledné transakcie</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-light-outlineVariant dark:border-dark-outlineVariant">
-                <th className="py-3 px-4 font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dátum</th>
-                <th className="py-3 px-4 font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Popis</th>
-                <th className="py-3 px-4 font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Kategória</th>
-                <th className="py-3 px-4 font-medium text-right text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Suma</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentTransactions.map(t => (
-                <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
-                  <td className="py-3 px-4 text-light-onSurface dark:text-dark-onSurface">{new Date(t.transactionDate).toLocaleDateString('sk-SK')}</td>
-                  <td className="py-3 px-4 text-light-onSurface dark:text-dark-onSurface">{t.notes}</td>
-                  <td className="py-3 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{categories.find(c => c.id === t.categoryId)?.name}</td>
-                  <td className={`py-3 px-4 text-right font-semibold ${t.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error'}`}>
-                    {t.amount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
 
     </div>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { ConfirmModal } from './Transactions';
-import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
+import { PlusIcon, PencilIcon, ArchiveBoxIcon } from '../components/icons';
 import type { Account, AccountType, AccountSubtype } from '../types';
 
 const ACCOUNT_TYPES: AccountType[] = ['Štandardný účet', 'Sporiaci účet'];
@@ -107,7 +107,7 @@ const AccountForm: React.FC<{
 };
 
 const Accounts: React.FC = () => {
-  const { accounts, deleteAccount, getAccountBalance } = useAppContext();
+  const { accounts, archiveAccount, getAccountBalance } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
@@ -154,14 +154,14 @@ const Accounts: React.FC = () => {
               </div>
               <div className="flex justify-end space-x-1 mt-4">
                 <button aria-label={`Upraviť účet ${account.name}`} onClick={() => openEditModal(account)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                <button aria-label={`Zmazať účet ${account.name}`} onClick={() => setConfirmModalState({
+                <button aria-label={`Archivovať účet ${account.name}`} onClick={() => setConfirmModalState({
                   isOpen: true,
-                  message: `Naozaj chcete zmazať účet "${account.name}"?`,
+                  message: `Naozaj chcete archivovať účet "${account.name}"? Účet bude skrytý, ale jeho história zostane zachovaná.`,
                   onConfirm: () => {
-                    deleteAccount(account.id);
+                    archiveAccount(account.id);
                     setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
                   }
-                })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><ArchiveBoxIcon /></button>
               </div>
             </div>
           ))}
@@ -182,14 +182,14 @@ const Accounts: React.FC = () => {
               </div>
               <div className="flex justify-end space-x-1 mt-4">
                 <button aria-label={`Upraviť účet ${account.name}`} onClick={() => openEditModal(account)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                <button aria-label={`Zmazať účet ${account.name}`} onClick={() => setConfirmModalState({
+                <button aria-label={`Archivovať účet ${account.name}`} onClick={() => setConfirmModalState({
                   isOpen: true,
-                  message: `Naozaj chcete zmazať účet "${account.name}"?`,
+                  message: `Naozaj chcete archivovať účet "${account.name}"? Účet bude skrytý, ale jeho história zostane zachovaná.`,
                   onConfirm: () => {
-                    deleteAccount(account.id);
+                    archiveAccount(account.id);
                     setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
                   }
-                })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><ArchiveBoxIcon /></button>
               </div>
             </div>
         ))}
@@ -210,7 +210,7 @@ const Accounts: React.FC = () => {
         onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
         message={confirmModalState.message}
         onConfirm={confirmModalState.onConfirm}
-        title="Potvrdenie zmazania"
+        title="Potvrdenie archivácie"
       />
     </div>
   );

@@ -324,6 +324,20 @@
       },
       {
         "hidden": false,
+        "id": "select_account_status",
+        "maxSelect": 1,
+        "name": "status",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "active",
+          "archived"
+        ]
+      },
+      {
+        "hidden": false,
         "id": "autodate2990389176",
         "name": "created",
         "onCreate": true,
@@ -863,6 +877,7 @@
         "values": [
           "account_created",
           "account_deleted",
+          "account_archived",
           "initial_balance_set",
           "workspace_created",
           "workspace_updated",

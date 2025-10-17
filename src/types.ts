@@ -14,6 +14,8 @@ export interface Workspace {
   name: string;
 }
 
+export type AccountStatus = 'active' | 'archived';
+
 export interface Account {
   id: string;
   name: string;
@@ -23,6 +25,7 @@ export interface Account {
   type: AccountSubtype;
   initialBalance: number;
   initialBalanceDate: string;
+  status: AccountStatus;
 }
 
 export interface Category {

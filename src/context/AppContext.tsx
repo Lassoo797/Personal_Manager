@@ -1,12 +1,12 @@
 import { RecordModel } from 'pocketbase';import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import pb from '../lib/pocketbase';
-import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification } from '../types';
+import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification, AccountStatus } from '../types';
 import { useAuth } from './AuthContext';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
 const mapPbToWorkspace = (r: RecordModel): Workspace => ({ id: r.id, name: r.workspace_name });
-const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, workspaceId: r.workspace, currency: r.currency, accountType: r.accountType, type: r.type, initialBalance: r.initialBalance || 0, initialBalanceDate: r.initialBalanceDate });
+const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, workspaceId: r.workspace, currency: r.currency, accountType: r.accountType, type: r.type, initialBalance: r.initialBalance || 0, initialBalanceDate: r.initialBalanceDate, status: r.status || 'active' });
 const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order, validFrom: r.validFrom, dedicatedAccountId: r.dedicatedAccountId || null });
 const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, transactionDate: r.transactionDate, notes: r.notes, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.accountId, destinationAccountId: r.destinationAccountId || null, workspaceId: r.workspace });
 const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, workspaceId: r.workspace });
@@ -36,7 +36,7 @@ interface AppContextType {
   // Actions
   createAccount: (account: Omit<Account, 'id' | 'workspaceId'>) => Promise<void>;
   updateAccount: (account: Partial<Account> & Pick<Account, 'id'>) => Promise<void>;
-  deleteAccount: (id: string) => Promise<string | void>;
+  archiveAccount: (id: string) => Promise<string | void>;
   getAccountBalance: (accountId: string) => number;
   
   addCategory: (category: Omit<Category, 'id' | 'workspaceId' | 'order'>) => Promise<Category | null>;
@@ -77,7 +77,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useLocalStorage<string | null>('currentWorkspaceId', null);
   
-  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [allAccounts, setAllAccounts] = useState<Account[]>([]);
+  const accounts = useMemo(() => allAccounts.filter(a => a.status === 'active'), [allAccounts]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -139,7 +140,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             pb.collection('transactions').getFullList({ filter }),
             pb.collection('budgets').getFullList({ filter }),
           ]);
-          setAccounts(accs.map(mapPbToAccount));
+          setAllAccounts(accs.map(mapPbToAccount));
           setCategories(cats.map(mapPbToCategory));
           setTransactions(trans.map(mapPbToTransaction));
           setBudgets(buds.map(mapPbToBudget));
@@ -153,7 +154,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       } else {
         // If no workspace is selected, clear workspace-specific data
-        setAccounts([]);
+        setAllAccounts([]);
         setCategories([]);
         setTransactions([]);
         setBudgets([]);
@@ -399,7 +400,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const linkedAccount = accounts.find(a => a.id === originalCategory.dedicatedAccountId);
         if (linkedAccount && linkedAccount.name !== name) {
             await pb.collection('accounts').update(linkedAccount.id, { name });
-            setAccounts(prev => prev.map(acc => acc.id === linkedAccount.id ? { ...acc, name } : acc));
+            setAllAccounts(prev => prev.map(acc => acc.id === linkedAccount.id ? { ...acc, name } : acc));
         }
     }
 
@@ -551,13 +552,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const moveCategoryDown = useCallback((categoryId: string) => moveCategory(categoryId, 'down'), [moveCategory]);
   
   // ACCOUNT MANAGEMENT
-  const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId'>) => {
+  const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId' | 'status'>) => {
     if (!currentWorkspaceId) return;
 
     try {
-        const newAccountRecord = await pb.collection('accounts').create({ ...account, workspace: currentWorkspaceId });
+        const newAccountRecord = await pb.collection('accounts').create({ ...account, workspace: currentWorkspaceId, status: 'active' });
         const newAccount = mapPbToAccount(newAccountRecord);
-        setAccounts(prev => [...prev, newAccount]);
+        setAllAccounts(prev => [...prev, newAccount]);
 
         // Log system event for account creation
         await pb.collection('system_events').create({
@@ -610,7 +611,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error("Chyba pri vytváraní účtu:", e);
         addNotification('Nastala chyba pri vytváraní účtu.', 'error');
     }
-  }, [currentWorkspaceId, addNotification, categories, accounts, addCategory]);
+  }, [currentWorkspaceId, addNotification, categories, allAccounts, addCategory]);
 
   const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
     if (!currentWorkspaceId) return;
@@ -642,58 +643,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     
     // Optimistically update local state
-    setAccounts(prev => prev.map(acc => acc.id === id ? { ...acc, name } : acc));
+    setAllAccounts(prev => prev.map(acc => acc.id === id ? { ...acc, name } : acc));
     addNotification(`Účet "${name}" bol aktualizovaný.`, 'success');
   }, [accounts, categories, addNotification, updateCategory, currentWorkspaceId]);
 
-  const deleteAccount = useCallback(async (id: string): Promise<string | void> => {
+  const archiveAccount = useCallback(async (id: string): Promise<string | void> => {
     if (!currentWorkspaceId) return;
     const balance = getAccountBalance(id);
     if (Math.abs(balance) > 0.001) {
-      const message = `Účet nie je možné zmazať, pretože jeho zostatok je ${balance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}. Pred zmazaním musíte zostatok vynulovať.`;
+      const message = `Účet nie je možné archivovať, pretože jeho zostatok je ${balance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}. Pred archiváciou musíte zostatok vynulovať.`;
       addNotification(message, 'error');
       return message;
     }
     
-    const associatedTransactions = transactions.filter(t => t.accountId === id || t.destinationAccountId === id);
-
-    if (associatedTransactions.length > 0) {
-        const message = 'Nie je možné zmazať účet, ku ktorému sú priradené transakcie.';
-        addNotification(message, 'error');
-        return message;
-    }
-    
     try {
-        const accountToDelete = accounts.find(a => a.id === id);
-        if (accountToDelete && accountToDelete.accountType === 'Sporiaci účet') {
-            const linkedCategory = categories.find(c => c.dedicatedAccountId === id);
-            if (linkedCategory) {
-                await deleteCategory(linkedCategory.id);
-            }
-        }
-
-        await pb.collection('accounts').delete(id);
-        setAccounts(prev => prev.filter(a => a.id !== id));
-        addNotification('Účet bol úspešne zmazaný.', 'success');
+        const accountToArchive = allAccounts.find(a => a.id === id);
         
-        if (accountToDelete) {
+        await pb.collection('accounts').update(id, { status: 'archived' });
+
+        setAllAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'archived' } : a));
+        addNotification('Účet bol úspešne archivovaný.', 'success');
+        
+        if (accountToArchive) {
           await pb.collection('system_events').create({
             workspace: currentWorkspaceId,
-            type: 'account_deleted',
+            type: 'account_archived',
             details: {
-              accountId: accountToDelete.id,
-              name: accountToDelete.name,
-              type: accountToDelete.type,
-              accountType: accountToDelete.accountType,
-              currency: accountToDelete.currency,
+              accountId: accountToArchive.id,
+              name: accountToArchive.name,
             }
           });
         }
     } catch (e: any) {
-        console.error("Chyba pri mazaní účtu:", e);
-        addNotification('Nastala chyba pri mazaní účtu.', 'error');
+        console.error("Chyba pri archivácii účtu:", e);
+        addNotification('Nastala chyba pri archivácii účtu.', 'error');
     }
-  }, [transactions, addNotification, getAccountBalance, accounts, categories, deleteCategory, currentWorkspaceId]);
+  }, [transactions, addNotification, getAccountBalance, allAccounts, categories, deleteCategory, currentWorkspaceId]);
   
   // TRANSACTION MANAGEMENT
 
@@ -968,7 +953,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = useMemo(() => ({
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
-    accounts, createAccount, updateAccount, deleteAccount, getAccountBalance,
+    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
@@ -978,7 +963,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }), [
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
-    accounts, createAccount, updateAccount, deleteAccount, getAccountBalance,
+    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
