@@ -238,20 +238,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- Workspace Management ---
   const addWorkspace = useCallback(async (name: string) => {
-    const newWorkspace = await pb.collection('workspaces').create({ workspace_name: name });
-    const mapped = mapPbToWorkspace(newWorkspace);
+    const newWorkspaceRecord = await pb.collection('workspaces').create({ workspace_name: name });
+    const mapped = mapPbToWorkspace(newWorkspaceRecord);
     setWorkspaces(prev => [...prev, mapped]);
     setCurrentWorkspaceId(mapped.id);
+
+    await pb.collection('system_events').create({
+      workspace: mapped.id,
+      type: 'workspace_created',
+      details: {
+        workspaceId: mapped.id,
+        name: mapped.name
+      }
+    });
+
     addNotification(`Pracovný priestor "${name}" bol úspešne vytvorený.`, 'success');
   }, [setCurrentWorkspaceId, addNotification]);
 
   const updateWorkspace = useCallback(async (id: string, name: string) => {
+    const originalWorkspace = workspaces.find(w => w.id === id);
+    if (!originalWorkspace) return;
+
     const updated = await pb.collection('workspaces').update(id, { workspace_name: name });
     setWorkspaces(prev => prev.map(p => p.id === id ? mapPbToWorkspace(updated) : p));
+
+    await pb.collection('system_events').create({
+      workspace: id,
+      type: 'workspace_updated',
+      details: {
+        workspaceId: id,
+        oldName: originalWorkspace.name,
+        newName: name
+      }
+    });
+
     addNotification(`Pracovný priestor "${name}" bol aktualizovaný.`, 'success');
-  }, [addNotification]);
+  }, [addNotification, workspaces]);
 
   const deleteWorkspace = useCallback(async (id: string) => {
+    const workspaceToDelete = workspaces.find(w => w.id === id);
+    if (!workspaceToDelete) return;
+
     try {
       setIsLoading(true);
       const filter = pb.filter('workspace = {:workspaceId}', { workspaceId: id });
@@ -275,6 +302,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       // Finally, delete the workspace itself
       await pb.collection('workspaces').delete(id);
+      
+      await pb.collection('system_events').create({
+        workspace: id,
+        type: 'workspace_deleted',
+        details: {
+          workspaceId: id,
+          name: workspaceToDelete.name
+        }
+      });
 
       // Update local state
       const remaining = workspaces.filter(p => p.id !== id);
@@ -317,9 +353,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     try {
-      const newCategory = await pb.collection('categories').create(data);
-      const mapped = mapPbToCategory(newCategory);
+      const newCategoryRecord = await pb.collection('categories').create(data);
+      const mapped = mapPbToCategory(newCategoryRecord);
       setCategories(prev => [...prev, mapped]);
+
+      await pb.collection('system_events').create({
+        workspace: currentWorkspaceId,
+        type: 'category_created',
+        details: {
+          categoryId: mapped.id,
+          name: mapped.name,
+          type: mapped.type,
+          parentId: mapped.parentId
+        }
+      });
+
       addNotification(`Kategória "${mapped.name}" bola vytvorená.`, 'success');
       return mapped;
     } catch (e: any) {
@@ -334,6 +382,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const { id, name } = updated;
     const originalCategory = categories.find(c => c.id === id);
     if (!originalCategory) return;
+
+    // Create a snapshot of changes
+    const changes: Record<string, any> = {};
+    for (const key in updated) {
+      if (key !== 'id' && updated[key as keyof Category] !== originalCategory[key as keyof Category]) {
+        changes[key] = {
+          old: originalCategory[key as keyof Category],
+          new: updated[key as keyof Category]
+        };
+      }
+    }
     
     // Update linked account name if it's a dedicated category and name has changed
     if (originalCategory.dedicatedAccountId && name && name !== originalCategory.name) {
@@ -353,6 +412,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const newState = prev.map(c => c.id === id ? mapPbToCategory(updatedCategory) : c)
         return newState.sort((a, b) => (a.order || 0) - (b.order || 0));
     });
+
+    if (Object.keys(changes).length > 0) {
+      await pb.collection('system_events').create({
+        workspace: originalCategory.workspaceId,
+        type: 'category_updated',
+        details: {
+          categoryId: id,
+          name: updated.name,
+          changes
+        }
+      });
+    }
+
     addNotification(`Kategória "${updated.name}" bola aktualizovaná.`, 'success');
   }, [addNotification, categories, accounts]);
   
@@ -376,17 +448,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [loadAppData]);
 
   const deleteCategory = useCallback(async (id: string) => {
+    if (!currentWorkspaceId) return;
+    const categoryToDelete = categories.find(c => c.id === id);
+    if (!categoryToDelete) return;
+
     // Delete related budgets first
     const relatedBudgets = await pb.collection('budgets').getFullList({ filter: `category = '${id}'` });
     await Promise.all(relatedBudgets.map(b => pb.collection('budgets').delete(b.id)));
     
     await pb.collection('categories').delete(id);
     
+    await pb.collection('system_events').create({
+      workspace: currentWorkspaceId,
+      type: 'category_deleted',
+      details: {
+        categoryId: id,
+        name: categoryToDelete.name,
+        type: categoryToDelete.type
+      }
+    });
+
     // Update local state
     setCategories(prev => prev.filter(c => c.id !== id));
     setBudgets(prev => prev.filter(b => b.categoryId !== id));
     addNotification('Kategória bola zmazaná.', 'success');
-  }, [addNotification]);
+  }, [addNotification, categories, currentWorkspaceId]);
 
   const deleteCategoryAndChildren = useCallback(async (id: string) => {
     const children = categories.filter(c => c.parentId === id);
@@ -527,6 +613,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [currentWorkspaceId, addNotification, categories, accounts, addCategory]);
 
   const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
+    if (!currentWorkspaceId) return;
     const { id, name } = accountToUpdate;
     const originalAccount = accounts.find(a => a.id === id);
     if (!originalAccount) return;
@@ -535,6 +622,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!name || name === originalAccount.name) return;
 
     await pb.collection('accounts').update(id, { name });
+
+    await pb.collection('system_events').create({
+      workspace: currentWorkspaceId,
+      type: 'account_updated',
+      details: {
+        accountId: id,
+        oldName: originalAccount.name,
+        newName: name
+      }
+    });
 
     // If it's a savings account, find and update the linked category
     if (originalAccount.accountType === 'Sporiaci účet') {
@@ -547,7 +644,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Optimistically update local state
     setAccounts(prev => prev.map(acc => acc.id === id ? { ...acc, name } : acc));
     addNotification(`Účet "${name}" bol aktualizovaný.`, 'success');
-  }, [accounts, categories, addNotification, updateCategory]);
+  }, [accounts, categories, addNotification, updateCategory, currentWorkspaceId]);
 
   const deleteAccount = useCallback(async (id: string): Promise<string | void> => {
     if (!currentWorkspaceId) return;
@@ -611,13 +708,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         destinationAccountId: transaction.type === 'transfer' ? transaction.destinationAccountId : null,
     };
 
-    const newTransaction = await pb.collection('transactions').create(data);
-    setTransactions(prev => [...prev, mapPbToTransaction(newTransaction)]);
+    const newTransactionRecord = await pb.collection('transactions').create(data);
+    const newTransaction = mapPbToTransaction(newTransactionRecord);
+    setTransactions(prev => [...prev, newTransaction]);
+
+    await pb.collection('system_events').create({
+      workspace: currentWorkspaceId,
+      type: 'transaction_created',
+      details: {
+        transactionId: newTransaction.id,
+        type: newTransaction.type,
+        amount: newTransaction.amount,
+        accountId: newTransaction.accountId,
+        categoryId: newTransaction.categoryId
+      }
+    });
+
     addNotification('Transakcia bola pridaná.', 'success');
   }, [currentWorkspaceId, addNotification]);
 
   const updateTransaction = useCallback(async (updated: Transaction) => {
     const { id, workspaceId, ...data } = updated;
+    const originalTransaction = transactions.find(t => t.id === id);
+    if (!originalTransaction) return;
+
     const payload = { 
         ...data,
         workspace: workspaceId,
@@ -625,16 +739,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         category: data.type !== 'transfer' ? data.categoryId : null,
         destinationAccountId: data.type === 'transfer' ? data.destinationAccountId : null,
      };
-    const updatedTransaction = await pb.collection('transactions').update(id, payload);
-    setTransactions(prev => prev.map(t => t.id === id ? mapPbToTransaction(updatedTransaction) : t));
+    const updatedTransactionRecord = await pb.collection('transactions').update(id, payload);
+    const updatedTransaction = mapPbToTransaction(updatedTransactionRecord);
+    setTransactions(prev => prev.map(t => t.id === id ? updatedTransaction : t));
+
+    const changes: Record<string, any> = {};
+    for (const key in updated) {
+      if (key !== 'id' && updated[key as keyof Transaction] !== originalTransaction[key as keyof Transaction]) {
+        changes[key] = {
+          old: originalTransaction[key as keyof Transaction],
+          new: updated[key as keyof Transaction]
+        };
+      }
+    }
+    
+    if (Object.keys(changes).length > 0) {
+      await pb.collection('system_events').create({
+        workspace: workspaceId,
+        type: 'transaction_updated',
+        details: {
+          transactionId: id,
+          changes
+        }
+      });
+    }
+
     addNotification('Transakcia bola aktualizovaná.', 'success');
-  }, [addNotification]);
+  }, [addNotification, transactions]);
 
   const deleteTransaction = useCallback(async (id: string) => {
+    if (!currentWorkspaceId) return;
+    const transactionToDelete = transactions.find(t => t.id === id);
+    if (!transactionToDelete) return;
+
     await pb.collection('transactions').delete(id);
     setTransactions(prev => prev.filter(t => t.id !== id));
+
+    await pb.collection('system_events').create({
+      workspace: currentWorkspaceId,
+      type: 'transaction_deleted',
+      details: {
+        transactionId: id,
+        type: transactionToDelete.type,
+        amount: transactionToDelete.amount,
+        accountId: transactionToDelete.accountId,
+        date: transactionToDelete.transactionDate
+      }
+    });
+
     addNotification('Transakcia bola zmazaná.', 'success');
-  }, [addNotification]);
+  }, [addNotification, transactions, currentWorkspaceId]);
 
   const addOrUpdateBudget = useCallback(async (budget: Omit<Budget, 'id' | 'workspaceId'>) => {
     if (!currentWorkspaceId) return;
@@ -642,26 +796,67 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const existing = budgets.find(b => b.categoryId === budget.categoryId && b.month === budget.month);
 
     if (existing) {
-      const updated = await pb.collection('budgets').update(existing.id, { amount: budget.amount });
-      setBudgets(prev => prev.map(b => b.id === existing.id ? mapPbToBudget(updated) : b));
+      const updatedRecord = await pb.collection('budgets').update(existing.id, { amount: budget.amount });
+      const updated = mapPbToBudget(updatedRecord);
+      setBudgets(prev => prev.map(b => b.id === existing.id ? updated : b));
+
+      await pb.collection('system_events').create({
+        workspace: currentWorkspaceId,
+        type: 'budget_updated',
+        details: {
+          budgetId: existing.id,
+          categoryId: existing.categoryId,
+          month: existing.month,
+          oldAmount: existing.amount,
+          newAmount: updated.amount
+        }
+      });
+
     } else {
       const data = {
           ...budget,
           workspace: currentWorkspaceId,
           category: budget.categoryId
       };
-      const newBudget = await pb.collection('budgets').create(data);
-      const mapped = mapPbToBudget(newBudget);
+      const newBudgetRecord = await pb.collection('budgets').create(data);
+      const mapped = mapPbToBudget(newBudgetRecord);
       setBudgets(prev => [...prev, mapped]);
+
+      await pb.collection('system_events').create({
+        workspace: currentWorkspaceId,
+        type: 'budget_created',
+        details: {
+          budgetId: mapped.id,
+          categoryId: mapped.categoryId,
+          month: mapped.month,
+          amount: mapped.amount
+        }
+      });
     }
     addNotification('Rozpočet bol uložený.', 'success');
   }, [currentWorkspaceId, budgets, addNotification]);
   
   const deleteBudget = useCallback(async(id:string) => {
+    if (!currentWorkspaceId) return;
+    const budgetToDelete = budgets.find(b => b.id === id);
+    if (!budgetToDelete) return;
+
     await pb.collection('budgets').delete(id);
     setBudgets(prev => prev.filter(b => b.id !== id));
+
+    await pb.collection('system_events').create({
+      workspace: currentWorkspaceId,
+      type: 'budget_deleted',
+      details: {
+        budgetId: id,
+        categoryId: budgetToDelete.categoryId,
+        month: budgetToDelete.month,
+        amount: budgetToDelete.amount
+      }
+    });
+
     addNotification('Rozpočet bol zmazaný.', 'success');
-  }, [addNotification]);
+  }, [addNotification, budgets, currentWorkspaceId]);
 
   const publishBudgetForYear = useCallback(async (baseCategoryId: string, baseMonth: string, forAllSubcategories: boolean = false) => {
     if (!currentWorkspaceId) return;

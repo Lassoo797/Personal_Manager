@@ -1,3 +1,10 @@
+export type SystemEvent = {
+  id: string;
+  workspace: string;
+  type: string;
+  details: any;
+  created: string;
+};
 export type TransactionType = 'income' | 'expense' | 'transfer';
 export type AccountType = 'Štandardný účet' | 'Sporiaci účet';
 export type AccountSubtype = 'Bankový účet' | 'Hotovosť';

@@ -49,6 +49,7 @@ const Header: React.FC = () => {
       <NavLink to="/budgets" className={getNavLinkClass}>Rozpočty</NavLink>
       <NavLink to="/accounts" className={getNavLinkClass}>Účty</NavLink>
       <NavLink to="/analysis" className={getNavLinkClass}>Analýza</NavLink>
+      <NavLink to="/system-events" className={getNavLinkClass}>Systémové Udalosti</NavLink>
     </>
   );
 
@@ -105,7 +106,7 @@ const Header: React.FC = () => {
               </div>
               {currentWorkspaceId && (
                 <div className="hidden md:block">
-                  <div className="ml-10 flex items-baseline space-x-2">
+                  <div className="ml-10 flex items-baseline space-x-1">
                     {navLinks}
                   </div>
                 </div>

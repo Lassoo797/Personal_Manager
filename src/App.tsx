@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationsContainer from './components/Notifications';
+import SystemEvents from './pages/SystemEvents';
 
 const App: React.FC = () => {
   return (
@@ -60,6 +61,7 @@ const AppContent: React.FC = () => {
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/budgets" element={<Budgets />} />
               <Route path="/analysis" element={<Analysis />} />
+              <Route path="/system-events" element={<SystemEvents />} />
             </>
           ) : (
             // If the user is logged in but has no workspace selected (or exists)
