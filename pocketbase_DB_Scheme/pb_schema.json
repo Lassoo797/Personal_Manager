@@ -250,7 +250,7 @@
         "id": "relation2170006031",
         "maxSelect": 1,
         "minSelect": 0,
-        "name": "profile",
+        "name": "workspace",
         "presentable": false,
         "required": true,
         "system": false,
@@ -380,7 +380,7 @@
         "id": "relation2170006031",
         "maxSelect": 1,
         "minSelect": 0,
-        "name": "profile",
+        "name": "workspace",
         "presentable": false,
         "required": true,
         "system": false,
@@ -495,7 +495,7 @@
         "id": "relation2170006031",
         "maxSelect": 1,
         "minSelect": 0,
-        "name": "profile",
+        "name": "workspace",
         "presentable": false,
         "required": true,
         "system": false,
@@ -525,68 +525,6 @@
         "required": false,
         "system": false,
         "type": "number"
-      },
-      {
-        "hidden": false,
-        "id": "autodate2990389176",
-        "name": "created",
-        "onCreate": true,
-        "onUpdate": false,
-        "presentable": false,
-        "system": false,
-        "type": "autodate"
-      },
-      {
-        "hidden": false,
-        "id": "autodate3332085495",
-        "name": "updated",
-        "onCreate": true,
-        "onUpdate": true,
-        "presentable": false,
-        "system": false,
-        "type": "autodate"
-      }
-    ],
-    "indexes": [],
-    "system": false
-  },
-  {
-    "id": "pbc_3414089001",
-    "listRule": "",
-    "viewRule": "",
-    "createRule": "",
-    "updateRule": "",
-    "deleteRule": "",
-    "name": "profiles",
-    "type": "base",
-    "fields": [
-      {
-        "autogeneratePattern": "[a-z0-9]{15}",
-        "hidden": false,
-        "id": "text3208210256",
-        "max": 15,
-        "min": 15,
-        "name": "id",
-        "pattern": "^[a-z0-9]+$",
-        "presentable": false,
-        "primaryKey": true,
-        "required": true,
-        "system": true,
-        "type": "text"
-      },
-      {
-        "autogeneratePattern": "",
-        "hidden": false,
-        "id": "text1579384326",
-        "max": 0,
-        "min": 0,
-        "name": "name",
-        "pattern": "",
-        "presentable": false,
-        "primaryKey": false,
-        "required": true,
-        "system": false,
-        "type": "text"
       },
       {
         "hidden": false,
@@ -695,7 +633,7 @@
         "id": "relation2170006031",
         "maxSelect": 1,
         "minSelect": 0,
-        "name": "profile",
+        "name": "workspace",
         "presentable": false,
         "required": true,
         "system": false,
@@ -748,6 +686,68 @@
         "required": false,
         "system": false,
         "type": "bool"
+      },
+      {
+        "hidden": false,
+        "id": "autodate2990389176",
+        "name": "created",
+        "onCreate": true,
+        "onUpdate": false,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "autodate3332085495",
+        "name": "updated",
+        "onCreate": true,
+        "onUpdate": true,
+        "presentable": false,
+        "system": false,
+        "type": "autodate"
+      }
+    ],
+    "indexes": [],
+    "system": false
+  },
+  {
+    "id": "pbc_3414089001",
+    "listRule": "",
+    "viewRule": "",
+    "createRule": "",
+    "updateRule": "",
+    "deleteRule": "",
+    "name": "workspaces",
+    "type": "base",
+    "fields": [
+      {
+        "autogeneratePattern": "[a-z0-9]{15}",
+        "hidden": false,
+        "id": "text3208210256",
+        "max": 15,
+        "min": 15,
+        "name": "id",
+        "pattern": "^[a-z0-9]+$",
+        "presentable": false,
+        "primaryKey": true,
+        "required": true,
+        "system": true,
+        "type": "text"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text1579384326",
+        "max": 0,
+        "min": 0,
+        "name": "workspace_name",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": true,
+        "system": false,
+        "type": "text"
       },
       {
         "hidden": false,
