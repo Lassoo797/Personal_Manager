@@ -5,10 +5,10 @@ import { useAuth } from './AuthContext';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
-const mapPbToWorkspace = (r: RecordModel): Workspace => ({ id: r.id, name: r.workspace_name });
+const mapPbToWorkspace = (r: RecordModel): Workspace => ({ id: r.id, name: r.name });
 const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, workspaceId: r.workspace, currency: r.currency, accountType: r.accountType, type: r.type, initialBalance: r.initialBalance || 0, initialBalanceDate: r.initialBalanceDate, status: r.status || 'active' });
-const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order, validFrom: r.validFrom, dedicatedAccountId: r.dedicatedAccountId || null, status: r.status || 'active' });
-const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, transactionDate: r.transactionDate, notes: r.notes, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.accountId, destinationAccountId: r.destinationAccountId || null, workspaceId: r.workspace });
+const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order, validFrom: r.validFrom, dedicatedAccount: r.dedicatedAccount || null, status: r.status || 'active' });
+const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, transactionDate: r.transactionDate, notes: r.notes, amount: r.amount, type: r.type, categoryId: r.category || null, account: r.account, destinationAccount: r.destinationAccount || null, workspaceId: r.workspace });
 const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, workspaceId: r.workspace });
 
 // PocketBase options to prevent autocancellation during batch operations
@@ -207,16 +207,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const transactionsTotal = transactions.reduce((balance, t) => {
         if (t.type === 'transfer') {
-            if (t.accountId === accountId) {
+            if (t.account === accountId) {
                 // Zdrojový účet prevodu -> odčítať
                 return balance - t.amount;
             }
-            if (t.destinationAccountId === accountId) {
+            if (t.destinationAccount === accountId) {
                 // Cieľový účet prevodu -> pričítať
                 return balance + t.amount;
             }
         } else { // Pôvodná logika pre príjem/výdavok
-            if (t.accountId === accountId) {
+            if (t.account === accountId) {
                 return t.type === 'income' ? balance + t.amount : balance - t.amount;
             }
         }
@@ -239,7 +239,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- Workspace Management ---
   const addWorkspace = useCallback(async (name: string) => {
-    const newWorkspaceRecord = await pb.collection('workspaces').create({ workspace_name: name });
+    const newWorkspaceRecord = await pb.collection('workspaces').create({ name: name });
     const mapped = mapPbToWorkspace(newWorkspaceRecord);
     setWorkspaces(prev => [...prev, mapped]);
     setCurrentWorkspaceId(mapped.id);
@@ -260,7 +260,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const originalWorkspace = workspaces.find(w => w.id === id);
     if (!originalWorkspace) return;
 
-    const updated = await pb.collection('workspaces').update(id, { workspace_name: name });
+    const updated = await pb.collection('workspaces').update(id, { name: name });
     setWorkspaces(prev => prev.map(p => p.id === id ? mapPbToWorkspace(updated) : p));
 
     await pb.collection('system_events').create({
@@ -397,8 +397,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
     
     // Update linked account name if it's a dedicated category and name has changed
-    if (originalCategory.dedicatedAccountId && name && name !== originalCategory.name) {
-        const linkedAccount = accounts.find(a => a.id === originalCategory.dedicatedAccountId);
+    if (originalCategory.dedicatedAccount && name && name !== originalCategory.name) {
+        const linkedAccount = accounts.find(a => a.id === originalCategory.dedicatedAccount);
         if (linkedAccount && linkedAccount.name !== name) {
             await pb.collection('accounts').update(linkedAccount.id, { name });
             setAllAccounts(prev => prev.map(acc => acc.id === linkedAccount.id ? { ...acc, name } : acc));
@@ -455,8 +455,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const categoryToArchive = allCategories.find(c => c.id === id);
     if (!categoryToArchive) return { message: 'Category not found.' };
 
-    if (categoryToArchive.dedicatedAccountId && !force) {
-        const linkedAccount = allAccounts.find(a => a.id === categoryToArchive.dedicatedAccountId);
+    if (categoryToArchive.dedicatedAccount && !force) {
+        const linkedAccount = allAccounts.find(a => a.id === categoryToArchive.dedicatedAccount);
         if (linkedAccount) {
             const balance = getAccountBalance(linkedAccount.id);
             if (Math.abs(balance) > 0.001) {
@@ -475,8 +475,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
         // --- Actual Archiving Logic ---
         // Archive linked account if force is true
-        if (categoryToArchive.dedicatedAccountId && force) {
-            await archiveAccount(categoryToArchive.dedicatedAccountId);
+        if (categoryToArchive.dedicatedAccount && force) {
+            await archiveAccount(categoryToArchive.dedicatedAccount);
         }
 
         // Delete related budgets
@@ -567,7 +567,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
         const accountToArchive = allAccounts.find(a => a.id === id);
         if (accountToArchive && accountToArchive.accountType === 'Sporiaci účet') {
-            const linkedCategory = allCategories.find(c => c.dedicatedAccountId === id);
+            const linkedCategory = allCategories.find(c => c.dedicatedAccount === id);
             // We don't archive the linked category here automatically. 
             // The user should archive the category, which in turn archives the account.
             if (linkedCategory && linkedCategory.status === 'active') {
@@ -646,7 +646,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     type: 'expense',
                     parentId: parentCategory.id,
                     validFrom: account.initialBalanceDate.substring(0, 7),
-                    dedicatedAccountId: newAccount.id
+                    dedicatedAccount: newAccount.id
                 };
                 await addCategory(subcategoryData);
             }
@@ -682,7 +682,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // If it's a savings account, find and update the linked category
     if (originalAccount.accountType === 'Sporiaci účet') {
-        const linkedCategory = allCategories.find(c => c.dedicatedAccountId === id);
+        const linkedCategory = allCategories.find(c => c.dedicatedAccount === id);
         if (linkedCategory && linkedCategory.name !== name) {
             await updateCategory({ ...linkedCategory, name });
         }
@@ -702,9 +702,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const data = {
         ...transaction,
         workspace: currentWorkspaceId,
-        accountId: transaction.accountId,
+        account: transaction.account,
         category: transaction.type !== 'transfer' ? transaction.categoryId : null,
-        destinationAccountId: transaction.type === 'transfer' ? transaction.destinationAccountId : null,
+        destinationAccount: transaction.type === 'transfer' ? transaction.destinationAccount : null,
     };
 
     const newTransactionRecord = await pb.collection('transactions').create(data);
@@ -718,7 +718,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         transactionId: newTransaction.id,
         type: newTransaction.type,
         amount: newTransaction.amount,
-        accountId: newTransaction.accountId,
+        account: newTransaction.account,
         categoryId: newTransaction.categoryId
       }
     });
@@ -734,9 +734,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const payload = { 
         ...data,
         workspace: workspaceId,
-        accountId: data.accountId,
+        account: data.account,
         category: data.type !== 'transfer' ? data.categoryId : null,
-        destinationAccountId: data.type === 'transfer' ? data.destinationAccountId : null,
+        destinationAccount: data.type === 'transfer' ? data.destinationAccount : null,
      };
     const updatedTransactionRecord = await pb.collection('transactions').update(id, payload);
     const updatedTransaction = mapPbToTransaction(updatedTransactionRecord);
@@ -781,7 +781,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         transactionId: id,
         type: transactionToDelete.type,
         amount: transactionToDelete.amount,
-        accountId: transactionToDelete.accountId,
+        account: transactionToDelete.account,
         date: transactionToDelete.transactionDate
       }
     });

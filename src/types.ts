@@ -36,7 +36,7 @@ export interface Category {
   workspaceId: string;
   order: number;
   validFrom: string; // YYYY-MM
-  dedicatedAccountId?: string | null;
+  dedicatedAccount?: string | null;
   status: 'active' | 'archived';
 }
 
@@ -47,8 +47,8 @@ export interface Transaction {
   amount: number;
   type: TransactionType;
   categoryId: string | null; // Can be null for transfers
-  accountId: string; // Source account
-  destinationAccountId?: string | null; // Destination account for transfers
+  account: string; // Source account
+  destinationAccount?: string | null; // Destination account for transfers
   workspaceId: string;
 }
 
