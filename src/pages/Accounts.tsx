@@ -60,7 +60,7 @@ const AccountForm: React.FC<{
             </div>
 
             <div className="relative">
-                <select id="accountType" value={accountType} onChange={e => setAccountType(e.target.value as AccountType)} className={`${formInputStyle} h-14`} required>
+                <select id="accountType" value={accountType} onChange={e => setAccountType(e.target.value as AccountType)} className={`${formInputStyle} h-14`} required disabled={isEditing}>
                   {ACCOUNT_TYPES.map(t => (
                     <option key={t} value={t} className="dark:bg-dark-surfaceContainerHigh">{t}</option>
                   ))}
@@ -68,7 +68,7 @@ const AccountForm: React.FC<{
                 <label htmlFor="accountType" className={formLabelStyle}>Typ účtu</label>
             </div>
             <div className="relative">
-                <select id="type" value={type} onChange={e => setType(e.target.value as AccountSubtype)} className={`${formInputStyle} h-14`} required>
+                <select id="type" value={type} onChange={e => setType(e.target.value as AccountSubtype)} className={`${formInputStyle} h-14`} required disabled={isEditing}>
                   {ACCOUNT_SUBTYPES.map(t => (
                     <option key={t} value={t} className="dark:bg-dark-surfaceContainerHigh">{t}</option>
                   ))}

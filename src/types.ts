@@ -25,6 +25,8 @@ export interface Category {
   type: TransactionType;
   workspaceId: string;
   order: number;
+  validFrom: string; // YYYY-MM
+  dedicatedAccountId?: string | null;
 }
 
 export interface Transaction {

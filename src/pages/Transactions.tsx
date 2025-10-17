@@ -41,10 +41,11 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     }, [transaction]);
 
     const filteredCategories = useMemo(() => {
+        const transactionMonth = transactionDate.substring(0, 7);
         return categories
-            .filter((c: Category) => c.type === type && c.parentId)
+            .filter((c: Category) => c.type === type && c.parentId && c.validFrom <= transactionMonth)
             .sort((a: Category, b: Category) => a.name.localeCompare(b.name));
-    }, [categories, type]);
+    }, [categories, type, transactionDate]);
     
     // Filter accounts for transfers - only standard accounts
     const standardAccounts = useMemo(() =>

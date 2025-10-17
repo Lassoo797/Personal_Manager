@@ -7,7 +7,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 // Helper funkcie na mapovanie PocketBase záznamov
 const mapPbToWorkspace = (r: RecordModel): Workspace => ({ id: r.id, name: r.workspace_name });
 const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, workspaceId: r.workspace, currency: r.currency, accountType: r.accountType, type: r.type, initialBalance: r.initialBalance || 0, initialBalanceDate: r.initialBalanceDate });
-const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order });
+const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order, validFrom: r.validFrom, dedicatedAccountId: r.dedicatedAccountId || null });
 const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, transactionDate: r.transactionDate, notes: r.notes, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.accountId, destinationAccountId: r.destinationAccountId || null, workspaceId: r.workspace });
 const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, workspaceId: r.workspace });
 
@@ -301,93 +301,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [workspaces, currentWorkspaceId, setCurrentWorkspaceId, addNotification]);
 
   // --- Data Management ---
-  const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId'>) => {
-    if (!currentWorkspaceId) return;
-
-    try {
-      const newAccountRecord = await pb.collection('accounts').create({ ...account, workspace: currentWorkspaceId });
-      const newAccount = mapPbToAccount(newAccountRecord);
-      
-      // Vytvorenie system eventu
-      await pb.collection('system_events').create({
-        workspace: currentWorkspaceId,
-        type: 'account_created',
-        details: { accountId: newAccount.id, accountName: newAccount.name }
-      });
-
-      if (account.initialBalance && account.initialBalance !== 0) {
-        await pb.collection('system_events').create({
-          workspace: currentWorkspaceId,
-          type: 'initial_balance_set',
-          details: { accountId: newAccount.id, balance: account.initialBalance }
-        });
-      }
-
-      setAccounts(prev => [...prev, newAccount]);
-      addNotification(`Účet "${account.name}" bol pridaný.`, 'success');
-    } catch (e: any) {
-        console.error("Chyba pri vytváraní účtu:", e);
-        addNotification('Nastala chyba pri vytváraní účtu.', 'error');
-    }
-  }, [currentWorkspaceId, addNotification]);
-
-  const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
-    const { id, name, currency, accountType, type } = accountToUpdate;
-    const payload: Partial<Omit<Account, 'id' | 'workspaceId'>> = {};
-    if (name) payload.name = name;
-    if (currency) payload.currency = currency;
-    if (accountType) payload.accountType = accountType;
-    if (type) payload.type = type;
-
-    if (Object.keys(payload).length === 0) return; // No fields to update
-
-    await pb.collection('accounts').update(id, payload);
-
-    setAccounts(prev =>
-      prev.map(acc =>
-        acc.id === id ? { ...acc, ...payload } : acc
-      )
-    );
-    addNotification(`Účet bol aktualizovaný.`, 'success');
-  }, [addNotification]);
-
-  const deleteAccount = useCallback(async (id: string): Promise<string | void> => {
-    const balance = getAccountBalance(id);
-    if (Math.abs(balance) > 0.001) {
-      const message = `Účet nie je možné zmazať, pretože jeho zostatok je ${balance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}. Pred zmazaním musíte zostatok vynulovať.`;
-      addNotification(message, 'error');
-      return message;
-    }
-    
-    const associatedTransactions = transactions.filter(t => t.accountId === id || t.destinationAccountId === id);
-
-    if (associatedTransactions.length > 0) {
-        const message = 'Nie je možné zmazať účet, ku ktorému sú priradené transakcie.';
-        addNotification(message, 'error');
-        return message;
-    }
-    
-    try {
-        await pb.collection('accounts').delete(id);
-        
-        // Vytvorenie system eventu
-        if(currentWorkspaceId) {
-            const account = accounts.find(a => a.id === id);
-            await pb.collection('system_events').create({
-                workspace: currentWorkspaceId,
-                type: 'account_deleted',
-                details: { accountId: id, accountName: account?.name }
-            });
-        }
-
-        setAccounts(prev => prev.filter(a => a.id !== id));
-        addNotification('Účet bol úspešne zmazaný.', 'success');
-    } catch (e: any) {
-        console.error("Chyba pri mazaní účtu:", e);
-        addNotification('Nastala chyba pri mazaní účtu.', 'error');
-    }
-  }, [transactions, addNotification, getAccountBalance, currentWorkspaceId, accounts]);
   
+  // CATEGORY MANAGEMENT
   const addCategory = useCallback(async (category: Omit<Category, 'id' | 'workspaceId' | 'order'>): Promise<Category | null> => {
     if (!currentWorkspaceId) return null;
     
@@ -416,17 +331,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [currentWorkspaceId, categories, addNotification]);
 
   const updateCategory = useCallback(async (updated: Category) => {
-    const { id, workspaceId, ...data } = updated;
-    // Ensure parent is correctly formatted for PocketBase (ID or null)
-    const payload = { ...data, parent: data.parentId || null, workspace: workspaceId };
+    const { id, name } = updated;
+    const originalCategory = categories.find(c => c.id === id);
+    if (!originalCategory) return;
+    
+    // Update linked account name if it's a dedicated category and name has changed
+    if (originalCategory.dedicatedAccountId && name && name !== originalCategory.name) {
+        const linkedAccount = accounts.find(a => a.id === originalCategory.dedicatedAccountId);
+        if (linkedAccount && linkedAccount.name !== name) {
+            await pb.collection('accounts').update(linkedAccount.id, { name });
+            setAccounts(prev => prev.map(acc => acc.id === linkedAccount.id ? { ...acc, name } : acc));
+        }
+    }
+
+    const payload = { ...updated, parent: updated.parentId || null, workspace: updated.workspaceId };
+    delete (payload as any).id; 
+    delete (payload as any).workspaceId;
+
     const updatedCategory = await pb.collection('categories').update(id, payload);
     setCategories(prev => {
         const newState = prev.map(c => c.id === id ? mapPbToCategory(updatedCategory) : c)
-        return newState.sort((a, b) => a.order - b.order);
+        return newState.sort((a, b) => (a.order || 0) - (b.order || 0));
     });
     addNotification(`Kategória "${updated.name}" bola aktualizovaná.`, 'success');
-  }, [addNotification]);
-
+  }, [addNotification, categories, accounts]);
+  
   const updateCategoryOrder = useCallback(async (updatedCategories: Category[]) => {
     try {
         await Promise.all(
@@ -493,7 +422,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await deleteCategory(categoryIdToDelete);
     addNotification('Transakcie boli presunuté a kategória bola zmazaná.', 'success');
     
-    // No loadAppData() needed as we updated the state manually
   }, [deleteCategory, addNotification]);
 
   const moveCategory = useCallback(async (categoryId: string, direction: 'up' | 'down') => {
@@ -502,7 +430,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
     const siblings = categories
       .filter(c => c.parentId === category.parentId && c.type === category.type)
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
   
     const currentIndex = siblings.findIndex(c => c.id === categoryId);
     if (currentIndex === -1) return;
@@ -524,7 +452,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       );
       setCategories(prev => {
         const updatedMap = new Map(updatedOrders.map(c => [c.id, c]));
-        const sorted = prev.map(c => updatedMap.get(c.id) || c).sort((a,b)=> a.order - b.order);
+        const sorted = prev.map(c => updatedMap.get(c.id) || c).sort((a,b)=> (a.order || 0) - (b.order || 0));
         return sorted;
       });
     } catch (e) {
@@ -535,6 +463,142 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const moveCategoryUp = useCallback((categoryId: string) => moveCategory(categoryId, 'up'), [moveCategory]);
   const moveCategoryDown = useCallback((categoryId: string) => moveCategory(categoryId, 'down'), [moveCategory]);
+  
+  // ACCOUNT MANAGEMENT
+  const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId'>) => {
+    if (!currentWorkspaceId) return;
+
+    try {
+        const newAccountRecord = await pb.collection('accounts').create({ ...account, workspace: currentWorkspaceId });
+        const newAccount = mapPbToAccount(newAccountRecord);
+        setAccounts(prev => [...prev, newAccount]);
+
+        // Log system event for account creation
+        await pb.collection('system_events').create({
+          workspace: currentWorkspaceId,
+          type: 'account_created',
+          details: {
+            accountId: newAccount.id,
+            name: newAccount.name,
+            type: newAccount.type,
+            accountType: newAccount.accountType,
+            currency: newAccount.currency,
+          }
+        });
+        
+        // Log system event for initial balance if it exists
+        if (account.initialBalance && account.initialBalance > 0) {
+          await pb.collection('system_events').create({
+            workspace: currentWorkspaceId,
+            type: 'initial_balance_set',
+            details: {
+              accountId: newAccount.id,
+              name: newAccount.name,
+              initialBalance: account.initialBalance,
+              initialBalanceDate: account.initialBalanceDate
+            }
+          });
+        }
+        
+        if (account.accountType === 'Sporiaci účet') {
+            let parentCategory = categories.find(c => c.name === 'Sporenie' && c.type === 'expense' && !c.parentId);
+            if (!parentCategory) {
+                const parentData = { name: 'Sporenie', type: 'expense', parentId: null, validFrom: account.initialBalanceDate.substring(0, 7) };
+                parentCategory = await addCategory(parentData);
+            }
+
+            if (parentCategory) {
+                const subcategoryData = {
+                    name: account.name,
+                    type: 'expense',
+                    parentId: parentCategory.id,
+                    validFrom: account.initialBalanceDate.substring(0, 7),
+                    dedicatedAccountId: newAccount.id
+                };
+                await addCategory(subcategoryData);
+            }
+        }
+
+        addNotification(`Účet "${account.name}" bol pridaný.`, 'success');
+    } catch (e: any) {
+        console.error("Chyba pri vytváraní účtu:", e);
+        addNotification('Nastala chyba pri vytváraní účtu.', 'error');
+    }
+  }, [currentWorkspaceId, addNotification, categories, accounts, addCategory]);
+
+  const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
+    const { id, name } = accountToUpdate;
+    const originalAccount = accounts.find(a => a.id === id);
+    if (!originalAccount) return;
+
+    // We are only allowing name change for now to avoid complexity with other fields
+    if (!name || name === originalAccount.name) return;
+
+    await pb.collection('accounts').update(id, { name });
+
+    // If it's a savings account, find and update the linked category
+    if (originalAccount.accountType === 'Sporiaci účet') {
+        const linkedCategory = categories.find(c => c.dedicatedAccountId === id);
+        if (linkedCategory && linkedCategory.name !== name) {
+            await updateCategory({ ...linkedCategory, name });
+        }
+    }
+    
+    // Optimistically update local state
+    setAccounts(prev => prev.map(acc => acc.id === id ? { ...acc, name } : acc));
+    addNotification(`Účet "${name}" bol aktualizovaný.`, 'success');
+  }, [accounts, categories, addNotification, updateCategory]);
+
+  const deleteAccount = useCallback(async (id: string): Promise<string | void> => {
+    if (!currentWorkspaceId) return;
+    const balance = getAccountBalance(id);
+    if (Math.abs(balance) > 0.001) {
+      const message = `Účet nie je možné zmazať, pretože jeho zostatok je ${balance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}. Pred zmazaním musíte zostatok vynulovať.`;
+      addNotification(message, 'error');
+      return message;
+    }
+    
+    const associatedTransactions = transactions.filter(t => t.accountId === id || t.destinationAccountId === id);
+
+    if (associatedTransactions.length > 0) {
+        const message = 'Nie je možné zmazať účet, ku ktorému sú priradené transakcie.';
+        addNotification(message, 'error');
+        return message;
+    }
+    
+    try {
+        const accountToDelete = accounts.find(a => a.id === id);
+        if (accountToDelete && accountToDelete.accountType === 'Sporiaci účet') {
+            const linkedCategory = categories.find(c => c.dedicatedAccountId === id);
+            if (linkedCategory) {
+                await deleteCategory(linkedCategory.id);
+            }
+        }
+
+        await pb.collection('accounts').delete(id);
+        setAccounts(prev => prev.filter(a => a.id !== id));
+        addNotification('Účet bol úspešne zmazaný.', 'success');
+        
+        if (accountToDelete) {
+          await pb.collection('system_events').create({
+            workspace: currentWorkspaceId,
+            type: 'account_deleted',
+            details: {
+              accountId: accountToDelete.id,
+              name: accountToDelete.name,
+              type: accountToDelete.type,
+              accountType: accountToDelete.accountType,
+              currency: accountToDelete.currency,
+            }
+          });
+        }
+    } catch (e: any) {
+        console.error("Chyba pri mazaní účtu:", e);
+        addNotification('Nastala chyba pri mazaní účtu.', 'error');
+    }
+  }, [transactions, addNotification, getAccountBalance, accounts, categories, deleteCategory, currentWorkspaceId]);
+  
+  // TRANSACTION MANAGEMENT
 
   const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'workspaceId'>) => {
     if (!currentWorkspaceId) return;

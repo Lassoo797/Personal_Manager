@@ -147,9 +147,10 @@ const EditableCategoryName: React.FC<{ category: Category, isEditing: boolean, s
 const InlineCategoryForm: React.FC<{ 
     type: TransactionType, 
     parentId: string | null, 
+    validFrom: string, // YYYY-MM
     onCancel: () => void,
     onSaveSuccess: (newCategory: Category) => void 
-}> = ({ type, parentId, onCancel, onSaveSuccess }) => {
+}> = ({ type, parentId, validFrom, onCancel, onSaveSuccess }) => {
     const { addCategory } = useAppContext();
     const [name, setName] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -158,7 +159,7 @@ const InlineCategoryForm: React.FC<{
         e.preventDefault();
         if (name.trim() && !isSaving) {
             setIsSaving(true);
-            const newCategory = await addCategory({ name: name.trim(), type, parentId });
+            const newCategory = await addCategory({ name: name.trim(), type, parentId, validFrom });
             setIsSaving(false);
             if (newCategory) {
                 onSaveSuccess(newCategory);
@@ -236,10 +237,15 @@ const Budgets: React.FC = () => {
             .reduce((sum, t) => sum + t.amount, 0);
     }, [transactions, currentMonth]);
     
-    const parentCategories = useMemo(() => ({
-        income: categories.filter(c => c.type === 'income' && !c.parentId).sort((a, b) => a.order - b.order),
-        expense: categories.filter(c => c.type === 'expense' && !c.parentId).sort((a, b) => a.order - b.order),
-    }), [categories]);
+    const parentCategories = useMemo(() => {
+        const income = categories
+            .filter(c => c.type === 'income' && !c.parentId && c.validFrom <= currentMonth)
+            .sort((a, b) => a.order - b.order);
+        const expense = categories
+            .filter(c => c.type === 'expense' && !c.parentId && c.validFrom <= currentMonth)
+            .sort((a, b) => a.order - b.order);
+        return { income, expense };
+    }, [categories, currentMonth]);
 
     
     
@@ -350,6 +356,7 @@ const Budgets: React.FC = () => {
                     <InlineCategoryForm 
                         type={type} 
                         parentId={null} 
+                        validFrom={currentMonth}
                         onCancel={() => setAddingCategory(null)}
                         onSaveSuccess={handleSaveSuccess}
                     />
@@ -611,7 +618,10 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
-    const subcategories = useMemo(() => categories.filter(c => c.parentId === parent.id).sort((a,b)=>(a.order || 0) - (b.order || 0)), [categories, parent.id]);
+    const subcategories = useMemo(() => 
+        categories.filter(c => c.parentId === parent.id && c.validFrom <= currentMonth)
+                  .sort((a,b)=>(a.order || 0) - (b.order || 0)), 
+    [categories, parent.id, currentMonth]);
 
     const { parentTotalBudget, parentTotalActual } = useMemo(() => {
         let totalBudget = 0;
@@ -761,6 +771,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                             <InlineCategoryForm 
                                 type={parent.type} 
                                 parentId={parent.id} 
+                                validFrom={currentMonth}
                                 onCancel={onCancelAddSubcategory}
                                 onSaveSuccess={onSaveSubcategorySuccess}
                             />
@@ -957,7 +968,16 @@ const ReassignAndDeleteModal: React.FC<{
     const transactionCount = useMemo(() => category ? transactions.filter(t => t.categoryId === category.id).length : 0, [transactions, category]);
     const potentialTargetCategories = useMemo(() => {
         if (!category) return [];
-        return categories.filter(c => c.id !== category.id && c.type === category.type && c.parentId).sort((a,b) => a.name.localeCompare(b.name));
+        // Assuming the `currentMonth` is available in this component's scope,
+        // which might require passing it down from `Budgets` component.
+        // For now, let's assume we can get it from useAppContext or similar.
+        // A simpler approach is to filter by `validFrom` relative to the transaction dates,
+        // but for UI consistency let's just filter broadly here.
+        return categories.filter(c => 
+            c.id !== category.id && 
+            c.type === category.type && 
+            c.parentId
+        ).sort((a,b) => a.name.localeCompare(b.name));
     }, [categories, category]);
     
     useEffect(() => { if (isOpen) { setTargetCategoryId(''); } }, [isOpen]);
