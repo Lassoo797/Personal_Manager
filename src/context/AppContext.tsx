@@ -1,15 +1,15 @@
 import { RecordModel } from 'pocketbase';import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import pb from '../lib/pocketbase';
-import type { Account, Category, Transaction, Budget, BudgetProfile, TransactionType, Notification } from '../types';
+import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification } from '../types';
 import { useAuth } from './AuthContext';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 
 // Helper funkcie na mapovanie PocketBase záznamov
-const mapPbToProfile = (r: RecordModel): BudgetProfile => ({ id: r.id, name: r.name });
-const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, profileId: r.profile, currency: r.currency, accountType: r.accountType, type: r.type });
-const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, profileId: r.profile, order: r.order });
-const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.account, destinationAccountId: r.destinationAccountId || null, profileId: r.profile, systemType: r.systemType || null });
-const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, profileId: r.profile });
+const mapPbToWorkspace = (r: RecordModel): Workspace => ({ id: r.id, name: r.workspace_name });
+const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, workspaceId: r.workspace, currency: r.currency, accountType: r.accountType, type: r.type });
+const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order });
+const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, date: r.date, description: r.description, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.account, destinationAccountId: r.destinationAccountId || null, workspaceId: r.workspace, systemType: r.systemType || null });
+const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, workspaceId: r.workspace });
 
 // PocketBase options to prevent autocancellation during batch operations
 const noAutoCancel = { '$autoCancel': false };
@@ -20,12 +20,12 @@ interface AppContextType {
   error: Error | null;
 
   // Profile Management
-  budgetProfiles: BudgetProfile[];
-  currentProfileId: string | null;
-  setCurrentProfileId: (id: string | null) => void;
-  addBudgetProfile: (name: string) => Promise<void>;
-  updateBudgetProfile: (id: string, name: string) => Promise<void>;
-  deleteBudgetProfile: (id: string) => Promise<void>;
+  workspaces: Workspace[];
+  currentWorkspaceId: string | null;
+  setCurrentWorkspaceId: (id: string | null) => void;
+  addWorkspace: (name: string) => Promise<void>;
+  updateWorkspace: (id: string, name: string) => Promise<void>;
+  deleteWorkspace: (id: string) => Promise<void>;
   
   // Data for current profile
   accounts: Account[];
@@ -40,12 +40,12 @@ interface AppContextType {
   allCategories: Category[];
 
   // Actions
-  addAccountWithInitialTransaction: (account: Omit<Account, 'id' | 'profileId'>, initialBalance: number, initialBalanceDate: string) => Promise<void>;
+  addAccountWithInitialTransaction: (account: Omit<Account, 'id' | 'workspaceId'>, initialBalance: number, initialBalanceDate: string) => Promise<void>;
   updateAccount: (account: Partial<Account> & Pick<Account, 'id'>) => Promise<void>;
   deleteAccount: (id: string) => Promise<string | void>;
   getAccountBalance: (accountId: string) => number;
   
-  addCategory: (category: Omit<Category, 'id' | 'profileId' | 'order'>) => Promise<Category | null>;
+  addCategory: (category: Omit<Category, 'id' | 'workspaceId' | 'order'>) => Promise<Category | null>;
   updateCategory: (category: Category) => Promise<void>;
   updateCategoryOrder: (updatedCategories: Category[]) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
@@ -54,11 +54,11 @@ interface AppContextType {
   moveCategoryUp: (categoryId: string) => Promise<void>;
   moveCategoryDown: (categoryId: string) => Promise<void>;
 
-  addTransaction: (transaction: Omit<Transaction, 'id' | 'profileId'>) => Promise<void>;
+  addTransaction: (transaction: Omit<Transaction, 'id' | 'workspaceId'>) => Promise<void>;
   updateTransaction: (transaction: Transaction) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
 
-  addOrUpdateBudget: (budget: Omit<Budget, 'id' | 'profileId'>) => Promise<void>;
+  addOrUpdateBudget: (budget: Omit<Budget, 'id' | 'workspaceId'>) => Promise<void>;
   publishBudgetForYear: (categoryId: string, month: string, forAllSubcategories?: boolean) => Promise<void>;
   publishFullBudgetForYear: (month: string) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
@@ -77,11 +77,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const { user } = useAuth(); // Get the user from AuthContext
   const [isLoading, setIsLoading] = useState(true);
   const [isGlobalLoading, setIsGlobalLoading] = useState(true);
-  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const [budgetProfiles, setBudgetProfiles] = useState<BudgetProfile[]>([]);
-  const [currentProfileId, setCurrentProfileId] = useLocalStorage<string | null>('currentProfileId', null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useLocalStorage<string | null>('currentWorkspaceId', null);
   
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -97,15 +97,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Combined loading state
   useEffect(() => {
-    setIsLoading(isGlobalLoading || isProfileLoading);
-  }, [isGlobalLoading, isProfileLoading]);
+    setIsLoading(isGlobalLoading || isWorkspaceLoading);
+  }, [isGlobalLoading, isWorkspaceLoading]);
 
   // Effect to load global data once on startup
   useEffect(() => {
     const loadGlobalData = async () => {
       if (!user) {
         // If user is logged out, clear all data and stop loading
-        setBudgetProfiles([]);
+        setWorkspaces([]);
         setAllAccounts([]);
         setAllTransactions([]);
         setAllBudgets([]);
@@ -117,25 +117,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsGlobalLoading(true);
       setError(null);
       try {
-        const [profiles, allAccs, allTrans, allBuds, allCats] = await Promise.all([
-          pb.collection('profiles').getFullList(),
+        const [workspacesData, allAccs, allTrans, allBuds, allCats] = await Promise.all([
+          pb.collection('workspaces').getFullList(),
           pb.collection('accounts').getFullList(),
           pb.collection('transactions').getFullList(),
           pb.collection('budgets').getFullList(),
           pb.collection('categories').getFullList(),
       ]);
 
-        const mappedProfiles = profiles.map(mapPbToProfile);
-        setBudgetProfiles(mappedProfiles);
+        const mappedWorkspaces = workspacesData.map(mapPbToWorkspace);
+        setWorkspaces(mappedWorkspaces);
         setAllAccounts(allAccs.map(mapPbToAccount));
         setAllTransactions(allTrans.map(mapPbToTransaction));
         setAllBudgets(allBuds.map(mapPbToBudget));
         setAllCategories(allCats.map(mapPbToCategory));
 
-        // Auto-select profile logic after global data is loaded
-        const isInvalidStoredProfile = currentProfileId && !mappedProfiles.some(p => p.id === currentProfileId);
-        if (isInvalidStoredProfile || !currentProfileId) { // Also auto-select if no profile was selected
-          setCurrentProfileId(mappedProfiles.length > 0 ? mappedProfiles[0].id : null);
+        // Auto-select workspace logic after global data is loaded
+        const isInvalidStoredWorkspace = currentWorkspaceId && !mappedWorkspaces.some(p => p.id === currentWorkspaceId);
+        if (isInvalidStoredWorkspace || !currentWorkspaceId) { // Also auto-select if no workspace was selected
+          setCurrentWorkspaceId(mappedWorkspaces.length > 0 ? mappedWorkspaces[0].id : null);
         }
       } catch (e: any) {
         if (e.name !== 'AbortError' && !e.isAbort) {
@@ -153,12 +153,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Effect to load profile-specific data when profile changes
   useEffect(() => {
-    const loadProfileData = async () => {
-      if (currentProfileId) {
-        setIsProfileLoading(true);
+    const loadWorkspaceData = async () => {
+      if (currentWorkspaceId) {
+        setIsWorkspaceLoading(true);
         setError(null);
         try {
-          const filter = pb.filter('profile = {:profileId}', { profileId: currentProfileId });
+          const filter = pb.filter('workspace = {:workspaceId}', { workspaceId: currentWorkspaceId });
           const [accs, cats, trans, buds] = await Promise.all([
             pb.collection('accounts').getFullList({ filter }),
             pb.collection('categories').getFullList({ filter }),
@@ -172,13 +172,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } catch (e: any) {
           if (e.name !== 'AbortError' && !e.isAbort) {
             setError(e);
-            console.error("Chyba pri načítavaní dát profilu:", e);
+            console.error("Chyba pri načítavaní dát pracovného priestoru:", e);
           }
         } finally {
-          setIsProfileLoading(false);
+          setIsWorkspaceLoading(false);
         }
       } else {
-        // If no profile is selected, clear profile-specific data
+        // If no workspace is selected, clear workspace-specific data
         setAccounts([]);
         setCategories([]);
         setTransactions([]);
@@ -186,35 +186,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
 
-    // Don't load profile data until global data is ready
+    // Don't load workspace data until global data is ready
     if (!isGlobalLoading) {
-      loadProfileData();
+      loadWorkspaceData();
     }
-  }, [currentProfileId, isGlobalLoading]);
+  }, [currentWorkspaceId, isGlobalLoading]);
   
   const loadAppData = useCallback(async () => {
     // This function can be used to manually trigger a full reload of everything.
      setIsGlobalLoading(true);
      setError(null);
      try {
-       const [profiles, allAccs, allTrans, allBuds, allCats] = await Promise.all([
-         pb.collection('profiles').getFullList(),
+       const [workspacesData, allAccs, allTrans, allBuds, allCats] = await Promise.all([
+         pb.collection('workspaces').getFullList(),
          pb.collection('accounts').getFullList(),
          pb.collection('transactions').getFullList(),
          pb.collection('budgets').getFullList(),
          pb.collection('categories').getFullList(),
        ]);
 
-       const mappedProfiles = profiles.map(mapPbToProfile);
-       setBudgetProfiles(mappedProfiles);
+       const mappedWorkspaces = workspacesData.map(mapPbToWorkspace);
+       setWorkspaces(mappedWorkspaces);
        setAllAccounts(allAccs.map(mapPbToAccount));
        setAllTransactions(allTrans.map(mapPbToTransaction));
        setAllBudgets(allBuds.map(mapPbToBudget));
        setAllCategories(allCats.map(mapPbToCategory));
 
-       const isInvalidStoredProfile = currentProfileId && !mappedProfiles.some(p => p.id === currentProfileId);
-       if (isInvalidStoredProfile) {
-         setCurrentProfileId(mappedProfiles.length > 0 ? mappedProfiles[0].id : null);
+       const isInvalidStoredWorkspace = currentWorkspaceId && !mappedWorkspaces.some(p => p.id === currentWorkspaceId);
+       if (isInvalidStoredWorkspace) {
+         setCurrentWorkspaceId(mappedWorkspaces.length > 0 ? mappedWorkspaces[0].id : null);
        }
      } catch (e: any) {
        if (e.name !== 'AbortError' && !e.isAbort) {
@@ -224,7 +224,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
      } finally {
        setIsGlobalLoading(false);
      }
-  }, [currentProfileId, setCurrentProfileId]);
+  }, [currentWorkspaceId, setCurrentWorkspaceId]);
 
   const removeNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -273,25 +273,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, { actualIncome: 0, actualExpense: 0 });
   }, []);
 
-  // --- Profile Management ---
-  const addBudgetProfile = useCallback(async (name: string) => {
-    const newProfile = await pb.collection('profiles').create({ name });
-    const mapped = mapPbToProfile(newProfile);
-    setBudgetProfiles(prev => [...prev, mapped]);
-    setCurrentProfileId(mapped.id);
-    addNotification(`Profil "${name}" bol úspešne vytvorený.`, 'success');
-  }, [setCurrentProfileId, addNotification]);
+  // --- Workspace Management ---
+  const addWorkspace = useCallback(async (name: string) => {
+    const newWorkspace = await pb.collection('workspaces').create({ workspace_name: name });
+    const mapped = mapPbToWorkspace(newWorkspace);
+    setWorkspaces(prev => [...prev, mapped]);
+    setCurrentWorkspaceId(mapped.id);
+    addNotification(`Pracovný priestor "${name}" bol úspešne vytvorený.`, 'success');
+  }, [setCurrentWorkspaceId, addNotification]);
 
-  const updateBudgetProfile = useCallback(async (id: string, name: string) => {
-    const updated = await pb.collection('profiles').update(id, { name });
-    setBudgetProfiles(prev => prev.map(p => p.id === id ? mapPbToProfile(updated) : p));
-    addNotification(`Profil "${name}" bol aktualizovaný.`, 'success');
+  const updateWorkspace = useCallback(async (id: string, name: string) => {
+    const updated = await pb.collection('workspaces').update(id, { workspace_name: name });
+    setWorkspaces(prev => prev.map(p => p.id === id ? mapPbToWorkspace(updated) : p));
+    addNotification(`Pracovný priestor "${name}" bol aktualizovaný.`, 'success');
   }, [addNotification]);
 
-  const deleteBudgetProfile = useCallback(async (id: string) => {
+  const deleteWorkspace = useCallback(async (id: string) => {
     try {
       setIsLoading(true);
-      const filter = pb.filter('profile = {:profileId}', { profileId: id });
+      const filter = pb.filter('workspace = {:workspaceId}', { workspaceId: id });
       
       // Get IDs of all related records
       const [accountsToDelete, categoriesToDelete, transactionsToDelete, budgetsToDelete] = await Promise.all([
@@ -302,7 +302,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ]);
 
       // Batch delete records. PocketBase JS SDK doesn't have batch delete, so we do it in parallel.
-      // Adjust if you have a very large number of records per profile to avoid overwhelming the server.
+      // Adjust if you have a very large number of records per workspace to avoid overwhelming the server.
       await Promise.all([
         ...accountsToDelete.map(r => pb.collection('accounts').delete(r.id)),
         ...categoriesToDelete.map(r => pb.collection('categories').delete(r.id)),
@@ -310,44 +310,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ...budgetsToDelete.map(r => pb.collection('budgets').delete(r.id)),
       ]);
 
-      // Finally, delete the profile itself
-      await pb.collection('profiles').delete(id);
+      // Finally, delete the workspace itself
+      await pb.collection('workspaces').delete(id);
 
       // Update local state
-      const remaining = budgetProfiles.filter(p => p.id !== id);
-      setBudgetProfiles(remaining);
-      if (currentProfileId === id) {
-        setCurrentProfileId(remaining.length > 0 ? remaining[0].id : null);
+      const remaining = workspaces.filter(p => p.id !== id);
+      setWorkspaces(remaining);
+      if (currentWorkspaceId === id) {
+        setCurrentWorkspaceId(remaining.length > 0 ? remaining[0].id : null);
       }
       
       // Also update the 'all' states to reflect the deletion without a full reload
-      setAllAccounts(prev => prev.filter(a => a.profileId !== id));
-      setAllCategories(prev => prev.filter(c => c.profileId !== id));
-      setAllTransactions(prev => prev.filter(t => t.profileId !== id));
-      setAllBudgets(prev => prev.filter(b => b.profileId !== id));
-      addNotification('Profil a všetky jeho dáta boli zmazané.', 'success');
+      setAllAccounts(prev => prev.filter(a => a.workspaceId !== id));
+      setAllCategories(prev => prev.filter(c => c.workspaceId !== id));
+      setAllTransactions(prev => prev.filter(t => t.workspaceId !== id));
+      setAllBudgets(prev => prev.filter(b => b.workspaceId !== id));
+      addNotification('Pracovný priestor a všetky jeho dáta boli zmazané.', 'success');
 
     } catch(e: any) {
         setError(e);
-        console.error("Chyba pri mazaní profilu:", e);
-        addNotification('Chyba pri mazaní profilu. Skontrolujte, či nie sú k profilu priradené nejaké dáta.', 'error');
+        console.error("Chyba pri mazaní pracovného priestoru:", e);
+        addNotification('Chyba pri mazaní pracovného priestoru. Skontrolujte, či nie sú k pracovnému priestoru priradené nejaké dáta.', 'error');
     } finally {
         setIsLoading(false);
         // We might need to refresh data if something went partially wrong
-        if (currentProfileId === id) {
-           // The main useEffect will trigger due to profile change
+        if (currentWorkspaceId === id) {
+           // The main useEffect will trigger due to workspace change
         } else {
-            // If we deleted a background profile, the current view is fine.
+            // If we deleted a background workspace, the current view is fine.
         }
     }
-  }, [budgetProfiles, currentProfileId, setCurrentProfileId, addNotification]);
+  }, [workspaces, currentWorkspaceId, setCurrentWorkspaceId, addNotification]);
 
   // --- Data Management ---
-  const addAccountWithInitialTransaction = useCallback(async (account: Omit<Account, 'id' | 'profileId'>, initialBalance: number, initialBalanceDate: string) => {
-    if (!currentProfileId) return;
+  const addAccountWithInitialTransaction = useCallback(async (account: Omit<Account, 'id' | 'workspaceId'>, initialBalance: number, initialBalanceDate: string) => {
+    if (!currentWorkspaceId) return;
 
     try {
-      const newAccountRecord = await pb.collection('accounts').create({ ...account, profile: currentProfileId });
+      const newAccountRecord = await pb.collection('accounts').create({ ...account, workspace: currentWorkspaceId });
       const newAccount = mapPbToAccount(newAccountRecord);
       
       if (initialBalance !== 0) {
@@ -358,7 +358,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           type: initialBalance >= 0 ? 'income' : 'expense',
           systemType: 'initial_balance',
           account: newAccount.id,
-          profile: currentProfileId,
+          workspace: currentWorkspaceId,
           category: null,
         };
         const newTransactionRecord = await pb.collection('transactions').create(initialTransactionData);
@@ -372,11 +372,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error("Chyba pri vytváraní účtu s počiatočnou transakciou:", e);
         addNotification('Nastala chyba pri vytváraní účtu.', 'error');
     }
-  }, [currentProfileId, addNotification]);
+  }, [currentWorkspaceId, addNotification]);
 
   const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
     const { id, name, currency, accountType, type } = accountToUpdate;
-    const payload: Partial<Omit<Account, 'id' | 'profileId'>> = {};
+    const payload: Partial<Omit<Account, 'id' | 'workspaceId'>> = {};
     if (name) payload.name = name;
     if (currency) payload.currency = currency;
     if (accountType) payload.accountType = accountType;
@@ -428,15 +428,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [transactions, addNotification, getAccountBalance]);
   
-  const addCategory = useCallback(async (category: Omit<Category, 'id' | 'profileId' | 'order'>): Promise<Category | null> => {
-    if (!currentProfileId) return null;
+  const addCategory = useCallback(async (category: Omit<Category, 'id' | 'workspaceId' | 'order'>): Promise<Category | null> => {
+    if (!currentWorkspaceId) return null;
     
     const siblings = categories.filter(c => c.parentId === category.parentId && c.type === category.type);
     const newOrder = siblings.length > 0 ? Math.max(...siblings.map(c => c.order)) + 1 : 0;
     
     const data = {
         ...category,
-        profile: currentProfileId,
+        workspace: currentWorkspaceId,
         order: newOrder,
         parent: category.parentId || undefined
     };
@@ -453,12 +453,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error("Nepodarilo sa vytvoriť kategóriu:", e);
       return null;
     }
-  }, [currentProfileId, categories, addNotification]);
+  }, [currentWorkspaceId, categories, addNotification]);
 
   const updateCategory = useCallback(async (updated: Category) => {
-    const { id, profileId, ...data } = updated;
+    const { id, workspaceId, ...data } = updated;
     // Ensure parent is correctly formatted for PocketBase (ID or null)
-    const payload = { ...data, parent: data.parentId || null, profile: profileId };
+    const payload = { ...data, parent: data.parentId || null, workspace: workspaceId };
     const updatedCategory = await pb.collection('categories').update(id, payload);
     setCategories(prev => {
         const newState = prev.map(c => c.id === id ? mapPbToCategory(updatedCategory) : c)
@@ -576,12 +576,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const moveCategoryUp = useCallback((categoryId: string) => moveCategory(categoryId, 'up'), [moveCategory]);
   const moveCategoryDown = useCallback((categoryId: string) => moveCategory(categoryId, 'down'), [moveCategory]);
 
-  const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'profileId'>) => {
-    if (!currentProfileId) return;
+  const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'workspaceId'>) => {
+    if (!currentWorkspaceId) return;
     
     const data = {
         ...transaction,
-        profile: currentProfileId,
+        workspace: currentWorkspaceId,
         account: transaction.accountId,
         category: transaction.type !== 'transfer' ? transaction.categoryId : null,
         destinationAccountId: transaction.type === 'transfer' ? transaction.destinationAccountId : null,
@@ -590,13 +590,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newTransaction = await pb.collection('transactions').create(data);
     setTransactions(prev => [...prev, mapPbToTransaction(newTransaction)]);
     addNotification('Transakcia bola pridaná.', 'success');
-  }, [currentProfileId, addNotification]);
+  }, [currentWorkspaceId, addNotification]);
 
   const updateTransaction = useCallback(async (updated: Transaction) => {
-    const { id, profileId, ...data } = updated;
+    const { id, workspaceId, ...data } = updated;
     const payload = { 
         ...data,
-        profile: profileId,
+        workspace: workspaceId,
         account: data.accountId,
         category: data.type !== 'transfer' ? data.categoryId : null,
         destinationAccountId: data.type === 'transfer' ? data.destinationAccountId : null,
@@ -612,8 +612,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     addNotification('Transakcia bola zmazaná.', 'success');
   }, [addNotification]);
 
-  const addOrUpdateBudget = useCallback(async (budget: Omit<Budget, 'id' | 'profileId'>) => {
-    if (!currentProfileId) return;
+  const addOrUpdateBudget = useCallback(async (budget: Omit<Budget, 'id' | 'workspaceId'>) => {
+    if (!currentWorkspaceId) return;
     
     const existing = budgets.find(b => b.categoryId === budget.categoryId && b.month === budget.month);
 
@@ -624,7 +624,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   } else {
     const data = {
         ...budget,
-        profile: currentProfileId,
+        workspace: currentWorkspaceId,
         category: budget.categoryId
     };
     const newBudget = await pb.collection('budgets').create(data);
@@ -633,7 +633,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAllBudgets(prev => [...prev, mapped]);
   }
   addNotification('Rozpočet bol uložený.', 'success');
-  }, [currentProfileId, budgets, addNotification]);
+  }, [currentWorkspaceId, budgets, addNotification]);
   
   const deleteBudget = useCallback(async(id:string) => {
     await pb.collection('budgets').delete(id);
@@ -643,7 +643,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [addNotification]);
 
   const publishBudgetForYear = useCallback(async (baseCategoryId: string, baseMonth: string, forAllSubcategories: boolean = false) => {
-    if (!currentProfileId) return;
+    if (!currentWorkspaceId) return;
 
     const [year, month] = baseMonth.split('-').map(Number);
     let categoryIdsToUpdate = [baseCategoryId];
@@ -677,7 +677,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         } else if (sourceAmount > 0) {
              // Vytvor nový, len ak je suma > 0
-            const data = { profile: currentProfileId, category: categoryId, month: targetMonth, amount: sourceAmount };
+            const data = { workspace: currentWorkspaceId, category: categoryId, month: targetMonth, amount: sourceAmount };
             try {
                 const newBudget = await pb.collection('budgets').create(data, noAutoCancel);
                 newBudgets.push(mapPbToBudget(newBudget));
@@ -700,10 +700,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     addNotification('Rozpočet bol publikovaný pre nasledujúce mesiace.', 'success');
 
-  }, [currentProfileId, budgets, categories, addNotification]);
+  }, [currentWorkspaceId, budgets, categories, addNotification]);
 
   const publishFullBudgetForYear = useCallback(async (baseMonth: string) => {
-    if (!currentProfileId) return;
+    if (!currentWorkspaceId) return;
   
     const [year, month] = baseMonth.split('-').map(Number);
     const categoryIds = categories.map(c => c.id);
@@ -726,7 +726,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             budgetsToUpdate.push(pb.collection('budgets').update(existingBudget.id, { amount: sourceAmount }, noAutoCancel));
           }
         } else if (sourceAmount > 0) {
-          const data = { profile: currentProfileId, category: categoryId, month: targetMonth, amount: sourceAmount };
+          const data = { workspace: currentWorkspaceId, category: categoryId, month: targetMonth, amount: sourceAmount };
           budgetsToCreate.push(pb.collection('budgets').create(data, noAutoCancel));
         }
       }
@@ -757,11 +757,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     } finally {
       setIsLoading(false);
     }
-  }, [currentProfileId, categories, budgets, addNotification]);
+  }, [currentWorkspaceId, categories, budgets, addNotification]);
 
   const value = useMemo(() => ({
     isLoading, error,
-    budgetProfiles, currentProfileId, setCurrentProfileId, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile,
+    workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
     accounts, addAccountWithInitialTransaction, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
@@ -772,7 +772,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     getFinancialSummary,
   }), [
     isLoading, error,
-    budgetProfiles, currentProfileId, setCurrentProfileId, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile,
+    workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
     accounts, addAccountWithInitialTransaction, updateAccount, deleteAccount, getAccountBalance,
     categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,

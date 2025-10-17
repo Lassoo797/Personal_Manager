@@ -22,7 +22,7 @@ const App: React.FC = () => {
 };
 
 const AppContent: React.FC = () => {
-  const { currentProfileId, isLoading, error, budgetProfiles } = useAppContext();
+  const { currentWorkspaceId, isLoading, error, workspaces } = useAppContext();
   const { user } = useAuth();
 
   const renderContent = () => {
@@ -35,7 +35,7 @@ const AppContent: React.FC = () => {
     }
 
     // After loading and no errors, check for profiles
-    if (user && budgetProfiles.length === 0) {
+    if (user && workspaces.length === 0) {
         return <MasterDashboard />; // MasterDashboard handles the welcome message
     }
 
@@ -43,7 +43,7 @@ const AppContent: React.FC = () => {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<ProtectedRoute />}>
-          {currentProfileId ? (
+          {currentWorkspaceId ? (
             <>
               <Route path="/" element={<Dashboard />} />
               <Route path="/transactions" element={<Transactions />} />

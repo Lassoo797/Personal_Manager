@@ -1,46 +1,46 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { PencilIcon, TrashIcon, PlusIcon } from './icons';
-import type { BudgetProfile } from '../types';
+import type { Workspace } from '../types';
 import { ConfirmModal } from '../pages/Transactions';
 
 
-const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const { budgetProfiles, addBudgetProfile, updateBudgetProfile, deleteBudgetProfile } = useAppContext();
-    const [newProfileName, setNewProfileName] = useState('');
-    const [editingProfile, setEditingProfile] = useState<BudgetProfile | null>(null);
+const WorkspaceManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const { workspaces, addWorkspace, updateWorkspace, deleteWorkspace } = useAppContext();
+    const [newWorkspaceName, setNewWorkspaceName] = useState('');
+    const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null);
     const [editingName, setEditingName] = useState('');
     const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0";
 
-    const handleAddProfile = async (e: React.FormEvent) => {
+    const handleAddWorkspace = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (newProfileName.trim()) {
-            await addBudgetProfile(newProfileName.trim());
-            setNewProfileName('');
+        if (newWorkspaceName.trim()) {
+            await addWorkspace(newWorkspaceName.trim());
+            setNewWorkspaceName('');
             onClose();
         }
     };
 
-    const handleEdit = (profile: BudgetProfile) => {
-        setEditingProfile(profile);
-        setEditingName(profile.name);
+    const handleEdit = (workspace: Workspace) => {
+        setEditingWorkspace(workspace);
+        setEditingName(workspace.name);
     };
 
     const handleSaveEdit = () => {
-        if (editingProfile && editingName.trim()) {
-            updateBudgetProfile(editingProfile.id, editingName.trim());
+        if (editingWorkspace && editingName.trim()) {
+            updateWorkspace(editingWorkspace.id, editingName.trim());
         }
-        setEditingProfile(null);
+        setEditingWorkspace(null);
         setEditingName('');
     };
     
-    const handleDeleteRequest = (profile: BudgetProfile) => {
+    const handleDeleteRequest = (workspace: Workspace) => {
         setConfirmModalState({
             isOpen: true,
-            message: `Naozaj chcete natrvalo zmazať profil "${profile.name}"? Týmto sa zmažú všetky súvisiace účty, transakcie a rozpočty.`,
+            message: `Naozaj chcete natrvalo zmazať pracovný priestor "${workspace.name}"? Týmto sa zmažú všetky súvisiace účty, transakcie a rozpočty.`,
             onConfirm: () => {
-                deleteBudgetProfile(profile.id);
+                deleteWorkspace(workspace.id);
                 setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
             }
         });
@@ -50,11 +50,11 @@ const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <>
             <div className="space-y-6">
                 <div>
-                    <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface mb-2">Existujúce profily</h3>
+                    <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface mb-2">Existujúce pracovné priestory</h3>
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                        {budgetProfiles.map(profile => (
-                            <div key={profile.id} className="flex items-center justify-between bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-3 rounded-lg">
-                                {editingProfile?.id === profile.id ? (
+                        {workspaces.map(workspace => (
+                            <div key={workspace.id} className="flex items-center justify-between bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-3 rounded-lg">
+                                {editingWorkspace?.id === workspace.id ? (
                                     <input
                                         type="text"
                                         value={editingName}
@@ -65,13 +65,13 @@ const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                         autoFocus
                                     />
                                 ) : (
-                                    <span className="text-light-onSurface dark:text-dark-onSurface">{profile.name}</span>
+                                    <span className="text-light-onSurface dark:text-dark-onSurface">{workspace.name}</span>
                                 )}
                                 
                                 <div className="flex items-center space-x-1 ml-4">
-                                    <button aria-label={`Upraviť profil ${profile.name}`} onClick={() => handleEdit(profile)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                                    {budgetProfiles.length > 1 && (
-                                        <button aria-label={`Zmazať profil ${profile.name}`} onClick={() => handleDeleteRequest(profile)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                                    <button aria-label={`Upraviť pracovný priestor ${workspace.name}`} onClick={() => handleEdit(workspace)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
+                                    {workspaces.length > 1 && (
+                                        <button aria-label={`Zmazať pracovný priestor ${workspace.name}`} onClick={() => handleDeleteRequest(workspace)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
                                     )}
                                 </div>
                             </div>
@@ -80,21 +80,21 @@ const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
 
                 <div className="border-t border-light-outlineVariant dark:border-dark-outlineVariant pt-4">
-                    <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface mb-2">Vytvoriť nový profil</h3>
-                    <form onSubmit={handleAddProfile} className="flex items-center space-x-2">
+                    <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface mb-2">Vytvoriť nový pracovný priestor</h3>
+                    <form onSubmit={handleAddWorkspace} className="flex items-center space-x-2">
                         <div className="relative flex-grow">
                             <input
                                 type="text"
-                                id="new-profile-name"
-                                value={newProfileName}
-                                onChange={(e) => setNewProfileName(e.target.value)}
+                                id="new-workspace-name"
+                                value={newWorkspaceName}
+                                onChange={(e) => setNewWorkspaceName(e.target.value)}
                                 className={`${formInputStyle} peer h-12 pt-2`}
                                 required
                                 placeholder=" "
                             />
-                            <label htmlFor="new-profile-name" className="absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3">Názov nového profilu</label>
+                            <label htmlFor="new-workspace-name" className="absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3">Názov nového pracovného priestoru</label>
                         </div>
-                        <button type="submit" aria-label="Pridať nový profil" className="flex-shrink-0 p-3 bg-light-primary text-light-onPrimary rounded-full hover:shadow-lg transition-shadow">
+                        <button type="submit" aria-label="Pridať nový pracovný priestor" className="flex-shrink-0 p-3 bg-light-primary text-light-onPrimary rounded-full hover:shadow-lg transition-shadow">
                             <PlusIcon className="h-6 w-6" />
                         </button>
                     </form>
@@ -108,10 +108,10 @@ const ProfileManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })}
                 message={confirmModalState.message}
                 onConfirm={confirmModalState.onConfirm}
-                title="Potvrdenie zmazania profilu"
+                title="Potvrdenie zmazania pracovného priestoru"
             />
         </>
     );
 };
 
-export default ProfileManager;
+export default WorkspaceManager;

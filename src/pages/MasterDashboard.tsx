@@ -3,7 +3,7 @@ import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 
 const MasterDashboard: React.FC = () => {
-  const { budgetProfiles, allAccounts, allTransactions, getFinancialSummary } = useAppContext();
+  const { workspaces, allAccounts, allTransactions, getFinancialSummary } = useAppContext();
   const { theme } = useTheme();
 
   const getAccountBalance = (account: { initialBalance: number; id: string; }, transactions: any[]) => {
@@ -67,15 +67,15 @@ const MasterDashboard: React.FC = () => {
     };
   }, [allAccounts, allTransactions, getFinancialSummary]);
 
-  if (budgetProfiles.length === 0) {
+  if (workspaces.length === 0) {
     return (
         <div className="text-center py-20">
             <h2 className="text-2xl sm:text-3xl font-bold text-light-onSurface dark:text-dark-onSurface">Vitajte v Rozpočtovom manažéri!</h2>
             <p className="mt-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
-                Zdá sa, že zatiaľ nemáte žiadny rozpočtový profil. Začnite tým, že si vytvoríte svoj prvý.
+                Zdá sa, že zatiaľ nemáte žiadny pracovný priestor. Začnite tým, že si vytvoríte svoj prvý.
             </p>
             <p className="mt-2 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
-                Použite menu vľavo hore na správu a výber profilov.
+                Použite menu vľavo hore na správu a výber pracovných priestorov.
             </p>
         </div>
     );
@@ -87,15 +87,15 @@ const MasterDashboard: React.FC = () => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dostupné v rozpočte (Všetky profily)</h2>
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dostupné v rozpočte (Všetky pracovné priestory)</h2>
           <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-1">{operatingBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
         </div>
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Sporenia (Všetky profily)</h2>
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Sporenia (Všetky pracovné priestory)</h2>
           <p className="text-3xl font-bold text-light-secondary dark:text-dark-secondary mt-1">{savingsBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
         </div>
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový majetok (Všetky profily)</h2>
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový majetok (Všetky pracovné priestory)</h2>
           <p className="text-3xl font-bold text-light-tertiary dark:text-dark-tertiary mt-1">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
         </div>
       </div>

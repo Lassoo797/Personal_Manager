@@ -2,7 +2,7 @@ export type TransactionType = 'income' | 'expense' | 'transfer';
 export type AccountType = 'Štandardný účet' | 'Sporiaci účet';
 export type AccountSubtype = 'Bankový účet' | 'Hotovosť';
 
-export interface BudgetProfile {
+export interface Workspace {
   id: string;
   name: string;
 }
@@ -10,7 +10,7 @@ export interface BudgetProfile {
 export interface Account {
   id: string;
   name: string;
-  profileId: string;
+  workspaceId: string;
   currency: 'EUR' | 'USD' | 'CZK';
   accountType: AccountType;
   type: AccountSubtype;
@@ -21,7 +21,7 @@ export interface Category {
   name: string;
   parentId: string | null;
   type: TransactionType;
-  profileId: string;
+  workspaceId: string;
   order: number;
 }
 
@@ -34,7 +34,7 @@ export interface Transaction {
   categoryId: string | null; // Can be null for transfers
   accountId: string; // Source account
   destinationAccountId?: string | null; // Destination account for transfers
-  profileId: string;
+  workspaceId: string;
   systemType?: 'initial_balance' | null;
 }
 
@@ -43,7 +43,7 @@ export interface Budget {
   categoryId: string;
   amount: number;
   month: string; // YYYY-MM
-  profileId: string;
+  workspaceId: string;
 }
 
 export interface Notification {

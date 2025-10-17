@@ -4,29 +4,30 @@ import { MenuIcon, XIcon, ChevronDownIcon } from './icons';
 import ThemeSwitcher from './ThemeSwitcher';
 import { useAppContext } from '../context/AppContext';
 import Modal from './Modal';
-import ProfileManager from './ProfileManager';
+import WorkspaceManager from './WorkspaceManager';
 import { useAuth } from '../context/AuthContext';
+import { Workspace } from '../types';
 
 
 const Header: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false);
+  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const { logout, user } = useAuth();
   
-  const { budgetProfiles, currentProfileId, setCurrentProfileId } = useAppContext();
+  const { workspaces, currentWorkspaceId, setCurrentWorkspaceId } = useAppContext();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
 
-  const currentProfile = useMemo(() => 
-    budgetProfiles.find(p => p.id === currentProfileId),
-    [budgetProfiles, currentProfileId]
+  const currentWorkspace = useMemo(() => 
+    workspaces.find((p: Workspace) => p.id === currentWorkspaceId),
+    [workspaces, currentWorkspaceId]
   );
   
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsProfileDropdownOpen(false);
+        setIsWorkspaceDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -60,21 +61,21 @@ const Header: React.FC = () => {
               <div className="flex-shrink-0">
                 <div className="relative" ref={dropdownRef}>
                   <button 
-                    onClick={() => setIsProfileDropdownOpen(prev => !prev)}
+                    onClick={() => setIsWorkspaceDropdownOpen((prev: boolean) => !prev)}
                     className="flex items-center text-light-onSurface dark:text-dark-onSurface text-lg font-medium p-2 rounded-lg hover:bg-light-surfaceContainer dark:hover:bg-dark-surfaceContainer transition-colors"
                   >
-                    <span className="font-bold">{currentProfile?.name || 'Celkový prehľad'}</span>
-                    <ChevronDownIcon className={`h-5 w-5 ml-1 transition-transform ${isProfileDropdownOpen ? 'rotate-180' : ''}`} />
+                    <span className="font-bold">{currentWorkspace?.name || 'Celkový prehľad'}</span>
+                    <ChevronDownIcon className={`h-5 w-5 ml-1 transition-transform ${isWorkspaceDropdownOpen ? 'rotate-180' : ''}`} />
                   </button>
-                  {isProfileDropdownOpen && (
+                  {isWorkspaceDropdownOpen && (
                     <div className="origin-top-left absolute left-0 mt-2 w-56 rounded-xl shadow-lg bg-light-surfaceContainer dark:bg-dark-surfaceContainer ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
                       <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                        {currentProfileId && (
+                        {currentWorkspaceId && (
                            <NavLink
                             to="/"
-                            onClick={(e) => {
-                              setCurrentProfileId(null);
-                              setIsProfileDropdownOpen(false);
+                            onClick={() => {
+                              setCurrentWorkspaceId(null);
+                              setIsWorkspaceDropdownOpen(false);
                             }}
                             className="block px-4 py-2 text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh font-semibold"
                             role="menuitem"
@@ -82,40 +83,40 @@ const Header: React.FC = () => {
                             &larr; Celkový prehľad
                           </NavLink>
                         )}
-                        {budgetProfiles.filter(p => p.id !== currentProfileId).map(profile => (
+                        {workspaces.filter((p: Workspace) => p.id !== currentWorkspaceId).map((workspace: Workspace) => (
                           <a
-                            key={profile.id}
+                            key={workspace.id}
                             href="#"
-                            onClick={(e) => {
+                            onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
                               e.preventDefault();
-                              setCurrentProfileId(profile.id);
-                              setIsProfileDropdownOpen(false);
+                              setCurrentWorkspaceId(workspace.id);
+                              setIsWorkspaceDropdownOpen(false);
                             }}
                             className="block px-4 py-2 text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"
                             role="menuitem"
                           >
-                            {profile.name}
+                            {workspace.name}
                           </a>
                         ))}
                          <div className="border-t border-light-outlineVariant dark:border-dark-outlineVariant my-1"></div>
                         <a
                           href="#"
-                          onClick={(e) => {
+                          onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
                             e.preventDefault();
-                            setIsProfileModalOpen(true);
-                            setIsProfileDropdownOpen(false);
+                            setIsWorkspaceModalOpen(true);
+                            setIsWorkspaceDropdownOpen(false);
                           }}
                           className="block px-4 py-2 text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"
                           role="menuitem"
                         >
-                          Spravovať profily...
+                          Spravovať pracovné priestory...
                         </a>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
-              {currentProfileId && (
+              {currentWorkspaceId && (
                 <div className="hidden md:block">
                   <div className="ml-10 flex items-baseline space-x-2">
                     {navLinks}
@@ -139,7 +140,7 @@ const Header: React.FC = () => {
                 v{process.env.APP_VERSION}
               </span>
               <ThemeSwitcher />
-              {currentProfileId && (
+              {currentWorkspaceId && (
                 <div className="-mr-2 flex md:hidden ml-2">
                   <button
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -157,7 +158,7 @@ const Header: React.FC = () => {
           </div>
         </div>
 
-        {isMobileMenuOpen && currentProfileId && (
+        {isMobileMenuOpen && currentWorkspaceId && (
           <div className="md:hidden" id="mobile-menu">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 flex flex-col items-start">
               {navLinks}
@@ -165,8 +166,8 @@ const Header: React.FC = () => {
           </div>
         )}
       </header>
-      <Modal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} title="Správa rozpočtových profilov">
-          <ProfileManager onClose={() => setIsProfileModalOpen(false)} />
+      <Modal isOpen={isWorkspaceModalOpen} onClose={() => setIsWorkspaceModalOpen(false)} title="Správa pracovných priestorov">
+          <WorkspaceManager onClose={() => setIsWorkspaceModalOpen(false)} />
       </Modal>
     </>
   );
