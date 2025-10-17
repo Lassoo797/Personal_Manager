@@ -47,9 +47,11 @@ export interface Transaction {
   amount: number;
   type: TransactionType;
   categoryId: string | null; // Can be null for transfers
-  account: string; // Source account
-  destinationAccount?: string | null; // Destination account for transfers
+  accountId: string; // Source account
+  destinationAccountId?: string | null; // Destination account for transfers
   workspaceId: string;
+  onBudget?: boolean; // True if transaction should be included in budgets/stats
+  linkedTransaction?: string | null; // ID of the paired transaction for savings
 }
 
 export interface Budget {

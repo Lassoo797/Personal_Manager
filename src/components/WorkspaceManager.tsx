@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { PencilIcon, TrashIcon, PlusIcon } from './icons';
 import type { Workspace } from '../types';
-import { ConfirmModal } from '../pages/Transactions';
+import { ConfirmModal } from './ConfirmModal';
 
 
 const WorkspaceManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {

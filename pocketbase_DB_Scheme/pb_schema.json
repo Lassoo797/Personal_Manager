@@ -758,6 +758,28 @@
       },
       {
         "hidden": false,
+        "id": "bool_on_budget",
+        "name": "onBudget",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "bool"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_3174063690",
+        "hidden": false,
+        "id": "relation_linked_transaction",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "linkedTransaction",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
+      },
+      {
+        "hidden": false,
         "id": "autodate2990389176",
         "name": "created",
         "onCreate": true,

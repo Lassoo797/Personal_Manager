@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
+import { ConfirmModal } from '../components/ConfirmModal';
 import type { Transaction, TransactionType, Account, Category } from '../types';
 
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
@@ -14,6 +15,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     const [accountId, setAccountId] = useState(transaction?.accountId || '');
     const [destinationAccountId, setDestinationAccountId] = useState(transaction?.destinationAccountId || '');
     const [error, setError] = useState<string | null>(null);
+    const [dedicatedAccountInfo, setDedicatedAccountInfo] = useState<{ name: string, type: 'income' | 'expense' } | null>(null);
     const dateInputRef = React.useRef<HTMLInputElement>(null);
 
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
@@ -39,6 +41,23 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             setDestinationAccountId('');
         }
     }, [transaction]);
+
+    // Effect to show info about dedicated (savings) account
+    useEffect(() => {
+        if (categoryId) {
+            const category = categories.find(c => c.id === categoryId);
+            if (category?.dedicatedAccount) {
+                const account = accounts.find(a => a.id === category.dedicatedAccount);
+                if (account) {
+                    setDedicatedAccountInfo({ name: account.name, type: category.type as 'income' | 'expense' });
+                }
+            } else {
+                setDedicatedAccountInfo(null);
+            }
+        } else {
+            setDedicatedAccountInfo(null);
+        }
+    }, [categoryId, categories, accounts]);
 
     const filteredCategories = useMemo(() => {
         const transactionMonth = transactionDate.substring(0, 7);
@@ -141,9 +160,23 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     <div className="relative">
                         <select id="account" value={accountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte účet</option>
-                            {accounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                            {standardAccounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                         </select>
                     </div>
+
+                    {dedicatedAccountInfo && (
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                value={dedicatedAccountInfo.name} 
+                                className={`${formInputStyle} h-14 text-light-onSurfaceVariant/70 dark:text-dark-onSurfaceVariant/70`} 
+                                disabled 
+                            />
+                            <label className={`${formLabelStyle} text-light-onSurfaceVariant/70 dark:text-dark-onSurfaceVariant/70`}>
+                                {dedicatedAccountInfo.type === 'expense' ? 'Na sporiaci účet' : 'Zo sporiaceho účtu'}
+                            </label>
+                        </div>
+                    )}
                 </>
             )}
 
@@ -200,9 +233,12 @@ const Transactions: React.FC = () => {
       .filter(t => {
         if (filters.startDate && new Date(t.transactionDate) < new Date(filters.startDate)) return false;
         if (filters.endDate && new Date(t.transactionDate) > new Date(filters.endDate)) return false;
-        // Filter transfers based on category filter
-        if (filters.categoryId && t.type !== 'transfer' && t.categoryId !== filters.categoryId) return false;
-        if (filters.categoryId && t.type === 'transfer') return false; // Hide transfers if a category is selected
+        
+        // Hide all offBudget transactions from the main view
+        if (t.onBudget === false) return false;
+        
+        // Filter by category if a category is selected
+        if (filters.categoryId && t.categoryId !== filters.categoryId) return false;
 
         if (filters.minAmount && t.amount < parseFloat(filters.minAmount)) return false;
         if (filters.maxAmount && t.amount > parseFloat(filters.maxAmount)) return false;
@@ -343,10 +379,14 @@ const Transactions: React.FC = () => {
             <tbody>
               {filteredTransactions.map(t => {
                 const isTransfer = t.type === 'transfer';
+                const isSaving = t.type === 'expense' && t.linkedTransaction;
+
                 return (
                   <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
                     <td className="py-4 px-4">{new Date(t.transactionDate).toLocaleDateString('sk-SK')}</td>
-                    <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{isTransfer ? 'Prevod' : getCategoryDisplayName(t)}</td>
+                    <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                      {isSaving ? `Sporenie: ${getCategoryDisplayName(t)}` : (isTransfer ? 'Prevod' : getCategoryDisplayName(t))}
+                    </td>
                     <td className="py-4 px-4">{t.notes}</td>
                     <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
                       {isTransfer 
@@ -361,7 +401,7 @@ const Transactions: React.FC = () => {
                           <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"><PencilIcon /></button>
                           <button aria-label="Zmazať transakciu" onClick={() => setConfirmModalState({
                             isOpen: true,
-                            message: `Naozaj chcete zmazať túto transakciu?`,
+                            message: `Naozaj chcete zmazať túto transakciu? ${isSaving ? 'Týmto sa zmaže aj súvisiaci príjem na sporiacom účte.' : ''}`,
                             onConfirm: () => {
                               deleteTransaction(t.id);
                               setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
@@ -388,28 +428,6 @@ const Transactions: React.FC = () => {
         onConfirm={confirmModalState.onConfirm}
       />
     </div>
-  );
-};
-
-export const ConfirmModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  message: string;
-  onConfirm: () => void;
-  title?: string;
-}> = ({ isOpen, onClose, message, onConfirm, title="Potvrdenie zmazania" }) => {
-  if (!isOpen) return null;
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
-      <div className="space-y-4">
-        <p>{message}</p>
-        <div className="flex justify-end space-x-2 pt-4">
-          <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
-          <button type="button" onClick={onConfirm} className="px-6 py-2.5 bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError rounded-full hover:shadow-lg font-medium transition-shadow">Zmazať</button>
-        </div>
-      </div>
-    </Modal>
   );
 };
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
-import { ConfirmModal } from './Transactions';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { PlusIcon, PencilIcon, ArchiveBoxIcon } from '../components/icons';
 import type { Account, AccountType, AccountSubtype } from '../types';
 
