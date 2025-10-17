@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 
 import { useAppContext } from '../context/AppContext';
 import type { TransactionType, Category } from '../types';
-import { PlusIcon, TrashIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon } from '../components/icons';
+import { PlusIcon, ArchiveBoxIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon } from '../components/icons';
 import Modal from '../components/Modal';
 
 import ReactDOM from 'react-dom';
@@ -186,9 +186,9 @@ const InlineCategoryForm: React.FC<{
 const Budgets: React.FC = () => {
     const { 
         categories, budgets, transactions, 
-        deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, 
-        updateCategoryOrder, isLoading, error, 
-        publishBudgetForYear, publishFullBudgetForYear, getFinancialSummary
+        archiveCategory, 
+        isLoading, error, 
+        publishFullBudgetForYear, getFinancialSummary
     } = useAppContext();
     
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -198,10 +198,8 @@ const Budgets: React.FC = () => {
     const [addingCategory, setAddingCategory] = useState<{type: TransactionType, parentId: string | null} | null>(null);
 
     // State for deletion modal
-    const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
-    const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
-    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Zmazať' });
-
+    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Archivovať' });
+    
     const handleSaveSuccess = (newCategory: Category) => {
         // Ak bola pridaná nová skupina (nemá parentId), rozbaľ ju
         if (!newCategory.parentId) {
@@ -278,54 +276,27 @@ const Budgets: React.FC = () => {
         return { plannedIncome, actualIncome, plannedExpense, actualExpense, plannedBalance, actualBalance };
     }, [budgets, transactions, currentMonth, categories, getFinancialSummary]);
 
-    const handleDeleteRequest = (e: React.MouseEvent, category: Category) => {
+    const handleArchiveRequest = async (e: React.MouseEvent, category: Category) => {
         e.stopPropagation();
-        const isParent = !category.parentId;
+        // First, always check for special conditions by calling archiveCategory without force.
+        const result = await archiveCategory(category.id, false);
 
-        if (isParent) {
-            const subcategories = categories.filter(c => c.parentId === category.id);
-            const childIds = subcategories.map(sc => sc.id);
-            const hasTransactionsInChildren = transactions.some(t => childIds.includes(t.categoryId));
-
-            if (hasTransactionsInChildren) {
-                setConfirmModalState({
-                    isOpen: true,
-                    message: `Nie je možné zmazať skupinu "${category.name}", pretože jej podkategórie obsahujú transakcie. Najprv presuňte alebo zmažte transakcie z podkategórií.`,
-                    onConfirm: () => setConfirmModalState({ ...confirmModalState, isOpen: false }),
-                    confirmText: 'Rozumiem'
-                });
-                return;
-            }
-            
-            const confirmationMessage = subcategories.length > 0
-                ? `Naozaj chcete zmazať skupinu "${category.name}" a všetky jej podkategórie (${subcategories.map(s => s.name).join(', ')})?`
-                : `Naozaj chcete zmazať prázdnu skupinu "${category.name}"?`;
-
-            setConfirmModalState({
-                isOpen: true,
-                message: confirmationMessage,
-                onConfirm: () => {
-                    deleteCategoryAndChildren(category.id);
-                    setConfirmModalState({ ...confirmModalState, isOpen: false });
-                }
-            });
-
-        } else { // It's a subcategory
-            const hasTransactions = transactions.some(t => t.categoryId === category.id);
-            if (hasTransactions) {
-                setCategoryToDelete(category);
-                setIsReassignModalOpen(true);
-            } else {
-                setConfirmModalState({
-                    isOpen: true,
-                    message: `Naozaj chcete zmazať kategóriu "${category.name}"?`,
-                    onConfirm: () => {
-                        deleteCategory(category.id);
-                        setConfirmModalState({ ...confirmModalState, isOpen: false });
-                    }
-                });
-            }
+        if (result.message && !result.needsConfirmation) {
+            // Error case, notification is already handled by the context. Do nothing.
+            return;
         }
+
+        const onConfirm = async () => {
+            await archiveCategory(category.id, true); // Always force on the second call
+            setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+        };
+
+        setConfirmModalState({
+            isOpen: true,
+            message: result.needsConfirmation ? result.message! : `Naozaj chcete archivovať kategóriu "${category.name}"?`,
+            onConfirm: onConfirm,
+            confirmText: 'Áno, archivovať'
+        });
     };
 
 
@@ -342,13 +313,14 @@ const Budgets: React.FC = () => {
                             isDragging={false}
                             currentMonth={currentMonth}
                             getActualAmount={getActualAmount}
-                            onDeleteRequest={handleDeleteRequest}
+                            onArchiveRequest={handleArchiveRequest}
                             onAddSubcategory={() => setAddingCategory({ type, parentId: parent.id })}
                             isAddingSubcategory={addingCategory?.parentId === parent.id}
                             onCancelAddSubcategory={() => setAddingCategory(null)}
                             onSaveSubcategorySuccess={handleSaveSuccess}
                             isExpanded={expandedGroups.has(parent.id)}
                             toggleExpansion={() => toggleGroupExpansion(parent.id)}
+                            setConfirmModalState={setConfirmModalState}
                         />
                     </div>
                 ))}
@@ -571,15 +543,7 @@ const Budgets: React.FC = () => {
                         {renderCategorySection('expense')}
                     </div>
                 </div>
-                <ReassignAndDeleteModal 
-                    isOpen={isReassignModalOpen} 
-                    onClose={() => {
-                        setIsReassignModalOpen(false);
-                        setCategoryToDelete(null);
-                    }} 
-                    category={categoryToDelete} 
-                    reassignAnddeleteCategory={reassignAnddeleteCategory}
-                />
+
                 <ConfirmModal 
                     isOpen={confirmModalState.isOpen} 
                     onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
@@ -598,7 +562,7 @@ interface CategoryGroupProps {
     siblingsCount: number;
     currentMonth: string;
     getActualAmount: (id: string) => number;
-    onDeleteRequest: (e: React.MouseEvent, cat: Category) => void;
+    onArchiveRequest: (e: React.MouseEvent, cat: Category) => void;
     onAddSubcategory: () => void;
     isAddingSubcategory: boolean;
     onCancelAddSubcategory: () => void;
@@ -610,7 +574,7 @@ interface CategoryGroupProps {
 }
 
 const CategoryGroup: React.FC<CategoryGroupProps> = ({ 
-    parent, parentIndex, siblingsCount, currentMonth, getActualAmount, onDeleteRequest, 
+    parent, parentIndex, siblingsCount, currentMonth, getActualAmount, onArchiveRequest, 
     onAddSubcategory, isAddingSubcategory, onCancelAddSubcategory, onSaveSubcategorySuccess,
     isExpanded, toggleExpansion, isDragging, setConfirmModalState 
 }) => {
@@ -749,8 +713,8 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                                     <CalendarClockIcon className="h-5 w-5 mr-3"/> Nastaviť do konca roka
                                 </button>
                                 <div className="my-1 h-px bg-light-outlineVariant dark:bg-dark-outlineVariant" />
-                                <button onClick={(e) => onDeleteRequest(e, parent)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">
-                                    <TrashIcon className="h-5 w-5 mr-3"/> Zmazať skupinu
+                                <button onClick={(e) => onArchiveRequest(e, parent)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">
+                                    <ArchiveBoxIcon className="h-5 w-5 mr-3"/> Archivovať skupinu
                                 </button>
                             </div>
                         </ActionMenu>
@@ -764,7 +728,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
             
             {isExpanded && (
                 <div className="divide-y divide-light-outlineVariant/50 dark:divide-dark-outlineVariant/50">
-                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onDeleteRequest={onDeleteRequest} getBarColor={getBarColor} />)}
+                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onArchiveRequest={onArchiveRequest} getBarColor={getBarColor} setConfirmModalState={setConfirmModalState} />)}
                     
                     {isAddingSubcategory ? (
                         <div className="p-2">
@@ -795,10 +759,10 @@ const SubcategoryItem: React.FC<{
     siblingsCount: number;
     currentMonth: string;
     getActualAmount: (id: string) => number;
-    onDeleteRequest: (e: React.MouseEvent, cat: Category) => void;
+    onArchiveRequest: (e: React.MouseEvent, cat: Category) => void;
     getBarColor: (ratio: number, type: TransactionType) => string;
     setConfirmModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>>;
-}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onDeleteRequest, getBarColor, setConfirmModalState }) => {
+}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onArchiveRequest, getBarColor, setConfirmModalState }) => {
     const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -919,8 +883,8 @@ const SubcategoryItem: React.FC<{
                                 <CalendarClockIcon className="h-5 w-5 mr-3"/> Nastaviť do konca roka
                             </button>
                             <div className="my-1 h-px bg-light-outlineVariant dark:bg-dark-outlineVariant" />
-                            <button onClick={(e) => onDeleteRequest(e, category)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">
-                                <TrashIcon className="h-5 w-5 mr-3"/> Zmazať
+                            <button onClick={(e) => onArchiveRequest(e, category)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">
+                                <ArchiveBoxIcon className="h-5 w-5 mr-3"/> Archivovať
                             </button>
                         </div>
                     </ActionMenu>
@@ -937,7 +901,7 @@ const ConfirmModal: React.FC<{
     message: string;
     onConfirm: () => void;
     confirmText?: string;
-}> = ({ isOpen, onClose, message, onConfirm, confirmText = 'Zmazať' }) => {
+}> = ({ isOpen, onClose, message, onConfirm, confirmText = 'Archivovať' }) => {
     if (!isOpen) return null;
 
     return (
@@ -946,7 +910,7 @@ const ConfirmModal: React.FC<{
                 <p className="text-light-onSurface dark:text-dark-onSurface">{message}</p>
                 <div className="flex justify-end space-x-2 pt-4">
                     <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
-                    <button type="button" onClick={onConfirm} className={`px-6 py-2.5 rounded-full hover:shadow-lg font-medium transition-shadow ${confirmText === 'Zmazať' || confirmText === 'Rozumiem' ? 'bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError' : 'bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary'}`}>
+                    <button type="button" onClick={onConfirm} className={`px-6 py-2.5 rounded-full hover:shadow-lg font-medium transition-shadow ${confirmText === 'Rozumiem' ? 'bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary' : 'bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError'}`}>
                         {confirmText}
                     </button>
                 </div>
@@ -955,71 +919,6 @@ const ConfirmModal: React.FC<{
     );
 };
 
-const ReassignAndDeleteModal: React.FC<{ 
-    isOpen: boolean; 
-    onClose: () => void; 
-    category: Category | null; 
-    reassignAnddeleteCategory: (categoryIdToDelete: string, targetCategoryId: string) => void;
-}> = ({ isOpen, onClose, category, reassignAnddeleteCategory }) => {
-    const { categories, transactions } = useAppContext();
-    const [targetCategoryId, setTargetCategoryId] = useState('');
-
-    const formInputStyle = "mt-1 block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 h-14 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0";
-    const transactionCount = useMemo(() => category ? transactions.filter(t => t.categoryId === category.id).length : 0, [transactions, category]);
-    const potentialTargetCategories = useMemo(() => {
-        if (!category) return [];
-        // Assuming the `currentMonth` is available in this component's scope,
-        // which might require passing it down from `Budgets` component.
-        // For now, let's assume we can get it from useAppContext or similar.
-        // A simpler approach is to filter by `validFrom` relative to the transaction dates,
-        // but for UI consistency let's just filter broadly here.
-        return categories.filter(c => 
-            c.id !== category.id && 
-            c.type === category.type && 
-            c.parentId
-        ).sort((a,b) => a.name.localeCompare(b.name));
-    }, [categories, category]);
-    
-    useEffect(() => { if (isOpen) { setTargetCategoryId(''); } }, [isOpen]);
-    if (!isOpen || !category) return null;
-
-    const getCategoryDisplayName = (cat: Category) => {
-        const parent = categories.find(p => p.id === cat.parentId);
-        return parent ? `${parent.name} - ${cat.name}` : cat.name;
-    };
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!targetCategoryId) { 
-            // This is a safeguard, the button should be disabled.
-            // But if it happens, we can show a more integrated error message.
-            return; 
-        }
-        reassignAnddeleteCategory(category.id, targetCategoryId);
-        onClose();
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Presunúť transakcie a zmazať">
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <p className="text-light-onSurface dark:text-dark-onSurface">Kategória <span className="font-bold">"{category.name}"</span> obsahuje <span className="font-bold">{transactionCount}</span> transakcií.</p>
-                    <p className="mt-2 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Pre jej zmazanie je potrebné presunúť tieto transakcie do inej kategórie.</p>
-                </div>
-                <div className="relative pt-2">
-                    <label htmlFor="target-category" className="absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-5 z-10 origin-[0] left-4">Presunúť do:</label>
-                    <select id="target-category" value={targetCategoryId} onChange={e => setTargetCategoryId(e.target.value)} className={formInputStyle} required>
-                        <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
-                        {potentialTargetCategories.map(c => (<option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{getCategoryDisplayName(c)}</option>))}
-                    </select>
-                </div>
-                <div className="flex justify-end space-x-2 pt-4">
-                    <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
-                    <button type="submit" disabled={!targetCategoryId} className="px-6 py-2.5 bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError rounded-full hover:shadow-lg font-medium transition-shadow disabled:bg-light-onSurface/20 dark:disabled:bg-dark-onSurface/20 disabled:shadow-none">Presunúť a zmazať</button>
-                </div>
-            </form>
-        </Modal>
-    );
-};
 
 
 export default Budgets;

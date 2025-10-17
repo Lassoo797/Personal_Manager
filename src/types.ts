@@ -37,6 +37,7 @@ export interface Category {
   order: number;
   validFrom: string; // YYYY-MM
   dedicatedAccountId?: string | null;
+  status: 'active' | 'archived';
 }
 
 export interface Transaction {

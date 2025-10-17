@@ -7,7 +7,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage';
 // Helper funkcie na mapovanie PocketBase záznamov
 const mapPbToWorkspace = (r: RecordModel): Workspace => ({ id: r.id, name: r.workspace_name });
 const mapPbToAccount = (r: RecordModel): Account => ({ id: r.id, name: r.name, workspaceId: r.workspace, currency: r.currency, accountType: r.accountType, type: r.type, initialBalance: r.initialBalance || 0, initialBalanceDate: r.initialBalanceDate, status: r.status || 'active' });
-const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order, validFrom: r.validFrom, dedicatedAccountId: r.dedicatedAccountId || null });
+const mapPbToCategory = (r: RecordModel): Category => ({ id: r.id, name: r.name, parentId: r.parent || null, type: r.type, workspaceId: r.workspace, order: r.order, validFrom: r.validFrom, dedicatedAccountId: r.dedicatedAccountId || null, status: r.status || 'active' });
 const mapPbToTransaction = (r: RecordModel): Transaction => ({ id: r.id, transactionDate: r.transactionDate, notes: r.notes, amount: r.amount, type: r.type, categoryId: r.category || null, accountId: r.accountId, destinationAccountId: r.destinationAccountId || null, workspaceId: r.workspace });
 const mapPbToBudget = (r: RecordModel): Budget => ({ id: r.id, categoryId: r.category, amount: r.amount, month: r.month, workspaceId: r.workspace });
 
@@ -39,12 +39,11 @@ interface AppContextType {
   archiveAccount: (id: string) => Promise<string | void>;
   getAccountBalance: (accountId: string) => number;
   
-  addCategory: (category: Omit<Category, 'id' | 'workspaceId' | 'order'>) => Promise<Category | null>;
+  addCategory: (category: Omit<Category, 'id' | 'workspaceId' | 'order' | 'status'>) => Promise<Category | null>;
   updateCategory: (category: Category) => Promise<void>;
   updateCategoryOrder: (updatedCategories: Category[]) => Promise<void>;
-  deleteCategory: (id: string) => Promise<void>;
-  deleteCategoryAndChildren: (id: string) => Promise<void>;
-  reassignAnddeleteCategory: (categoryIdToDelete: string, targetCategoryId: string) => Promise<void>;
+  archiveCategory: (id: string, force?: boolean) => Promise<{ needsConfirmation?: boolean; message?: string; }>;
+  archiveCategoryAndChildren: (id: string) => Promise<void>;
   moveCategoryUp: (categoryId: string) => Promise<void>;
   moveCategoryDown: (categoryId: string) => Promise<void>;
 
@@ -79,7 +78,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
   const accounts = useMemo(() => allAccounts.filter(a => a.status === 'active'), [allAccounts]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const categories = useMemo(() => allCategories.filter(c => c.status === 'active'), [allCategories]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -141,7 +141,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             pb.collection('budgets').getFullList({ filter }),
           ]);
           setAllAccounts(accs.map(mapPbToAccount));
-          setCategories(cats.map(mapPbToCategory));
+          setAllCategories(cats.map(mapPbToCategory));
           setTransactions(trans.map(mapPbToTransaction));
           setBudgets(buds.map(mapPbToBudget));
         } catch (e: any) {
@@ -155,7 +155,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } else {
         // If no workspace is selected, clear workspace-specific data
         setAllAccounts([]);
-        setCategories([]);
+        setAllCategories([]);
         setTransactions([]);
         setBudgets([]);
       }
@@ -340,23 +340,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // --- Data Management ---
   
   // CATEGORY MANAGEMENT
-  const addCategory = useCallback(async (category: Omit<Category, 'id' | 'workspaceId' | 'order'>): Promise<Category | null> => {
+  const addCategory = useCallback(async (category: Omit<Category, 'id' | 'workspaceId' | 'order' | 'status'>): Promise<Category | null> => {
     if (!currentWorkspaceId) return null;
     
-    const siblings = categories.filter(c => c.parentId === category.parentId && c.type === category.type);
+    const siblings = allCategories.filter(c => c.parentId === category.parentId && c.type === category.type);
     const newOrder = siblings.length > 0 ? Math.max(...siblings.map(c => c.order)) + 1 : 0;
     
     const data = {
         ...category,
         workspace: currentWorkspaceId,
         order: newOrder,
-        parent: category.parentId || undefined
+        parent: category.parentId || undefined,
+        status: 'active'
     };
 
     try {
       const newCategoryRecord = await pb.collection('categories').create(data);
       const mapped = mapPbToCategory(newCategoryRecord);
-      setCategories(prev => [...prev, mapped]);
+      setAllCategories(prev => [...prev, mapped]);
 
       await pb.collection('system_events').create({
         workspace: currentWorkspaceId,
@@ -377,11 +378,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error("Nepodarilo sa vytvoriť kategóriu:", e);
       return null;
     }
-  }, [currentWorkspaceId, categories, addNotification]);
+  }, [currentWorkspaceId, allCategories, addNotification]);
 
   const updateCategory = useCallback(async (updated: Category) => {
     const { id, name } = updated;
-    const originalCategory = categories.find(c => c.id === id);
+    const originalCategory = allCategories.find(c => c.id === id);
     if (!originalCategory) return;
 
     // Create a snapshot of changes
@@ -409,7 +410,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     delete (payload as any).workspaceId;
 
     const updatedCategory = await pb.collection('categories').update(id, payload);
-    setCategories(prev => {
+    setAllCategories(prev => {
         const newState = prev.map(c => c.id === id ? mapPbToCategory(updatedCategory) : c)
         return newState.sort((a, b) => (a.order || 0) - (b.order || 0));
     });
@@ -437,7 +438,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             )
         );
         // Optimistically update local state to avoid re-fetch lag
-        setCategories(prev => {
+        setAllCategories(prev => {
             const updatedMap = new Map(updatedCategories.map(c => [c.id, c]));
             return prev.map(c => updatedMap.get(c.id) || c);
         });
@@ -448,68 +449,71 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [loadAppData]);
 
-  const deleteCategory = useCallback(async (id: string) => {
-    if (!currentWorkspaceId) return;
-    const categoryToDelete = categories.find(c => c.id === id);
-    if (!categoryToDelete) return;
-
-    // Delete related budgets first
-    const relatedBudgets = await pb.collection('budgets').getFullList({ filter: `category = '${id}'` });
-    await Promise.all(relatedBudgets.map(b => pb.collection('budgets').delete(b.id)));
+  const archiveCategory = useCallback(async (id: string, force: boolean = false): Promise<{ needsConfirmation?: boolean; message?: string; }> => {
+    if (!currentWorkspaceId) return { message: 'No workspace selected.' };
     
-    await pb.collection('categories').delete(id);
-    
-    await pb.collection('system_events').create({
-      workspace: currentWorkspaceId,
-      type: 'category_deleted',
-      details: {
-        categoryId: id,
-        name: categoryToDelete.name,
-        type: categoryToDelete.type
-      }
-    });
+    const categoryToArchive = allCategories.find(c => c.id === id);
+    if (!categoryToArchive) return { message: 'Category not found.' };
 
-    // Update local state
-    setCategories(prev => prev.filter(c => c.id !== id));
-    setBudgets(prev => prev.filter(b => b.categoryId !== id));
-    addNotification('Kategória bola zmazaná.', 'success');
-  }, [addNotification, categories, currentWorkspaceId]);
-
-  const deleteCategoryAndChildren = useCallback(async (id: string) => {
-    const children = categories.filter(c => c.parentId === id);
-    for (const child of children) {
-      // Recursively delete children and their associated data
-      await deleteCategoryAndChildren(child.id);
+    if (categoryToArchive.dedicatedAccountId && !force) {
+        const linkedAccount = allAccounts.find(a => a.id === categoryToArchive.dedicatedAccountId);
+        if (linkedAccount) {
+            const balance = getAccountBalance(linkedAccount.id);
+            if (Math.abs(balance) > 0.001) {
+                const message = `Kategóriu '${categoryToArchive.name}' nie je možné archivovať, pretože prepojený účet '${linkedAccount.name}' má nenulový zostatok (${balance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}). Najprv musíte zostatok účtu vynulovať.`;
+                addNotification(message, 'error');
+                return { message };
+            }
+            // Balance is zero, needs user confirmation to archive both
+            return { 
+                needsConfirmation: true, 
+                message: `Kategória '${categoryToArchive.name}' je prepojená s účtom '${linkedAccount.name}'. Jej archiváciou sa archivuje aj tento účet. Prajete si pokračovať?`
+            };
+        }
     }
-    // Delete the parent category itself
-    await deleteCategory(id);
-  }, [categories, deleteCategory]);
-
-  const reassignAnddeleteCategory = useCallback(async (categoryIdToDelete: string, targetCategoryId: string) => {
-    // 1. Find transactions to update in PocketBase
-    const relatedTransactions = await pb.collection('transactions').getFullList({ 
-        filter: `category = '${categoryIdToDelete}'` 
-    });
-
-    // 2. Update them in PocketBase
-    await Promise.all(
-      relatedTransactions.map(t => pb.collection('transactions').update(t.id, { category: targetCategoryId }))
-    );
-
-    // 3. Update local state for immediate UI feedback
-    setTransactions(prevTransactions => 
-      prevTransactions.map(t => 
-        t.categoryId === categoryIdToDelete 
-          ? { ...t, categoryId: targetCategoryId } 
-          : t
-      )
-    );
-
-    // 4. Delete the category (which also handles budgets)
-    await deleteCategory(categoryIdToDelete);
-    addNotification('Transakcie boli presunuté a kategória bola zmazaná.', 'success');
     
-  }, [deleteCategory, addNotification]);
+    try {
+        // --- Actual Archiving Logic ---
+        // Archive linked account if force is true
+        if (categoryToArchive.dedicatedAccountId && force) {
+            await archiveAccount(categoryToArchive.dedicatedAccountId);
+        }
+
+        // Delete related budgets
+        const relatedBudgets = await pb.collection('budgets').getFullList({ filter: `category = '${id}'` });
+        await Promise.all(relatedBudgets.map(b => pb.collection('budgets').delete(b.id)));
+        
+        // Archive the category itself
+        await pb.collection('categories').update(id, { status: 'archived' });
+        
+        await pb.collection('system_events').create({
+          workspace: currentWorkspaceId,
+          type: 'category_archived',
+          details: { categoryId: id, name: categoryToArchive.name }
+        });
+
+        // Update local state
+        setAllCategories(prev => prev.map(c => c.id === id ? { ...c, status: 'archived' } : c));
+        setBudgets(prev => prev.filter(b => b.categoryId !== id));
+        
+        addNotification(`Kategória '${categoryToArchive.name}' bola archivovaná.`, 'success');
+        return {}; // Success
+    } catch (e: any) {
+        const errorMsg = 'Nepodarilo sa archivovať kategóriu.';
+        addNotification(errorMsg, 'error');
+        console.error(errorMsg, e);
+        return { message: errorMsg };
+    }
+  }, [currentWorkspaceId, allCategories, allAccounts, getAccountBalance, addNotification]);
+
+  const archiveCategoryAndChildren = useCallback(async (id: string) => {
+    const children = allCategories.filter(c => c.parentId === id);
+    for (const child of children) {
+      await archiveCategoryAndChildren(child.id);
+    }
+    await archiveCategory(id, true); // Force archive without confirmation for children
+  }, [allCategories, archiveCategory]);
+
 
   const moveCategory = useCallback(async (categoryId: string, direction: 'up' | 'down') => {
     const category = categories.find(c => c.id === categoryId);
@@ -537,7 +541,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await Promise.all(
         updatedOrders.map(c => pb.collection('categories').update(c.id, { order: c.order }))
       );
-      setCategories(prev => {
+      setAllCategories(prev => {
         const updatedMap = new Map(updatedOrders.map(c => [c.id, c]));
         const sorted = prev.map(c => updatedMap.get(c.id) || c).sort((a,b)=> (a.order || 0) - (b.order || 0));
         return sorted;
@@ -546,10 +550,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error(`Failed to move category ${direction}:`, e);
       loadAppData();
     }
-  }, [categories, loadAppData]);
+  }, [allCategories, loadAppData]);
   
   const moveCategoryUp = useCallback((categoryId: string) => moveCategory(categoryId, 'up'), [moveCategory]);
   const moveCategoryDown = useCallback((categoryId: string) => moveCategory(categoryId, 'down'), [moveCategory]);
+
+  const archiveAccount = useCallback(async (id: string): Promise<string | void> => {
+    if (!currentWorkspaceId) return;
+    const balance = getAccountBalance(id);
+    if (Math.abs(balance) > 0.001) {
+      const message = `Účet nie je možné archivovať, pretože jeho zostatok je ${balance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}. Pred archiváciou musíte zostatok vynulovať.`;
+      addNotification(message, 'error');
+      return message;
+    }
+    
+    try {
+        const accountToArchive = allAccounts.find(a => a.id === id);
+        if (accountToArchive && accountToArchive.accountType === 'Sporiaci účet') {
+            const linkedCategory = allCategories.find(c => c.dedicatedAccountId === id);
+            // We don't archive the linked category here automatically. 
+            // The user should archive the category, which in turn archives the account.
+            if (linkedCategory && linkedCategory.status === 'active') {
+                 addNotification(`Toto je sporiaci účet prepojený s kategóriou '${linkedCategory.name}'. Pre archiváciu prosím archivujte danú kategóriu.`, 'info');
+                 return;
+            }
+        }
+        
+        await pb.collection('accounts').update(id, { status: 'archived' });
+
+        setAllAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'archived' } : a));
+        addNotification('Účet bol úspešne archivovaný.', 'success');
+        
+        if (accountToArchive) {
+          await pb.collection('system_events').create({
+            workspace: currentWorkspaceId,
+            type: 'account_archived',
+            details: {
+              accountId: accountToArchive.id,
+              name: accountToArchive.name,
+            }
+          });
+        }
+    } catch (e: any) {
+        console.error("Chyba pri archivácii účtu:", e);
+        addNotification('Nastala chyba pri archivácii účtu.', 'error');
+    }
+  }, [transactions, addNotification, getAccountBalance, allAccounts, allCategories, currentWorkspaceId]);
   
   // ACCOUNT MANAGEMENT
   const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId' | 'status'>) => {
@@ -636,7 +682,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // If it's a savings account, find and update the linked category
     if (originalAccount.accountType === 'Sporiaci účet') {
-        const linkedCategory = categories.find(c => c.dedicatedAccountId === id);
+        const linkedCategory = allCategories.find(c => c.dedicatedAccountId === id);
         if (linkedCategory && linkedCategory.name !== name) {
             await updateCategory({ ...linkedCategory, name });
         }
@@ -645,41 +691,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Optimistically update local state
     setAllAccounts(prev => prev.map(acc => acc.id === id ? { ...acc, name } : acc));
     addNotification(`Účet "${name}" bol aktualizovaný.`, 'success');
-  }, [accounts, categories, addNotification, updateCategory, currentWorkspaceId]);
+  }, [accounts, allCategories, addNotification, updateCategory, currentWorkspaceId]);
 
-  const archiveAccount = useCallback(async (id: string): Promise<string | void> => {
-    if (!currentWorkspaceId) return;
-    const balance = getAccountBalance(id);
-    if (Math.abs(balance) > 0.001) {
-      const message = `Účet nie je možné archivovať, pretože jeho zostatok je ${balance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}. Pred archiváciou musíte zostatok vynulovať.`;
-      addNotification(message, 'error');
-      return message;
-    }
-    
-    try {
-        const accountToArchive = allAccounts.find(a => a.id === id);
-        
-        await pb.collection('accounts').update(id, { status: 'archived' });
 
-        setAllAccounts(prev => prev.map(a => a.id === id ? { ...a, status: 'archived' } : a));
-        addNotification('Účet bol úspešne archivovaný.', 'success');
-        
-        if (accountToArchive) {
-          await pb.collection('system_events').create({
-            workspace: currentWorkspaceId,
-            type: 'account_archived',
-            details: {
-              accountId: accountToArchive.id,
-              name: accountToArchive.name,
-            }
-          });
-        }
-    } catch (e: any) {
-        console.error("Chyba pri archivácii účtu:", e);
-        addNotification('Nastala chyba pri archivácii účtu.', 'error');
-    }
-  }, [transactions, addNotification, getAccountBalance, allAccounts, categories, deleteCategory, currentWorkspaceId]);
-  
   // TRANSACTION MANAGEMENT
 
   const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'workspaceId'>) => {
@@ -954,7 +968,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
     accounts, createAccount, updateAccount, archiveAccount, getAccountBalance,
-    categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
+    categories, addCategory, updateCategory, archiveCategory, archiveCategoryAndChildren, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
     loadAppData, // Expose the loader function
@@ -964,7 +978,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
     accounts, createAccount, updateAccount, archiveAccount, getAccountBalance,
-    categories, addCategory, updateCategory, deleteCategory, deleteCategoryAndChildren, reassignAnddeleteCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
+    categories, addCategory, updateCategory, archiveCategory, archiveCategoryAndChildren, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
     loadAppData,

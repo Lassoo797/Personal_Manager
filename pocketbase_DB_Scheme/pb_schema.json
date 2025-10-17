@@ -592,6 +592,20 @@
       },
       {
         "hidden": false,
+        "id": "select_category_status",
+        "maxSelect": 1,
+        "name": "status",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "select",
+        "values": [
+          "active",
+          "archived"
+        ]
+      },
+      {
+        "hidden": false,
         "id": "autodate2990389176",
         "name": "created",
         "onCreate": true,
@@ -886,6 +900,7 @@
           "category_created",
           "category_updated",
           "category_deleted",
+          "category_archived",
           "transaction_created",
           "transaction_updated",
           "transaction_deleted",

@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { ConfirmModal } from './Transactions';
-import { PlusIcon, PencilIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons';
+import { PlusIcon, PencilIcon, ArchiveBoxIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons';
 import type { Category, TransactionType } from '../types';
 
 const CategoryForm: React.FC<{ category?: Category | null, onSave: () => void, onCancel: () => void }> = ({ category, onSave, onCancel }) => {
@@ -116,79 +116,6 @@ const CategoryForm: React.FC<{ category?: Category | null, onSave: () => void, o
     );
 };
 
-const ReassignAndDeleteModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  category: Category | null;
-}> = ({ isOpen, onClose, category }) => {
-    const { categories, transactions, reassignAnddeleteCategory } = useAppContext();
-    const [targetCategoryId, setTargetCategoryId] = useState('');
-    const formInputStyle = "mt-1 block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 h-14 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0";
-
-    const transactionCount = useMemo(() =>
-        category ? transactions.filter(t => t.categoryId === category.id).length : 0,
-    [transactions, category]);
-
-    const potentialTargetCategories = useMemo(() => {
-        if (!category) return [];
-        return categories.filter(c =>
-            c.id !== category.id &&
-            c.type === category.type &&
-            c.parentId 
-        ).sort((a,b) => a.name.localeCompare(b.name));
-    }, [categories, category]);
-    
-    useEffect(() => {
-        if (isOpen) {
-            setTargetCategoryId('');
-        }
-    }, [isOpen]);
-
-    if (!isOpen || !category) return null;
-
-    const getCategoryDisplayName = (cat: Category) => {
-        const parent = categories.find(p => p.id === cat.parentId);
-        return parent ? `${parent.name} - ${cat.name}` : cat.name;
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!targetCategoryId) {
-            alert('Vyberte cieľovú kategóriu.');
-            return;
-        }
-        reassignAnddeleteCategory(category.id, targetCategoryId);
-        onClose();
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Presunúť transakcie a zmazať">
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <p className="text-light-onSurface dark:text-dark-onSurface">Kategória <span className="font-bold">"{category.name}"</span> obsahuje <span className="font-bold">{transactionCount}</span> transakcií.</p>
-                    <p className="mt-2 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Pre jej zmazanie je potrebné presunúť tieto transakcie do inej kategórie.</p>
-                </div>
-                
-                <div>
-                    <label htmlFor="target-category" className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Presunúť do:</label>
-                    <select id="target-category" value={targetCategoryId} onChange={e => setTargetCategoryId(e.target.value)} className={formInputStyle} required>
-                        <option value="">Vyberte kategóriu</option>
-                        {potentialTargetCategories.map(c => (
-                            <option key={c.id} value={c.id}>
-                                {getCategoryDisplayName(c)}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="flex justify-end space-x-2 pt-4">
-                    <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
-                    <button type="submit" disabled={!targetCategoryId} className="px-6 py-2.5 bg-light-error text-light-onError dark:bg-dark-error dark:text-dark-onError rounded-full hover:shadow-lg font-medium transition-shadow disabled:bg-light-onSurface/20 dark:disabled:bg-dark-onSurface/20 disabled:shadow-none">Presunúť a zmazať</button>
-                </div>
-            </form>
-        </Modal>
-    );
-};
 
 
 const CategoryList: React.FC<{ type: TransactionType, onEdit: (cat: Category) => void, onDelete: (cat: Category) => void }> = ({ type, onEdit, onDelete }) => {
@@ -212,7 +139,7 @@ const CategoryList: React.FC<{ type: TransactionType, onEdit: (cat: Category) =>
                                 <button aria-label={`Move ${parent.name} up`} onClick={() => moveCategoryUp(parent.id)} disabled={parentIndex === 0} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh disabled:opacity-50"><ChevronUpIcon /></button>
                                 <button aria-label={`Move ${parent.name} down`} onClick={() => moveCategoryDown(parent.id)} disabled={parentIndex === parentCategories.length - 1} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh disabled:opacity-50"><ChevronDownIcon /></button>
                                 <button aria-label={`Upraviť kategóriu ${parent.name}`} onClick={() => onEdit(parent)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                                <button aria-label={`Zmazať kategóriu ${parent.name}`} onClick={() => onDelete(parent)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                                <button aria-label={`Archivovať kategóriu ${parent.name}`} onClick={() => onDelete(parent)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><ArchiveBoxIcon /></button>
                             </div>
                         </div>
                         <div className="ml-4 mt-2 space-y-2 border-l-2 border-light-outlineVariant dark:border-dark-outlineVariant pl-4">
@@ -223,7 +150,7 @@ const CategoryList: React.FC<{ type: TransactionType, onEdit: (cat: Category) =>
                                         <button aria-label={`Move ${child.name} up`} onClick={() => moveCategoryUp(child.id)} disabled={childIndex === 0} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh disabled:opacity-50"><ChevronUpIcon /></button>
                                         <button aria-label={`Move ${child.name} down`} onClick={() => moveCategoryDown(child.id)} disabled={childIndex === subcategories.length - 1} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh disabled:opacity-50"><ChevronDownIcon /></button>
                                         <button aria-label={`Upraviť podkategóriu ${child.name}`} onClick={() => onEdit(child)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                                        <button aria-label={`Zmazať podkategóriu ${child.name}`} onClick={() => onDelete(child)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
+                                        <button aria-label={`Archivovať podkategóriu ${child.name}`} onClick={() => onDelete(child)} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><ArchiveBoxIcon /></button>
                                     </div>
                                 </div>
                         ))}
@@ -236,12 +163,10 @@ const CategoryList: React.FC<{ type: TransactionType, onEdit: (cat: Category) =>
 };
 
 const Categories: React.FC = () => {
-    const { categories, transactions, deleteCategory, deleteCategoryAndChildren } = useAppContext();
+    const { archiveCategory } = useAppContext();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-    const [isReassignModalOpen, setIsReassignModalOpen] = useState(false);
-    const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
-    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Zmazať' });
+    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Archivovať' });
 
     const openAddModal = () => {
         setEditingCategory(null);
@@ -258,59 +183,26 @@ const Categories: React.FC = () => {
         setEditingCategory(null);
     };
 
-    const closeReassignModal = () => {
-        setIsReassignModalOpen(false);
-        setCategoryToDelete(null);
-    };
+    const handleArchiveRequest = async (category: Category) => {
+        // First, always check for special conditions by calling archiveCategory without force.
+        const result = await archiveCategory(category.id, false);
 
-    const handleDeleteRequest = (category: Category) => {
-        const isParent = !category.parentId;
-        if (isParent) {
-            const subcategories = categories.filter(c => c.parentId === category.id);
-            const childIds = subcategories.map(sc => sc.id);
-            const hasTransactionsInChildren = transactions.some(t => childIds.includes(t.categoryId));
-
-            if (hasTransactionsInChildren) {
-                setConfirmModalState({
-                    isOpen: true,
-                    message: `Nie je možné zmazať skupinu "${category.name}", pretože jej podkategórie obsahujú transakcie. Najprv presuňte alebo zmažte transakcie.`,
-                    onConfirm: () => setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} }),
-                    confirmText: 'Rozumiem'
-                });
-                return;
-            }
-
-            const confirmationMessage = subcategories.length > 0
-                ? `Naozaj chcete zmazať skupinu "${category.name}" a všetky jej podkategórie?`
-                : `Naozaj chcete zmazať prázdnu skupinu "${category.name}"?`;
-            
-            setConfirmModalState({
-                isOpen: true,
-                message: confirmationMessage,
-                onConfirm: () => {
-                    deleteCategoryAndChildren(category.id);
-                    setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-                },
-                confirmText: 'Zmazať'
-            });
-
-        } else { // It's a subcategory
-            const hasTransactions = transactions.some(t => t.categoryId === category.id);
-            if (hasTransactions) {
-                setCategoryToDelete(category);
-                setIsReassignModalOpen(true);
-            } else {
-                setConfirmModalState({
-                    isOpen: true,
-                    message: `Naozaj chcete zmazať kategóriu "${category.name}"?`,
-                    onConfirm: () => {
-                        deleteCategory(category.id);
-                        setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-                    },
-                    confirmText: 'Zmazať'
-                });
-            }
+        if (result.message && !result.needsConfirmation) {
+            // Error case, notification is already handled by the context. Do nothing.
+            return;
         }
+
+        const onConfirm = async () => {
+            await archiveCategory(category.id, true); // Always force on the second call
+            setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+        };
+
+        setConfirmModalState({
+            isOpen: true,
+            message: result.needsConfirmation ? result.message! : `Naozaj chcete archivovať kategóriu "${category.name}"?`,
+            onConfirm: onConfirm,
+            confirmText: 'Áno, archivovať'
+        });
     };
     
     return (
@@ -326,11 +218,11 @@ const Categories: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
                     <h2 className="text-2xl font-medium mb-4 text-light-error dark:text-dark-error">Výdavky</h2>
-                    <CategoryList type="expense" onEdit={openEditModal} onDelete={handleDeleteRequest} />
+                    <CategoryList type="expense" onEdit={openEditModal} onDelete={handleArchiveRequest} />
                 </div>
                 <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
                     <h2 className="text-2xl font-medium mb-4 text-green-600 dark:text-green-400">Príjmy</h2>
-                    <CategoryList type="income" onEdit={openEditModal} onDelete={handleDeleteRequest} />
+                    <CategoryList type="income" onEdit={openEditModal} onDelete={handleArchiveRequest} />
                 </div>
             </div>
 
@@ -338,11 +230,6 @@ const Categories: React.FC = () => {
                 <CategoryForm category={editingCategory} onSave={closeModal} onCancel={closeModal} />
             </Modal>
 
-            <ReassignAndDeleteModal 
-                isOpen={isReassignModalOpen} 
-                onClose={closeReassignModal} 
-                category={categoryToDelete} 
-            />
             <ConfirmModal 
                 isOpen={confirmModalState.isOpen}
                 onClose={() => setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} })}

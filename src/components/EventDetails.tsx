@@ -42,6 +42,9 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event }) => {
         return <span>Kategória <strong>{getCategoryName(details.categoryId)}</strong> bola aktualizovaná.</span>; // Simplified for now
       case 'category_deleted':
         return <span>Zmazaná kategória: <strong>{details.name}</strong></span>;
+      case 'category_archived':
+        return <span>Archivovaná kategória: <strong>{details.name}</strong></span>;
+
 
       // Transaction Events
       case 'transaction_created':
