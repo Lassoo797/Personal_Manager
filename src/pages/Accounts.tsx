@@ -58,28 +58,7 @@ const AccountForm: React.FC<{
                 <input type="text" id="name" value={name} className={`${formInputStyle} h-14`} required placeholder=" " onChange={e => setName(e.target.value)}/>
                 <label htmlFor="name" className={formLabelStyle}>Názov účtu</label>
             </div>
-            
-            {!isEditing && (
-              <>
-                <div className="relative">
-                    <input type="number" id="initialBalance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" " />
-                    <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
-                </div>
-                <div className="relative">
-                    <input type="date" id="initialBalanceDate" value={initialBalanceDate} onChange={e => setInitialBalanceDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required />
-                    <label htmlFor="initialBalanceDate" className={`${formLabelStyle} cursor-pointer`}>Dátum počiatočného zostatku</label>
-                </div>
-              </>
-            )}
-            
-            <div className="relative">
-                <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as 'EUR' | 'USD' | 'CZK')} className={`${formInputStyle} h-14`} required>
-                    <option value="EUR" className="dark:bg-dark-surfaceContainerHigh">EUR</option>
-                    <option value="USD" className="dark:bg-dark-surfaceContainerHigh">USD</option>
-                    <option value="CZK" className="dark:bg-dark-surfaceContainerHigh">CZK</option>
-                </select>
-                <label htmlFor="currency" className={formLabelStyle}>Mena</label>
-            </div>
+
             <div className="relative">
                 <select id="accountType" value={accountType} onChange={e => setAccountType(e.target.value as AccountType)} className={`${formInputStyle} h-14`} required>
                   {ACCOUNT_TYPES.map(t => (
@@ -96,6 +75,29 @@ const AccountForm: React.FC<{
                 </select>
                 <label htmlFor="type" className={formLabelStyle}>Podtyp účtu</label>
             </div>
+            
+            {!isEditing && (
+              <>
+                <div className="relative">
+                    <input type="date" id="initialBalanceDate" value={initialBalanceDate} onChange={e => setInitialBalanceDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required />
+                    <label htmlFor="initialBalanceDate" className={`${formLabelStyle} cursor-pointer`}>Dátum počiatočného zostatku</label>
+                </div>
+                <div className="relative">
+                    <input type="number" id="initialBalance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" " />
+                    <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
+                </div>
+              </>
+            )}
+            
+            <div className="relative">
+                <select id="currency" value={currency} onChange={e => setCurrency(e.target.value as 'EUR' | 'USD' | 'CZK')} className={`${formInputStyle} h-14`} required>
+                    <option value="EUR" className="dark:bg-dark-surfaceContainerHigh">EUR</option>
+                    <option value="USD" className="dark:bg-dark-surfaceContainerHigh">USD</option>
+                    <option value="CZK" className="dark:bg-dark-surfaceContainerHigh">CZK</option>
+                </select>
+                <label htmlFor="currency" className={formLabelStyle}>Mena</label>
+            </div>
+            
             <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={onCancel} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
                 <button type="submit" className="px-6 py-2.5 bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary rounded-full hover:shadow-lg font-medium transition-shadow">Uložiť</button>

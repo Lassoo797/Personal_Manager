@@ -105,17 +105,13 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                 <input ref={dateInputRef} type="date" id="transactionDate" value={transactionDate} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTransactionDate(e.target.value)} className={`${formInputStyle} h-14 pt-2 cursor-pointer`} required placeholder=" " />
                 <label htmlFor="transactionDate" className={`${formLabelStyle} cursor-pointer`}>Dátum</label>
             </div>
-            <div className="relative">
-                <input type="text" id="notes" value={notes} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNotes(e.target.value)} className={`${formInputStyle} h-14`} placeholder=" "/>
-                <label htmlFor="notes" className={formLabelStyle}>Poznámky</label>
-            </div>
-            <div className="relative">
-                <input type="number" id="amount" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" "/>
-                <label htmlFor="amount" className={formLabelStyle}>Suma</label>
-            </div>
 
             {type === 'transfer' ? (
                 <>
+                    <div className="relative">
+                        <input type="number" id="amount" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" "/>
+                        <label htmlFor="amount" className={formLabelStyle}>Suma</label>
+                    </div>
                     <div className="relative">
                         <select id="account" value={accountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Z účtu...</option>
@@ -138,6 +134,10 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                         </select>
                     </div>
                     <div className="relative">
+                        <input type="number" id="amount" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" "/>
+                        <label htmlFor="amount" className={formLabelStyle}>Suma</label>
+                    </div>
+                    <div className="relative">
                         <select id="account" value={accountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte účet</option>
                             {accounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
@@ -145,6 +145,11 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     </div>
                 </>
             )}
+
+            <div className="relative">
+                <input type="text" id="notes" value={notes} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNotes(e.target.value)} className={`${formInputStyle} h-14`} placeholder=" "/>
+                <label htmlFor="notes" className={formLabelStyle}>Poznámky</label>
+            </div>
 
             {error && <p className="text-sm text-light-error dark:text-dark-error">{error}</p>}
             <div className="flex justify-end space-x-2 pt-4">
