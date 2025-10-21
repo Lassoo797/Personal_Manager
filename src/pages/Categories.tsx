@@ -1,9 +1,55 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
-import { ConfirmModal } from './Transactions';
+import { ConfirmModal } from '../components/ConfirmModal';
 import { PlusIcon, PencilIcon, ArchiveBoxIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons';
 import type { Category, TransactionType } from '../types';
+
+const ArchiveCategoryModal: React.FC<{
+    category: Category | null;
+    isOpen: boolean;
+    onClose: () => void;
+    onConfirm: (categoryId: string, archiveMonth: string) => void;
+}> = ({ category, isOpen, onClose, onConfirm }) => {
+    const [archiveMonth, setArchiveMonth] = useState(new Date().toISOString().slice(0, 7));
+
+    useEffect(() => {
+        // Reset month when modal opens for a new category
+        if (isOpen) {
+            setArchiveMonth(new Date().toISOString().slice(0, 7));
+        }
+    }, [isOpen]);
+
+    if (!isOpen || !category) return null;
+
+    const handleSubmit = () => {
+        onConfirm(category.id, archiveMonth);
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={`Archivovať kategóriu "${category.name}"`}>
+            <div className="space-y-4">
+                <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                    Vyberte mesiac, od ktorého bude kategória archivovaná. Kategóriu nie je možné archivovať, ak v danom alebo budúcom mesiaci existujú transakcie alebo rozpočty.
+                </p>
+                <div>
+                    <label htmlFor="archiveMonth" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Archivovať od mesiaca</label>
+                    <input
+                        type="month"
+                        id="archiveMonth"
+                        value={archiveMonth}
+                        onChange={(e) => setArchiveMonth(e.target.value)}
+                        className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2"
+                    />
+                </div>
+                <div className="flex justify-end space-x-2 pt-4">
+                    <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+                    <button onClick={handleSubmit} className="px-6 py-2.5 bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary rounded-full hover:shadow-lg font-medium transition-shadow">Potvrdiť archiváciu</button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
 
 const CategoryForm: React.FC<{ category?: Category | null, onSave: () => void, onCancel: () => void }> = ({ category, onSave, onCancel }) => {
     const { categories, addCategory, updateCategory } = useAppContext();
@@ -166,7 +212,8 @@ const Categories: React.FC = () => {
     const { archiveCategory } = useAppContext();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Archivovať' });
+    const [archiveModalState, setArchiveModalState] = useState<{ isOpen: boolean, category: Category | null }>({ isOpen: false, category: null });
+    const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
 
     const openAddModal = () => {
         setEditingCategory(null);
@@ -183,26 +230,26 @@ const Categories: React.FC = () => {
         setEditingCategory(null);
     };
 
-    const handleArchiveRequest = async (category: Category) => {
-        // First, always check for special conditions by calling archiveCategory without force.
-        const result = await archiveCategory(category.id, false);
+    const handleArchiveRequest = (category: Category) => {
+        setArchiveModalState({ isOpen: true, category: category });
+    };
 
-        if (result.message && !result.needsConfirmation) {
-            // Error case, notification is already handled by the context. Do nothing.
-            return;
+    const handleConfirmArchive = async (categoryId: string, archiveMonth: string) => {
+        const result = await archiveCategory(categoryId, archiveMonth, false);
+        
+        if (result.needsConfirmation && result.message) {
+            setArchiveModalState({ isOpen: false, category: null });
+            setConfirmModalState({
+                isOpen: true,
+                message: result.message,
+                onConfirm: () => {
+                    archiveCategory(categoryId, archiveMonth, true);
+                    setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                }
+            });
+        } else if (result.success) {
+            setArchiveModalState({ isOpen: false, category: null });
         }
-
-        const onConfirm = async () => {
-            await archiveCategory(category.id, true); // Always force on the second call
-            setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-        };
-
-        setConfirmModalState({
-            isOpen: true,
-            message: result.needsConfirmation ? result.message! : `Naozaj chcete archivovať kategóriu "${category.name}"?`,
-            onConfirm: onConfirm,
-            confirmText: 'Áno, archivovať'
-        });
     };
     
     return (
@@ -229,13 +276,20 @@ const Categories: React.FC = () => {
             <Modal isOpen={isModalOpen} onClose={closeModal} title={editingCategory ? "Upraviť kategóriu" : "Pridať kategóriu"}>
                 <CategoryForm category={editingCategory} onSave={closeModal} onCancel={closeModal} />
             </Modal>
+            
+            <ArchiveCategoryModal 
+                isOpen={archiveModalState.isOpen}
+                onClose={() => setArchiveModalState({ isOpen: false, category: null })}
+                category={archiveModalState.category}
+                onConfirm={handleConfirmArchive}
+            />
 
             <ConfirmModal 
                 isOpen={confirmModalState.isOpen}
                 onClose={() => setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} })}
                 message={confirmModalState.message}
                 onConfirm={confirmModalState.onConfirm}
-                confirmText={confirmModalState.confirmText}
+                confirmButtonText="Áno, archivovať"
             />
         </div>
     );

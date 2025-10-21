@@ -36,6 +36,7 @@ export interface Category {
   workspaceId: string;
   order: number;
   validFrom: string; // YYYY-MM
+  archivedFrom?: string | null; // YYYY-MM
   dedicatedAccount?: string | null;
   status: 'active' | 'archived';
 }

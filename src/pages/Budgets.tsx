@@ -71,43 +71,8 @@ const ActionMenu: React.FC<{
 
 // --- Re-usable Components ---
 
-const EditableBudgetValue: React.FC<{ categoryId: string; currentMonth: string; }> = ({ categoryId, currentMonth }) => {
-    const { budgets, addOrUpdateBudget } = useAppContext();
-    const budgetAmount = useMemo(() => budgets.find(b => b.categoryId === categoryId && b.month === currentMonth)?.amount ?? 0, [budgets, categoryId, currentMonth]);
-    
-    const [isEditing, setIsEditing] = useState(false);
-    const [value, setValue] = useState(budgetAmount > 0 ? budgetAmount.toFixed(2) : '');
-    const inputRef = useRef<HTMLInputElement>(null);
-
-    useEffect(() => { setValue(budgetAmount > 0 ? budgetAmount.toFixed(2) : ''); }, [budgetAmount]);
-    useEffect(() => { if (isEditing) { inputRef.current?.focus(); inputRef.current?.select(); } }, [isEditing]);
-
-    const handleSave = () => {
-        const amount = value === '' ? 0 : parseFloat(value);
-        if (!isNaN(amount) && amount >= 0 && amount !== budgetAmount) {
-            addOrUpdateBudget({ categoryId, month: currentMonth, amount });
-        }
-        setIsEditing(false);
-    };
-
-    if (isEditing) {
-        return (
-             <div className="relative text-left flex-shrink-0 w-32">
-                <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-0.5">Plán</p>
-                <input ref={inputRef} type="number" value={value} onChange={(e) => setValue(e.target.value)} onBlur={handleSave} onKeyDown={(e) => { if(e.key === 'Enter') handleSave(); if(e.key === 'Escape') setIsEditing(false); }}
-                    className="w-full bg-light-surface dark:bg-dark-surface text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-primary dark:border-dark-primary focus:ring-0 px-2 py-1 text-left font-bold text-base" step="0.01" min="0" />
-            </div>
-        );
-    }
-    return (
-        <div className="text-left cursor-pointer group flex-shrink-0 w-32" onClick={() => setIsEditing(true)}>
-            <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-0.5">Plán</p>
-            <span className="text-base font-bold text-light-onSurface dark:text-dark-onSurface group-hover:text-light-primary dark:group-hover:text-dark-primary">
-                {budgetAmount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
-            </span>
-        </div>
-    );
-};
+// Komponent bol odstránený, pretože bol duplicitný a nepoužívaný.
+// Logika pre úpravu rozpočtu je priamo v komponente SubcategoryItem.
 
 const EditableCategoryName: React.FC<{ category: Category, isEditing: boolean, setIsEditing: (isEditing: boolean) => void }> = ({ category, isEditing, setIsEditing }) => {
     const { updateCategory } = useAppContext();
@@ -185,7 +150,7 @@ const InlineCategoryForm: React.FC<{
 
 const Budgets: React.FC = () => {
     const { 
-        categories, budgets, transactions, 
+        allCategories, budgets, transactions, 
         archiveCategory, 
         isLoading, error, 
         publishFullBudgetForYear, getFinancialSummary
@@ -199,6 +164,8 @@ const Budgets: React.FC = () => {
 
     // State for deletion modal
     const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Archivovať' });
+    const [archiveModalState, setArchiveModalState] = useState<{ isOpen: boolean, category: Category | null }>({ isOpen: false, category: null });
+    
     
     const handleSaveSuccess = (newCategory: Category) => {
         // Ak bola pridaná nová skupina (nemá parentId), rozbaľ ju
@@ -235,21 +202,29 @@ const Budgets: React.FC = () => {
             .reduce((sum, t) => sum + t.amount, 0);
     }, [transactions, currentMonth]);
     
+    
+    const visibleCategories = useMemo(() => {
+        return allCategories.filter(c =>
+            c.validFrom <= currentMonth &&
+            (c.status === 'active' || (c.status === 'archived' && c.archivedFrom && c.archivedFrom > currentMonth))
+        );
+    }, [allCategories, currentMonth]);
+
     const parentCategories = useMemo(() => {
-        const income = categories
-            .filter(c => c.type === 'income' && !c.parentId && c.validFrom <= currentMonth)
+        const income = visibleCategories
+            .filter(c => c.type === 'income' && !c.parentId)
             .sort((a, b) => a.order - b.order);
-        const expense = categories
-            .filter(c => c.type === 'expense' && !c.parentId && c.validFrom <= currentMonth)
+        const expense = visibleCategories
+            .filter(c => c.type === 'expense' && !c.parentId)
             .sort((a, b) => a.order - b.order);
         return { income, expense };
-    }, [categories, currentMonth]);
+    }, [visibleCategories]);
 
     
     
     const summary = useMemo(() => {
         // --- VÝPOČET ZÁKLADNÝCH HODNÔT ---
-        const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
+        const incomeCategoryIds = new Set(visibleCategories.filter(c => c.type === 'income').map(c => c.id));
         
         let plannedIncome = 0;
         let plannedExpense = 0;
@@ -274,29 +249,40 @@ const Budgets: React.FC = () => {
         const actualBalance = actualIncome - actualExpense;
 
         return { plannedIncome, actualIncome, plannedExpense, actualExpense, plannedBalance, actualBalance };
-    }, [budgets, transactions, currentMonth, categories, getFinancialSummary]);
+    }, [budgets, transactions, currentMonth, visibleCategories, getFinancialSummary]);
 
-    const handleArchiveRequest = async (e: React.MouseEvent, category: Category) => {
+    const handleArchiveRequest = (e: React.MouseEvent, category: Category) => {
         e.stopPropagation();
-        // First, always check for special conditions by calling archiveCategory without force.
-        const result = await archiveCategory(category.id, false);
+        setArchiveModalState({ isOpen: true, category: category });
+    };
 
-        if (result.message && !result.needsConfirmation) {
-            // Error case, notification is already handled by the context. Do nothing.
-            return;
+    const handleConfirmArchive = async (categoryId: string, archiveMonth: string) => {
+        setArchiveModalState({ isOpen: false, category: null });
+        
+        // Skúsi archivovať bez vynútenia, aby sa vykonali validácie
+        const result = await archiveCategory(categoryId, archiveMonth, false);
+
+        // 1. Ak archivácia prebehla úspešne hneď (neboli potrebné žiadne potvrdenia)
+        if (result.success) {
+            return; // Hotovo, notifikácia sa zobrazí z AppContext
         }
 
-        const onConfirm = async () => {
-            await archiveCategory(category.id, true); // Always force on the second call
-            setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-        };
+        // 2. Ak je potrebné potvrdenie od používateľa (napr. kvôli prepojeným účtom)
+        if (result.needsConfirmation) {
+            const onConfirm = async () => {
+                await archiveCategory(categoryId, archiveMonth, true); // Vynútená archivácia
+                setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+            };
 
-        setConfirmModalState({
-            isOpen: true,
-            message: result.needsConfirmation ? result.message! : `Naozaj chcete archivovať kategóriu "${category.name}"?`,
-            onConfirm: onConfirm,
-            confirmText: 'Áno, archivovať'
-        });
+            setConfirmModalState({
+                isOpen: true,
+                message: result.message!, // Použije správu z backendu
+                onConfirm: onConfirm,
+                confirmText: 'Áno, archivovať'
+            });
+        }
+        
+        // 3. Ak nastala iná chyba (napr. nájdené transakcie), notifikácia sa už zobrazila z AppContext a tu nerobíme nič.
     };
 
 
@@ -310,6 +296,7 @@ const Budgets: React.FC = () => {
                             parent={parent}
                             parentIndex={index}
                             siblingsCount={parents.length}
+                            categories={visibleCategories}
                             isDragging={false}
                             currentMonth={currentMonth}
                             getActualAmount={getActualAmount}
@@ -551,6 +538,13 @@ const Budgets: React.FC = () => {
                     onConfirm={confirmModalState.onConfirm}
                     confirmText={confirmModalState.confirmText}
                 />
+                <ArchiveCategoryModal 
+                    isOpen={archiveModalState.isOpen}
+                    onClose={() => setArchiveModalState({ isOpen: false, category: null })}
+                    category={archiveModalState.category}
+                    currentMonth={currentMonth}
+                    onConfirm={handleConfirmArchive}
+                />
             </div>
         
     );
@@ -560,6 +554,7 @@ interface CategoryGroupProps {
     parent: Category;
     parentIndex: number;
     siblingsCount: number;
+    categories: Category[];
     currentMonth: string;
     getActualAmount: (id: string) => number;
     onArchiveRequest: (e: React.MouseEvent, cat: Category) => void;
@@ -574,18 +569,18 @@ interface CategoryGroupProps {
 }
 
 const CategoryGroup: React.FC<CategoryGroupProps> = ({ 
-    parent, parentIndex, siblingsCount, currentMonth, getActualAmount, onArchiveRequest, 
+    parent, parentIndex, siblingsCount, categories, currentMonth, getActualAmount, onArchiveRequest, 
     onAddSubcategory, isAddingSubcategory, onCancelAddSubcategory, onSaveSubcategorySuccess,
     isExpanded, toggleExpansion, isDragging, setConfirmModalState 
 }) => {
-    const { categories, budgets, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
+    const { budgets, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
     const subcategories = useMemo(() => 
-        categories.filter(c => c.parentId === parent.id && c.validFrom <= currentMonth)
+        categories.filter(c => c.parentId === parent.id)
                   .sort((a,b)=>(a.order || 0) - (b.order || 0)), 
-    [categories, parent.id, currentMonth]);
+    [categories, parent.id]);
 
     const { parentTotalBudget, parentTotalActual } = useMemo(() => {
         let totalBudget = 0;
@@ -763,13 +758,14 @@ const SubcategoryItem: React.FC<{
     getBarColor: (ratio: number, type: TransactionType) => string;
     setConfirmModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>>;
 }> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onArchiveRequest, getBarColor, setConfirmModalState }) => {
-    const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
+    const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown, publishBudgetForYear, deleteBudget } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
 
     // Výpočty
-    const budgetAmount = useMemo(() => budgets.find(b => b.categoryId === category.id && b.month === currentMonth)?.amount ?? 0, [budgets, category.id, currentMonth]);
+    const budget = useMemo(() => budgets.find(b => b.categoryId === category.id && b.month === currentMonth), [budgets, category.id, currentMonth]);
+    const budgetAmount = budget?.amount ?? 0;
     const actualAmount = getActualAmount(category.id);
     const difference = category.type === 'income' ? actualAmount - budgetAmount : budgetAmount - actualAmount;
     const ratio = budgetAmount > 0 ? actualAmount / budgetAmount : (actualAmount > 0 ? 1 : 0);
@@ -790,11 +786,26 @@ const SubcategoryItem: React.FC<{
     useEffect(() => { setBudgetValue(budgetAmount > 0 ? budgetAmount.toFixed(2) : ''); }, [budgetAmount]);
     useEffect(() => { if (isEditingBudget) { budgetInputRef.current?.focus(); budgetInputRef.current?.select(); } }, [isEditingBudget]);
 
-    const handleBudgetSave = () => {
+    const handleBudgetSave = async () => {
         const amount = budgetValue === '' ? 0 : parseFloat(budgetValue);
-        if (!isNaN(amount) && amount >= 0 && amount !== budgetAmount) {
-            addOrUpdateBudget({ categoryId: category.id, month: currentMonth, amount });
+
+        if (isNaN(amount) || amount < 0) {
+            setIsEditingBudget(false);
+            return; // Ukonči, ak číslo nie je platné
         }
+
+        // Ak je suma > 0, aktualizuj alebo vytvor záznam.
+        if (amount > 0) {
+            if (amount !== budgetAmount) { // Ulož iba ak sa hodnota zmenila
+                await addOrUpdateBudget({ categoryId: category.id, month: currentMonth, amount });
+            }
+        } 
+        // Ak je suma 0 a záznam o rozpočte už existuje, zmaž ho.
+        else if (amount === 0 && budget) {
+            await deleteBudget(budget.id);
+        }
+        // Ak je suma 0 a záznam neexistuje, nerob nič.
+        
         setIsEditingBudget(false);
     };
 
@@ -920,6 +931,74 @@ const ConfirmModal: React.FC<{
 };
 
 
+
+const ArchiveCategoryModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    category: Category | null;
+    currentMonth: string;
+    onConfirm: (categoryId: string, archiveMonth: string) => void;
+}> = ({ isOpen, onClose, category, currentMonth, onConfirm }) => {
+    const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+    const monthInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (isOpen && category) {
+            // The selected month cannot be before the category is valid.
+            // If currentMonth is somehow before validFrom, use validFrom as the starting point.
+            const initialMonth = (currentMonth >= category.validFrom) ? currentMonth : category.validFrom;
+            setSelectedMonth(initialMonth);
+        }
+    }, [isOpen, currentMonth, category]);
+
+    if (!isOpen || !category) return null;
+
+    const handleMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSelectedMonth(e.target.value);
+    };
+
+    const handleSubmit = () => {
+        onConfirm(category.id, selectedMonth);
+    };
+    
+    const openCalendar = () => {
+        monthInputRef.current?.showPicker();
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Archivovať kategóriu">
+            <div className="space-y-4">
+                <p className="text-light-onSurface dark:text-dark-onSurface">
+                    Vyberte mesiac, od ktorého chcete archivovať kategóriu <strong>{category.name}</strong>.
+                </p>
+                <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                    Kategória a všetky jej podkategórie budú skryté z rozpočtov od zvoleného mesiaca.
+                    Uistite sa, že od tohto mesiaca neexistujú žiadne transakcie ani naplánované rozpočty.
+                </p>
+                <div>
+                    <label htmlFor="archiveMonth" onClick={openCalendar} className="block text-sm font-medium text-light-onSurface dark:text-dark-onSurface mb-1 cursor-pointer">Archivovať od mesiaca</label>
+                    <div className="relative" onClick={openCalendar}>
+                        <input
+                            ref={monthInputRef}
+                            type="month"
+                            id="archiveMonth"
+                            value={selectedMonth}
+                            min={category.validFrom}
+                            onChange={handleMonthChange}
+                            className="w-full bg-light-surfaceContainer dark:bg-dark-surfaceContainer border border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-light-onSurface dark:text-dark-onSurface focus:ring-light-primary focus:border-light-primary cursor-pointer"
+                        />
+                    </div>
+                </div>
+                <div className="flex justify-end space-x-2 pt-4">
+                    <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+                    <button type="button" onClick={handleSubmit} className="px-6 py-2.5 rounded-full bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary hover:shadow-lg font-medium transition-shadow">
+                        Pokračovať
+                    </button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
 
 export default Budgets;
 

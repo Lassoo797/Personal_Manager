@@ -124,8 +124,8 @@ const Header: React.FC = () => {
               >
                 Odhlásiť
               </button>
-              <span className="text-xs text-light-onSurfaceVariant/50 dark:text-dark-onSurfaceVariant/50 mr-4">
-                v{process.env.APP_VERSION}
+              <span className="text-xs text-green-500 mr-4">
+                DEV v0.1.8
               </span>
               <ThemeSwitcher />
               {currentWorkspaceId && (

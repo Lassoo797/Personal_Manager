@@ -6,7 +6,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import type { Transaction, TransactionType, Account, Category } from '../types';
 
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
-    const { accounts, categories, addTransaction, updateTransaction } = useAppContext();
+    const { accounts, allCategories, addTransaction, updateTransaction } = useAppContext();
     const [type, setType] = useState<TransactionType>(transaction?.type || 'expense');
     const [transactionDate, setTransactionDate] = useState(transaction?.transactionDate.slice(0, 10) || new Date().toISOString().slice(0, 10));
     const [notes, setNotes] = useState(transaction?.notes || '');
@@ -45,7 +45,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     // Effect to show info about dedicated (savings) account
     useEffect(() => {
         if (categoryId) {
-            const category = categories.find(c => c.id === categoryId);
+            const category = allCategories.find(c => c.id === categoryId);
             if (category?.dedicatedAccount) {
                 const account = accounts.find(a => a.id === category.dedicatedAccount);
                 if (account) {
@@ -57,14 +57,46 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         } else {
             setDedicatedAccountInfo(null);
         }
-    }, [categoryId, categories, accounts]);
+    }, [categoryId, allCategories, accounts]);
 
     const filteredCategories = useMemo(() => {
         const transactionMonth = transactionDate.substring(0, 7);
-        return categories
-            .filter((c: Category) => c.type === type && c.parentId && c.validFrom <= transactionMonth)
-            .sort((a: Category, b: Category) => a.name.localeCompare(b.name));
-    }, [categories, type, transactionDate]);
+        
+        // Získame všetky relevantné podkategórie pre daný typ a mesiac
+        const subcategories = allCategories.filter(c =>
+            c.type === type &&
+            c.parentId && 
+            c.validFrom <= transactionMonth &&
+            (c.status === 'active' || (c.archivedFrom && c.archivedFrom > transactionMonth))
+        );
+
+        // Vytvoríme mapu rodičov pre rýchly prístup k ich dátam (hlavne 'order')
+        const parentCategoryMap = new Map<string, Category>(
+            allCategories
+                .filter(c => !c.parentId)
+                .map(p => [p.id, p])
+        );
+
+        // Zoradíme podkategórie
+        subcategories.sort((a, b) => {
+            const parentA = parentCategoryMap.get(a.parentId!);
+            const parentB = parentCategoryMap.get(b.parentId!);
+
+            // 1. Zoraď podľa poradia rodičovskej kategórie
+            const parentOrderA = parentA?.order ?? 999;
+            const parentOrderB = parentB?.order ?? 999;
+            if (parentOrderA !== parentOrderB) {
+                return parentOrderA - parentOrderB;
+            }
+
+            // 2. Ak sú rodičia rovnakí (alebo neexistujú), zoraď podľa poradia podkategórie
+            const subcategoryOrderA = a.order ?? 999;
+            const subcategoryOrderB = b.order ?? 999;
+            return subcategoryOrderA - subcategoryOrderB;
+        });
+
+        return subcategories;
+    }, [allCategories, type, transactionDate]);
     
     // Filter accounts for transfers - only standard accounts
     const standardAccounts = useMemo(() =>
@@ -150,7 +182,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     <div className="relative">
                         <select id="category" value={categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCategoryId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
-                            {filteredCategories.map((c: Category) => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{categories.find((p: Category) => p.id === c.parentId)?.name} - {c.name}</option>)}
+                            {filteredCategories.map((c: Category) => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{allCategories.find((p: Category) => p.id === c.parentId)?.name} - {c.name}</option>)}
                         </select>
                     </div>
                     <div className="relative">
@@ -196,7 +228,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
 
 
 const Transactions: React.FC = () => {
-  const { transactions, deleteTransaction, categories, accounts } = useAppContext();
+  const { transactions, deleteTransaction, categories, allCategories, accounts } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
@@ -249,8 +281,8 @@ const Transactions: React.FC = () => {
   }, [transactions, filters]);
 
   const categoryMap = useMemo(() =>
-    new Map(categories.map((c: Category) => [c.id, c])),
-    [categories]
+    new Map(allCategories.map((c: Category) => [c.id, c])),
+    [allCategories]
   );
 
   const accountMap = useMemo(() =>

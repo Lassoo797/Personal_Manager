@@ -579,6 +579,20 @@
         "type": "text"
       },
       {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_archived_from",
+        "max": 7,
+        "min": 7,
+        "name": "archivedFrom",
+        "pattern": "^\\d{4}-\\d{2}$",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
+      },
+      {
         "hidden": false,
         "id": "number4113142680",
         "max": null,
