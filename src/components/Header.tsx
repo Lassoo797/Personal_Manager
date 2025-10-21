@@ -9,6 +9,8 @@ import { useAuth } from '../context/AuthContext';
 import { Workspace } from '../types';
 
 
+import { version } from '../../package.json';
+
 const Header: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false);
@@ -17,6 +19,12 @@ const Header: React.FC = () => {
   
   const { workspaces, currentWorkspaceId, setCurrentWorkspaceId } = useAppContext();
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const appVersion = useMemo(() => {
+    const isTest = version.includes('test');
+    const versionNumber = version.replace('-test', '');
+    return `${isTest ? 'TEST' : ''} v${versionNumber}`;
+  }, []);
 
 
   const currentWorkspace = useMemo(() => 
@@ -125,7 +133,7 @@ const Header: React.FC = () => {
                 Odhlásiť
               </button>
               <span className="text-xs text-green-500 mr-4">
-                DEV v0.1.8
+                {appVersion}
               </span>
               <ThemeSwitcher />
               {currentWorkspaceId && (

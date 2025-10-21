@@ -1,7 +1,7 @@
 {
   "name": "personal-manager",
   "private": true,
-  "version": "0.1.7",
+  "version": "0.1.8 DEV",
   "type": "module",
   "scripts": {
     "dev": "vite",
