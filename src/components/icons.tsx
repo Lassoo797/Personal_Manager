@@ -108,3 +108,33 @@ export const ArchiveBoxIcon: React.FC<{ className?: string }> = ({ className = "
       <path strokeLinecap="round" strokeLinejoin="round" d="M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
     </svg>
 );
+
+export const ArrowsPointingOutIcon: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9M20.25 20.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+    </svg>
+);
+
+export const ArrowsPointingInIcon: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />
+    </svg>
+);
+
+export const ChatBubbleLeftIcon: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193l-3.72 3.72a1.125 1.125 0 01-1.59 0l-3.72-3.72h-1.422c-1.136 0-2.1-.847-2.193-1.98l-.007-.022v-4.286c0-.97.616-1.813 1.5-2.097m6.091 9.091l.022-.007-3.722-3.722h-4.286c-.578 0-1.048-.47-1.048-1.048V9.61c0-.578.47-1.048 1.048-1.048h10.564c.578 0 1.048.47 1.048 1.048v4.286c0 .482-.337.892-.811 1.015l-1.42 1.42z" />
+    </svg>
+);
+
+export const UserCircleIcon: React.FC<{ className?: string }> = ({ className = "h-6 w-6" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
+
+export const ArrowRightOnRectangleIcon: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+    </svg>
+);

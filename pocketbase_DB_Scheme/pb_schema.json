@@ -468,6 +468,20 @@
         "presentable": false,
         "system": false,
         "type": "autodate"
+      },
+      {
+        "autogeneratePattern": "",
+        "hidden": false,
+        "id": "text_budget_note",
+        "max": 500,
+        "min": 0,
+        "name": "note",
+        "pattern": "",
+        "presentable": false,
+        "primaryKey": false,
+        "required": false,
+        "system": false,
+        "type": "text"
       }
     ],
     "indexes": [],

@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 
 import { useAppContext } from '../context/AppContext';
-import type { TransactionType, Category } from '../types';
-import { PlusIcon, ArchiveBoxIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon } from '../components/icons';
+import type { TransactionType, Category, Budget } from '../types';
+import { PlusIcon, ArchiveBoxIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon, ChatBubbleLeftIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '../components/icons';
 import Modal from '../components/Modal';
 
 import ReactDOM from 'react-dom';
@@ -66,6 +66,45 @@ const ActionMenu: React.FC<{
     </div>,
     document.body
   );
+};
+
+const NoteTooltip: React.FC<{
+    note: string;
+    isOpen: boolean;
+    triggerRef: React.RefObject<HTMLElement>;
+}> = ({ note, isOpen, triggerRef }) => {
+    const tooltipRef = useRef<HTMLDivElement>(null);
+    const [positionStyle, setPositionStyle] = useState<React.CSSProperties>({});
+
+    useEffect(() => {
+        if (isOpen && triggerRef.current && tooltipRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            const tooltipHeight = tooltipRef.current.offsetHeight;
+            const spaceAbove = rect.top;
+            const opensUpward = spaceAbove > tooltipHeight + 10;
+
+            setPositionStyle({
+                position: 'fixed',
+                top: opensUpward ? `${rect.top - 10}px` : `${rect.bottom + 10}px`,
+                left: `${rect.left + rect.width / 2}px`,
+                transform: opensUpward ? 'translate(-50%, -100%)' : 'translateX(-50%)',
+                zIndex: 100,
+            });
+        }
+    }, [isOpen, triggerRef]);
+
+    if (!isOpen) return null;
+
+    return ReactDOM.createPortal(
+        <div
+            ref={tooltipRef}
+            style={positionStyle}
+            className="bg-light-surfaceContainerHigh dark:bg-dark-surfaceContainerHigh rounded-lg shadow-xl px-4 py-2 max-w-xs text-sm text-light-onSurface dark:text-dark-onSurface whitespace-pre-wrap"
+        >
+            {note}
+        </div>,
+        document.body
+    );
 };
 
 
@@ -165,6 +204,7 @@ const Budgets: React.FC = () => {
     // State for deletion modal
     const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Archivovať' });
     const [archiveModalState, setArchiveModalState] = useState<{ isOpen: boolean, category: Category | null }>({ isOpen: false, category: null });
+    const [noteModalState, setNoteModalState] = useState<{ isOpen: boolean, budget: Budget | null, categoryId: string | null, month: string | null }>({ isOpen: false, budget: null, categoryId: null, month: null });
     
     
     const handleSaveSuccess = (newCategory: Category) => {
@@ -219,6 +259,15 @@ const Budgets: React.FC = () => {
             .sort((a, b) => a.order - b.order);
         return { income, expense };
     }, [visibleCategories]);
+
+    const handleExpandAll = useCallback(() => {
+        const allParentIds = parentCategories.income.map(c => c.id).concat(parentCategories.expense.map(c => c.id));
+        setExpandedGroups(new Set(allParentIds));
+    }, [parentCategories]);
+
+    const handleCollapseAll = () => {
+        setExpandedGroups(new Set());
+    };
 
     
     
@@ -308,6 +357,7 @@ const Budgets: React.FC = () => {
                             isExpanded={expandedGroups.has(parent.id)}
                             toggleExpansion={() => toggleGroupExpansion(parent.id)}
                             setConfirmModalState={setConfirmModalState}
+                            setNoteModalState={setNoteModalState}
                         />
                     </div>
                 ))}
@@ -366,6 +416,20 @@ const Budgets: React.FC = () => {
                                 >
                                     <CalendarDaysIcon className="h-5 w-5" />
                                     Aktuálny mesiac
+                                </button>
+                                <button
+                                    onClick={handleExpandAll}
+                                    className="flex items-center gap-2 px-4 py-2 bg-light-surfaceContainer text-light-onSurfaceContainer dark:bg-dark-surfaceContainer dark:text-dark-onSurfaceContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
+                                >
+                                    <ArrowsPointingOutIcon className="h-5 w-5" />
+                                    Rozbaliť všetko
+                                </button>
+                                <button
+                                    onClick={handleCollapseAll}
+                                    className="flex items-center gap-2 px-4 py-2 bg-light-surfaceContainer text-light-onSurfaceContainer dark:bg-dark-surfaceContainer dark:text-dark-onSurfaceContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
+                                >
+                                    <ArrowsPointingInIcon className="h-5 w-5" />
+                                    Zbaliť všetko
                                 </button>
                                 <button
                                     onClick={() => {
@@ -545,6 +609,13 @@ const Budgets: React.FC = () => {
                     currentMonth={currentMonth}
                     onConfirm={handleConfirmArchive}
                 />
+                <NoteModal
+                    isOpen={noteModalState.isOpen}
+                    onClose={() => setNoteModalState({ isOpen: false, budget: null, categoryId: null, month: null })}
+                    budget={noteModalState.budget}
+                    categoryId={noteModalState.categoryId}
+                    month={noteModalState.month}
+                />
             </div>
         </>
     );
@@ -566,12 +637,13 @@ interface CategoryGroupProps {
     toggleExpansion: () => void;
     isDragging: boolean;
     setConfirmModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>>;
+    setNoteModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, budget: Budget | null, categoryId: string | null, month: string | null }>>;
 }
 
 const CategoryGroup: React.FC<CategoryGroupProps> = ({ 
     parent, parentIndex, siblingsCount, categories, currentMonth, getActualAmount, onArchiveRequest, 
     onAddSubcategory, isAddingSubcategory, onCancelAddSubcategory, onSaveSubcategorySuccess,
-    isExpanded, toggleExpansion, isDragging, setConfirmModalState 
+    isExpanded, toggleExpansion, isDragging, setConfirmModalState, setNoteModalState
 }) => {
     const { budgets, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
@@ -723,7 +795,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
             
             {isExpanded && (
                 <div className="divide-y divide-light-outlineVariant/50 dark:divide-dark-outlineVariant/50">
-                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onArchiveRequest={onArchiveRequest} getBarColor={getBarColor} setConfirmModalState={setConfirmModalState} />)}
+                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onArchiveRequest={onArchiveRequest} getBarColor={getBarColor} setConfirmModalState={setConfirmModalState} setNoteModalState={setNoteModalState} />)}
                     
                     {isAddingSubcategory ? (
                         <div className="p-2">
@@ -757,11 +829,14 @@ const SubcategoryItem: React.FC<{
     onArchiveRequest: (e: React.MouseEvent, cat: Category) => void;
     getBarColor: (ratio: number, type: TransactionType) => string;
     setConfirmModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>>;
-}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onArchiveRequest, getBarColor, setConfirmModalState }) => {
+    setNoteModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, budget: Budget | null, categoryId: string | null, month: string | null }>>;
+}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onArchiveRequest, getBarColor, setConfirmModalState, setNoteModalState }) => {
     const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown, publishBudgetForYear, deleteBudget } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const triggerRef = useRef<HTMLButtonElement>(null);
+    const [isTooltipOpen, setIsTooltipOpen] = useState(false);
+    const noteIconRef = useRef<HTMLButtonElement>(null);
 
     // Výpočty
     const budget = useMemo(() => budgets.find(b => b.categoryId === category.id && b.month === currentMonth), [budgets, category.id, currentMonth]);
@@ -791,20 +866,19 @@ const SubcategoryItem: React.FC<{
 
         if (isNaN(amount) || amount < 0) {
             setIsEditingBudget(false);
-            return; // Ukonči, ak číslo nie je platné
+            return;
         }
 
-        // Ak je suma > 0, aktualizuj alebo vytvor záznam.
-        if (amount > 0) {
-            if (amount !== budgetAmount) { // Ulož iba ak sa hodnota zmenila
-                await addOrUpdateBudget({ categoryId: category.id, month: currentMonth, amount });
+        const noteExists = budget?.note && budget.note.trim() !== '';
+
+        if (amount > 0 || (amount === 0 && noteExists)) {
+            if (amount !== budgetAmount) {
+                await addOrUpdateBudget({ categoryId: category.id, month: currentMonth, amount: amount, note: budget?.note });
             }
         } 
-        // Ak je suma 0 a záznam o rozpočte už existuje, zmaž ho.
-        else if (amount === 0 && budget) {
+        else if (amount === 0 && !noteExists && budget) {
             await deleteBudget(budget.id);
         }
-        // Ak je suma 0 a záznam neexistuje, nerob nič.
         
         setIsEditingBudget(false);
     };
@@ -813,8 +887,26 @@ const SubcategoryItem: React.FC<{
         <div className="p-4 group">
             <div className="flex items-center gap-4 w-full">
                 {/* Názov kategórie */}
-                <div className="w-1/3 flex-shrink-0 pl-[2.25rem]">
+                <div className="w-1/3 flex-shrink-0 pl-[2.25rem] flex items-center gap-2">
                     <EditableCategoryName category={category} isEditing={isEditingName} setIsEditing={setIsEditingName} />
+                    {budget?.note && budget.note.trim() !== '' && (
+                        <>
+                            <button 
+                                ref={noteIconRef}
+                                onClick={() => setNoteModalState({ isOpen: true, budget, categoryId: category.id, month: currentMonth })} 
+                                onMouseEnter={() => setIsTooltipOpen(true)}
+                                onMouseLeave={() => setIsTooltipOpen(false)}
+                                className="p-1 rounded-full hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"
+                            >
+                                <ChatBubbleLeftIcon className="h-4 w-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant" />
+                            </button>
+                            <NoteTooltip
+                                isOpen={isTooltipOpen}
+                                note={budget.note}
+                                triggerRef={noteIconRef}
+                            />
+                        </>
+                    )}
                 </div>
 
                 {/* Finančná časť */}
@@ -876,6 +968,9 @@ const SubcategoryItem: React.FC<{
                             </button>
                             <button onClick={() => setIsEditingName(true)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
                                 <PencilIcon className="h-5 w-5 mr-3"/> Premenovať
+                            </button>
+                            <button onClick={() => setNoteModalState({ isOpen: true, budget, categoryId: category.id, month: currentMonth })} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
+                                <ChatBubbleLeftIcon className="h-5 w-5 mr-3"/> {budget?.note && budget.note.trim() !== '' ? 'Upraviť poznámku' : 'Pridať poznámku'}
                             </button>
                              <button 
                                 onClick={() => {
@@ -1002,3 +1097,80 @@ const ArchiveCategoryModal: React.FC<{
 
 export default Budgets;
 
+
+const NoteModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    budget: Budget | null;
+    categoryId: string | null;
+    month: string | null;
+}> = ({ isOpen, onClose, budget, categoryId, month }) => {
+    const { addOrUpdateBudget } = useAppContext();
+    const [note, setNote] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setNote(budget?.note || '');
+        }
+    }, [isOpen, budget]);
+
+    const handleSave = async () => {
+        if (!categoryId || !month) return;
+
+        // Ak budget neexistuje a poznámka je prázdna, nerob nič
+        if (!budget && !note.trim()) {
+            onClose();
+            return;
+        }
+
+        await addOrUpdateBudget({
+            categoryId: categoryId,
+            month: month,
+            amount: budget?.amount ?? 0,
+            note: note.trim()
+        });
+        onClose();
+    };
+    
+    const handleDelete = async () => {
+        if (!categoryId || !month) return;
+
+        await addOrUpdateBudget({
+            categoryId: categoryId,
+            month: month,
+            amount: budget?.amount ?? 0,
+            note: '' // Set note to empty string to delete it
+        });
+        onClose();
+    };
+
+    const noteExists = budget?.note && budget.note.trim() !== '';
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title={noteExists ? "Upraviť poznámku" : "Pridať poznámku"}>
+            <div className="space-y-4">
+                <textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Sem napíšte svoju poznámku..."
+                    rows={4}
+                    className="w-full bg-light-surfaceContainer dark:bg-dark-surfaceContainer border border-light-outline dark:border-dark-outline rounded-lg px-3 py-2 text-light-onSurface dark:text-dark-onSurface focus:ring-light-primary focus:border-light-primary"
+                    autoFocus
+                />
+                <div className="flex justify-between items-center pt-4">
+                    <div>
+                        {noteExists && (
+                             <button type="button" onClick={handleDelete} className="px-4 py-2.5 text-light-error dark:text-dark-error rounded-full hover:bg-light-error/10 dark:hover:bg-dark-error/10 font-medium text-sm">Zmazať poznámku</button>
+                        )}
+                    </div>
+                    <div className="flex space-x-2">
+                        <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+                        <button type="button" onClick={handleSave} className="px-6 py-2.5 rounded-full bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary hover:shadow-lg font-medium transition-shadow">
+                            Uložiť
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Modal>
+    );
+};

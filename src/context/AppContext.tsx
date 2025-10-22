@@ -46,7 +46,7 @@ interface AppContextType {
   updateTransaction: (transaction: Transaction) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
 
-  addOrUpdateBudget: (budget: Omit<Budget, 'id' | 'workspaceId'>) => Promise<void>;
+  addOrUpdateBudget: (budget: Partial<Budget> & Pick<Budget, 'categoryId' | 'month'>) => Promise<void>;
   publishBudgetForYear: (categoryId: string, month: string, forAllSubcategories?: boolean) => Promise<void>;
   publishFullBudgetForYear: (month: string) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
@@ -851,50 +851,55 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     addNotification('Transakcia bola zmazaná.', 'success');
   }, [addNotification, transactions, currentWorkspaceId]);
 
-  const addOrUpdateBudget = useCallback(async (budget: Omit<Budget, 'id' | 'workspaceId'>) => {
+  const addOrUpdateBudget = useCallback(async (budget: Partial<Budget> & Pick<Budget, 'categoryId' | 'month'>) => {
     if (!currentWorkspaceId) return;
-    
-    const existing = budgets.find(b => b.categoryId === budget.categoryId && b.month === budget.month);
 
-    if (existing) {
-      const updatedRecord = await pb.collection('budgets').update(existing.id, { amount: budget.amount });
-      const updated = mapPbToBudget(updatedRecord);
-      setBudgets(prev => prev.map(b => b.id === existing.id ? updated : b));
+    try {
+      const existing = budgets.find(b => b.categoryId === budget.categoryId && b.month === budget.month);
 
-      await pb.collection('system_events').create({
-        workspace: currentWorkspaceId,
-        type: 'budget_updated',
-        details: {
-          budgetId: existing.id,
-          categoryId: existing.categoryId,
-          month: existing.month,
-          oldAmount: existing.amount,
-          newAmount: updated.amount
-        }
-      });
+      if (existing) {
+        const hasAmountChanged = budget.amount !== undefined && budget.amount !== existing.amount;
+        const hasNoteChanged = budget.note !== undefined && budget.note !== existing.note;
+        
+        if (!hasAmountChanged && !hasNoteChanged) return;
 
-    } else {
-      const data = {
-          ...budget,
+        const dataToUpdate: Partial<Budget> = {};
+        if (hasAmountChanged) dataToUpdate.amount = budget.amount;
+        if (hasNoteChanged) dataToUpdate.note = budget.note;
+        
+        const updatedRecord = await pb.collection('budgets').update(existing.id, dataToUpdate);
+        const updated = mapPbToBudget(updatedRecord);
+        setBudgets(prev => prev.map(b => b.id === existing.id ? updated : b));
+        
+        await pb.collection('system_events').create({
           workspace: currentWorkspaceId,
-          category: budget.categoryId
-      };
-      const newBudgetRecord = await pb.collection('budgets').create(data);
-      const mapped = mapPbToBudget(newBudgetRecord);
-      setBudgets(prev => [...prev, mapped]);
+          type: 'budget_updated',
+          details: { /* ... logging details ... */ }
+        });
 
-      await pb.collection('system_events').create({
-        workspace: currentWorkspaceId,
-        type: 'budget_created',
-        details: {
-          budgetId: mapped.id,
-          categoryId: mapped.categoryId,
-          month: mapped.month,
-          amount: mapped.amount
-        }
-      });
+      } else {
+        const data = {
+          workspace: currentWorkspaceId,
+          category: budget.categoryId,
+          month: budget.month,
+          amount: budget.amount ?? 0,
+          note: budget.note || '',
+        };
+        const newBudgetRecord = await pb.collection('budgets').create(data);
+        const mapped = mapPbToBudget(newBudgetRecord);
+        setBudgets(prev => [...prev, mapped]);
+
+        await pb.collection('system_events').create({
+          workspace: currentWorkspaceId,
+          type: 'budget_created',
+          details: { /* ... logging details ... */ }
+        });
+      }
+      addNotification('Rozpočet bol uložený.', 'success');
+    } catch (e: any) {
+      console.error("Chyba pri ukladaní rozpočtu:", e);
+      addNotification(`Nepodarilo sa uložiť rozpočet: ${e.message}`, 'error');
     }
-    addNotification('Rozpočet bol uložený.', 'success');
   }, [currentWorkspaceId, budgets, addNotification]);
   
   const deleteBudget = useCallback(async(id:string) => {

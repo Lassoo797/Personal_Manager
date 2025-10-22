@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { NavLink } from 'react-router-dom';
-import { MenuIcon, XIcon, ChevronDownIcon } from './icons';
+import { MenuIcon, XIcon, ChevronDownIcon, UserCircleIcon, ArrowRightOnRectangleIcon } from './icons';
 import ThemeSwitcher from './ThemeSwitcher';
 import { useAppContext } from '../context/AppContext';
 import Modal from './Modal';
@@ -8,17 +9,84 @@ import WorkspaceManager from './WorkspaceManager';
 import { useAuth } from '../context/AuthContext';
 import { Workspace } from '../types';
 
-
 import { version } from '../../package.json';
+
+const UserMenu: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  triggerRef: React.RefObject<HTMLElement>;
+  onLogout: () => void;
+  userName: string;
+}> = ({ isOpen, onClose, triggerRef, onLogout, userName }) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [positionStyle, setPositionStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPositionStyle({
+        position: 'fixed',
+        top: `${rect.bottom + 8}px`,
+        right: `calc(100% - ${rect.right}px)`,
+        minWidth: '224px',
+        zIndex: 50,
+      });
+    }
+  }, [isOpen, triggerRef]);
+
+  if (!isOpen) return null;
+
+  return ReactDOM.createPortal(
+    <div
+      ref={menuRef}
+      style={positionStyle}
+      className="origin-top-right absolute mt-2 rounded-xl shadow-lg bg-light-surfaceContainer dark:bg-dark-surfaceContainer ring-1 ring-black ring-opacity-5 focus:outline-none"
+    >
+      <div className="py-1">
+        <div className="px-4 py-3">
+          <p className="text-sm text-light-onSurface dark:text-dark-onSurface">Prihlásený ako</p>
+          <p className="text-sm font-medium text-light-onSurface dark:text-dark-onSurface truncate">
+            {userName}
+          </p>
+        </div>
+        <div className="border-t border-light-outlineVariant dark:border-dark-outlineVariant"></div>
+        <button
+          onClick={onLogout}
+          className="w-full text-left flex items-center px-4 py-2 text-sm text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10"
+        >
+          <ArrowRightOnRectangleIcon className="h-5 w-5 mr-3" />
+          Odhlásiť sa
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 const Header: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { logout, user } = useAuth();
   
   const { workspaces, currentWorkspaceId, setCurrentWorkspaceId } = useAppContext();
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const appVersion = useMemo(() => {
     const isTest = version.includes('test');
@@ -120,24 +188,29 @@ const Header: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="flex items-center">
-              {user && (
-                <span className="mr-4 text-sm">
-                  Prihlásený: <strong>{user.email}</strong>
-                </span>
-              )}
-              <button
-                onClick={logout}
-                className="mr-4 px-3 py-2 rounded-full text-sm font-medium transition-colors text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"
-              >
-                Odhlásiť
-              </button>
-              <span className="text-xs text-green-500 mr-4">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-green-500">
                 {appVersion}
               </span>
               <ThemeSwitcher />
+              
+              {user && (
+                <div className="relative" ref={userMenuRef}>
+                   <button onClick={() => setIsUserMenuOpen(prev => !prev)} className="p-2 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh transition-colors">
+                      <UserCircleIcon className="h-6 w-6" />
+                   </button>
+                   <UserMenu
+                      isOpen={isUserMenuOpen}
+                      onClose={() => setIsUserMenuOpen(false)}
+                      triggerRef={userMenuRef}
+                      onLogout={logout}
+                      userName={user.name || user.email}
+                   />
+                </div>
+              )}
+
               {currentWorkspaceId && (
-                <div className="-mr-2 flex md:hidden ml-2">
+                <div className="-mr-2 flex md:hidden">
                   <button
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
                     type="button"

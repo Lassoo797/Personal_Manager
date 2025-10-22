@@ -61,6 +61,7 @@ export interface Budget {
   amount: number;
   month: string; // YYYY-MM
   workspaceId: string;
+  note?: string;
 }
 
 export interface Notification {
