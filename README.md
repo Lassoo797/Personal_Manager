@@ -2,19 +2,25 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
 
-This contains everything you need to run your app locally.
+The application is built with React and uses PocketBase as its backend database. It requires user authentication.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1YYchFgZKSFgfoC6zG-4R-El0iiNNTzL5
+The main features of the application are:
 
-## Run Locally
+Workspace Management: Allows users to create multiple separate "budget workspaces" (e.g., personal, family).
 
-**Prerequisites:**  Node.js
+Account Management: Tracks different financial accounts (e.g., bank accounts) and their initial balances.
 
+Category Management: Defining custom categories and subcategories for income and expenses.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Transaction Tracking: Logging income and expenses, assigning them to an account and category.
+
+Budgeting: The ability to set monthly budget plans for specific categories and track adherence.
+
+Visualization and Analysis:
+
+Dashboard: Displays charts and summaries of the overall balance, income vs. expenses, and financial trends over time.
+
+Master Dashboard: Provides a combined overview of all financial workspaces at once.
+
+Analysis: A dedicated page that analyzes budget overspending in specific categories.
