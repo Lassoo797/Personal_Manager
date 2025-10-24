@@ -26,6 +26,8 @@ export interface Account {
   initialBalance: number;
   initialBalanceDate: string;
   status: AccountStatus;
+  order: number;
+  isDefault?: boolean;
 }
 
 export interface Category {

@@ -44,6 +44,18 @@ export const accountService = {
   },
   
   /**
+   * Updates multiple accounts in parallel. Useful for reordering.
+   * @param accountsToUpdate An array of accounts with updated data.
+   * @returns A promise that resolves when all updates are complete.
+   */
+  batchUpdate: async (accountsToUpdate: { id: string, data: Partial<Omit<Account, 'id'>> }[]): Promise<void> => {
+    const promises = accountsToUpdate.map(acc => 
+      collection.update(acc.id, acc.data)
+    );
+    await Promise.all(promises);
+  },
+
+  /**
    * Deletes an account record by its ID.
    * @param id The ID of the account to delete.
    */

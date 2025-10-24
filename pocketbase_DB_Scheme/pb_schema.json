@@ -355,6 +355,27 @@
         "presentable": false,
         "system": false,
         "type": "autodate"
+      },
+      {
+        "id": "new_order_field",
+        "name": "order",
+        "type": "number",
+        "system": false,
+        "schema": {},
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
+      },
+      {
+        "id": "bool_is_default_account",
+        "name": "isDefault",
+        "type": "bool",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
       }
     ],
     "indexes": [],
@@ -720,7 +741,8 @@
           "transaction_deleted",
           "budget_created",
           "budget_updated",
-          "budget_deleted"
+          "budget_deleted",
+          "default_account_set"
         ]
       },
       {

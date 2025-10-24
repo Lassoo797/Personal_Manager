@@ -7,7 +7,7 @@ type SystemEventType =
   | "account_updated" | "category_created" | "category_updated"
   | "category_deleted" | "category_archived" | "transaction_created"
   | "transaction_updated" | "transaction_deleted" | "budget_created"
-  | "budget_updated" | "budget_deleted";
+  | "budget_updated" | "budget_deleted" | "default_account_set";
 
 interface SystemEventPayload {
   workspace: string;

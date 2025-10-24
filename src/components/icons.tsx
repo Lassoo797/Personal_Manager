@@ -138,3 +138,18 @@ export const ArrowRightOnRectangleIcon: React.FC<{ className?: string }> = ({ cl
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
     </svg>
 );
+
+export const LandmarkIcon: React.FC<{ className?: string }> = ({ className = "h-6 w-6" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21V3m0 18H3m9 0h9M3 21V10.5M21 21V10.5M3 10.5l9-7.5 9 7.5M3 10.5h18" />
+    </svg>
+);
+
+export const WalletIcon: React.FC<{ className?: string }> = ({ className = "h-6 w-6" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.75V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V9.75a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 9.75v3M21 9.75v-3a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6.75v3.007" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 9.75a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" />
+    </svg>
+);
+
+

@@ -35,10 +35,13 @@ interface AppContextType {
   budgets: Budget[];
 
   // Actions
-  createAccount: (account: Omit<Account, 'id' | 'workspaceId'>) => Promise<void>;
+  createAccount: (account: Omit<Account, 'id' | 'workspaceId' | 'status' | 'order'>) => Promise<void>;
   updateAccount: (account: Partial<Account> & Pick<Account, 'id'>) => Promise<void>;
   archiveAccount: (id: string) => Promise<string | void>;
   getAccountBalance: (accountId: string) => number;
+  moveAccountUp: (accountId: string) => Promise<void>;
+  moveAccountDown: (accountId: string) => Promise<void>;
+  setDefaultAccount: (accountId: string) => Promise<void>;
   
   addCategory: (category: Omit<Category, 'id' | 'workspaceId' | 'order' | 'status'>) => Promise<Category | null>;
   updateCategory: (category: Category) => Promise<void>;
@@ -77,7 +80,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [currentWorkspaceId, setCurrentWorkspaceId] = useLocalStorage<string | null>('currentWorkspaceId', null);
   
   const [allAccounts, setAllAccounts] = useState<Account[]>([]);
-  const accounts = useMemo(() => allAccounts.filter(a => a.status === 'active'), [allAccounts]);
+  const accounts = useMemo(() => allAccounts.filter(a => a.status === 'active').sort((a,b) => a.order - b.order), [allAccounts]);
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const categories = useMemo(() => allCategories.filter(c => c.status === 'active'), [allCategories]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -590,13 +593,111 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addNotification('Nastala chyba pri archivácii účtu.', 'error');
     }
   }, [transactions, addNotification, getAccountBalance, allAccounts, allCategories, currentWorkspaceId]);
+
+  const moveAccount = useCallback(async (accountId: string, direction: 'up' | 'down') => {
+    const account = allAccounts.find(a => a.id === accountId);
+    if (!account) return;
+
+    const siblings = allAccounts
+        .filter(a => a.accountType === account.accountType)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    const currentIndex = siblings.findIndex(a => a.id === accountId);
+    if (currentIndex === -1) return;
+
+    let newSiblings = [...siblings];
+    if (direction === 'up' && currentIndex > 0) {
+        [newSiblings[currentIndex], newSiblings[currentIndex - 1]] = [newSiblings[currentIndex - 1], newSiblings[currentIndex]];
+    } else if (direction === 'down' && currentIndex < siblings.length - 1) {
+        [newSiblings[currentIndex], newSiblings[currentIndex + 1]] = [newSiblings[currentIndex + 1], newSiblings[currentIndex]];
+    } else {
+        return;
+    }
+    
+    const updatedOrders = newSiblings.map((a, index) => ({ ...a, order: index }));
+
+    try {
+        const batchPayload = updatedOrders.map(a => ({ id: a.id, data: { order: a.order } }));
+        await accountService.batchUpdate(batchPayload);
+        
+        setAllAccounts(prev => {
+            const updatedMap = new Map(updatedOrders.map(a => [a.id, a]));
+            return prev.map(a => updatedMap.get(a.id) || a);
+        });
+    } catch (e: any) {
+        console.error(`Failed to move account ${direction}:`, e);
+        addNotification(`Nepodarilo sa posunúť účet: ${e.message}`, 'error');
+    }
+  }, [allAccounts, addNotification]);
+
+  const moveAccountUp = useCallback((accountId: string) => moveAccount(accountId, 'up'), [moveAccount]);
+  const moveAccountDown = useCallback((accountId: string) => moveAccount(accountId, 'down'), [moveAccount]);
+
+  const setDefaultAccount = useCallback(async (accountId: string) => {
+    if (!currentWorkspaceId) return;
+
+    const currentDefault = allAccounts.find(a => a.isDefault);
+
+    try {
+        const batchPayload = [];
+
+        // Ak existuje iný default účet, pripravíme jeho zrušenie
+        if (currentDefault && currentDefault.id !== accountId) {
+            batchPayload.push({ id: currentDefault.id, data: { isDefault: false } });
+        }
+        
+        // Pripravíme nastavenie nového default účtu
+        batchPayload.push({ id: accountId, data: { isDefault: true } });
+
+        // Všetko odošleme v jednej dávkovej požiadavke
+        await accountService.batchUpdate(batchPayload);
+
+        // Optimistická aktualizácia UI zostáva rovnaká
+        setAllAccounts(prev => 
+            prev.map(a => ({
+                ...a,
+                isDefault: a.id === accountId
+            }))
+        );
+
+        const account = allAccounts.find(a => a.id === accountId);
+        if (!account) {
+          console.error("setDefaultAccount: Account not found in state, cannot log system event.");
+          // Notifikácia je miernejšia, keďže hlavná funkčnosť (nastavenie default) prebehla
+          addNotification(`Účet bol nastavený ako predvolený, ale nastala chyba pri logovaní udalosti.`, 'info');
+          return;
+        }
+
+        addNotification(`Účet "${account.name}" bol nastavený ako predvolený.`, 'success');
+        
+        const eventPayload = {
+            workspace: currentWorkspaceId,
+            type: 'default_account_set' as const,
+            details: {
+              accountId: accountId,
+              name: account.name
+            }
+        };
+
+        console.log("Attempting to create system event with payload:", JSON.stringify(eventPayload, null, 2));
+        
+        await systemEventService.create(eventPayload);
+
+    } catch (e: any) {
+        console.error("Failed to set default account:", e);
+        addNotification(`Nepodarilo sa nastaviť predvolený účet: ${e.message}`, 'error');
+    }
+  }, [allAccounts, currentWorkspaceId, addNotification]);
   
   // ACCOUNT MANAGEMENT
-  const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId' | 'status'>) => {
+  const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId' | 'status' | 'order'>) => {
     if (!currentWorkspaceId) return;
 
     try {
-        const newAccount = await accountService.create({ ...account, workspace: currentWorkspaceId, status: 'active' });
+        const siblings = allAccounts.filter(a => a.accountType === account.accountType);
+        const newOrder = siblings.length > 0 ? Math.max(...siblings.map(a => a.order || 0)) + 1 : 0;
+
+        const newAccount = await accountService.create({ ...account, workspace: currentWorkspaceId, status: 'active', order: newOrder });
         setAllAccounts(prev => [...prev, newAccount]);
 
         // Log system event for account creation
@@ -1036,7 +1137,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = useMemo(() => ({
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
-    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance,
+    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance, moveAccountUp, moveAccountDown, setDefaultAccount,
     categories, allCategories, addCategory, updateCategory, archiveCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
@@ -1046,7 +1147,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }), [
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
-    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance,
+    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance, moveAccountUp, moveAccountDown, setDefaultAccount,
     categories, allCategories, addCategory, updateCategory, archiveCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,

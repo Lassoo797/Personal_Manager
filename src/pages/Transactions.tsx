@@ -32,32 +32,41 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             setDestinationAccountId(transaction.destinationAccountId || '');
         } else {
             // Reset form for a new transaction
+            const defaultAccount = accounts.find(a => a.isDefault && a.accountType === 'Štandardný účet');
             setType('expense');
             setTransactionDate(new Date().toISOString().slice(0, 10));
             setNotes('');
             setAmount('');
             setCategoryId('');
-            setAccountId('');
+            setAccountId(defaultAccount?.id || '');
             setDestinationAccountId('');
         }
     }, [transaction]);
 
     // Effect to show info about dedicated (savings) account
     useEffect(() => {
-        if (categoryId) {
-            const category = allCategories.find(c => c.id === categoryId);
-            if (category?.dedicatedAccount) {
-                const account = accounts.find(a => a.id === category.dedicatedAccount);
-                if (account) {
-                    setDedicatedAccountInfo({ name: account.name, type: category.type as 'income' | 'expense' });
+        const category = allCategories.find(c => c.id === categoryId);
+        if (category?.dedicatedAccount) {
+            const account = accounts.find(a => a.id === category.dedicatedAccount);
+            if (account) {
+                setDedicatedAccountInfo({ name: account.name, type: category.type as 'income' | 'expense' });
+                // Ak ide o vklad na sporenie, zdrojový účet sa nemení (mal by byť default)
+                // Ak ide o výber zo sporenia, zdrojový účet je sporiaci účet
+                if (category.type === 'income') {
+                    setAccountId(account.id);
                 }
-            } else {
-                setDedicatedAccountInfo(null);
             }
         } else {
             setDedicatedAccountInfo(null);
+            // Ak sa zmení kategória na "nesporiacu", a ide o novú transakciu, vrátime sa k default účtu
+            if (!transaction) {
+                const defaultAccount = accounts.find(a => a.isDefault && a.accountType === 'Štandardný účet');
+                if (defaultAccount) {
+                    setAccountId(defaultAccount.id);
+                }
+            }
         }
-    }, [categoryId, allCategories, accounts]);
+    }, [categoryId, allCategories, accounts, transaction]);
 
     const filteredCategories = useMemo(() => {
         const transactionMonth = transactionDate.substring(0, 7);

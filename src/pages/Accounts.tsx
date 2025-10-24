@@ -1,12 +1,79 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { PlusIcon, PencilIcon, ArchiveBoxIcon } from '../components/icons';
+import { PlusIcon, PencilIcon, ArchiveBoxIcon, LandmarkIcon, WalletIcon, DotsVerticalIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons';
 import type { Account, AccountType, AccountSubtype } from '../types';
 
 const ACCOUNT_TYPES: AccountType[] = ['Štandardný účet', 'Sporiaci účet'];
 const ACCOUNT_SUBTYPES: AccountSubtype[] = ['Bankový účet', 'Hotovosť'];
+
+const AccountIcon: React.FC<{ type: AccountSubtype }> = ({ type }) => {
+  switch (type) {
+    case 'Bankový účet':
+      return <LandmarkIcon className="h-8 w-8 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant" />;
+    case 'Hotovosť':
+      return <WalletIcon className="h-8 w-8 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant" />;
+    default:
+      return null;
+  }
+};
+
+const ActionMenu: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  triggerRef: React.RefObject<HTMLElement>;
+  children: React.ReactNode;
+}> = ({ isOpen, onClose, triggerRef, children }) => {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [positionStyle, setPositionStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (isOpen && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const menuHeightEstimate = 180; // A safe estimate for menu height
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const opensUpward = spaceBelow < menuHeightEstimate && rect.top > menuHeightEstimate;
+
+      setPositionStyle({
+        position: 'fixed',
+        top: opensUpward ? `${rect.top - menuHeightEstimate}px` : `${rect.bottom + 4}px`,
+        left: `${rect.left + rect.width - 224}px`, // 224px is w-56
+        width: '224px',
+        zIndex: 50,
+      });
+    }
+  }, [isOpen, triggerRef]);
+
+  if (!isOpen) return null;
+
+  return ReactDOM.createPortal(
+    <div
+      ref={menuRef}
+      style={positionStyle}
+      className="bg-light-surfaceContainerHigh dark:bg-dark-surfaceContainerHigh rounded-lg shadow-xl"
+      onClick={onClose}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+};
 
 const AccountForm: React.FC<{
   account?: Account | null;
@@ -106,19 +173,150 @@ const AccountForm: React.FC<{
     );
 };
 
-const Accounts: React.FC = () => {
-  const { accounts, archiveAccount, getAccountBalance } = useAppContext();
+const AccountListItem: React.FC<{
+  account: Account;
+  index: number;
+  accountsCount: number;
+  balanceColor: string;
+}> = ({ account, index, accountsCount, balanceColor }) => {
+  const { getAccountBalance, moveAccountUp, moveAccountDown, archiveAccount, setDefaultAccount } = useAppContext();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
+  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
-  const openAddModal = () => {
-    setEditingAccount(null);
+  const openEditModal = (acc: Account) => {
+    setEditingAccount(acc);
     setIsModalOpen(true);
+    setIsMenuOpen(false);
   };
 
-  const openEditModal = (account: Account) => {
-    setEditingAccount(account);
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingAccount(null);
+  };
+
+  return (
+    <>
+      <li className="p-4 flex items-center justify-between hover:bg-light-surfaceContainer dark:hover:bg-dark-surfaceContainer transition-colors duration-150">
+        <div className="flex items-center space-x-4">
+          <div className="p-3 bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full">
+            <AccountIcon type={account.type} />
+          </div>
+          <div>
+            <h3 className="text-lg font-medium text-light-onSurface dark:text-dark-onSurface flex items-center">
+              {account.name}
+              {account.isDefault && <span className="ml-2 text-yellow-500" role="img" aria-label="Default">★</span>}
+            </h3>
+            <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{account.type}</p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <p className={`text-xl font-bold ${balanceColor}`}>
+            {getAccountBalance(account.id).toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}
+          </p>
+          <div className="flex items-center">
+            <button 
+              ref={menuTriggerRef}
+              aria-label={`Možnosti pre účet ${account.name}`} 
+              onClick={() => setIsMenuOpen(prev => !prev)} 
+              className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"
+            >
+              <DotsVerticalIcon />
+            </button>
+            <ActionMenu 
+              isOpen={isMenuOpen} 
+              onClose={() => setIsMenuOpen(false)} 
+              triggerRef={menuTriggerRef}
+            >
+              <div className="py-2">
+                <button onClick={() => { moveAccountUp(account.id); setIsMenuOpen(false); }} disabled={index === 0} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50">
+                  <ChevronUpIcon className="h-5 w-5 mr-3"/> Posunúť vyššie
+                </button>
+                <button onClick={() => { moveAccountDown(account.id); setIsMenuOpen(false); }} disabled={index === accountsCount - 1} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50">
+                  <ChevronDownIcon className="h-5 w-5 mr-3"/> Posunúť nižšie
+                </button>
+                <div className="my-1 h-px bg-light-outlineVariant dark:bg-dark-outlineVariant" />
+                <button 
+                  onClick={() => { setDefaultAccount(account.id); setIsMenuOpen(false); }} 
+                  disabled={account.isDefault} 
+                  className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
+                >
+                  <span className="w-5 h-5 mr-3">★</span> Nastaviť ako predvolený
+                </button>
+                <button onClick={() => openEditModal(account)} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
+                  <PencilIcon className="h-5 w-5 mr-3"/> Upraviť
+                </button>
+                <button onClick={() => {
+                  setConfirmModalState({
+                    isOpen: true,
+                    message: `Naozaj chcete archivovať účet "${account.name}"? Účet bude skrytý, ale jeho história zostane zachovaná.`,
+                    onConfirm: () => {
+                      archiveAccount(account.id);
+                      setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                    }
+                  });
+                  setIsMenuOpen(false);
+                }} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-error dark:text-dark-error hover:bg-light-error/10 dark:hover:bg-dark-error/10">
+                  <ArchiveBoxIcon className="h-5 w-5 mr-3"/> Archivovať
+                </button>
+              </div>
+            </ActionMenu>
+          </div>
+        </div>
+      </li>
+      {isModalOpen && (
+        <Modal isOpen={isModalOpen} onClose={closeModal} title="Upraviť účet">
+          <AccountForm 
+            account={editingAccount} 
+            isEditing={!!editingAccount} 
+            onSave={closeModal} 
+            onCancel={closeModal} 
+          />
+        </Modal>
+      )}
+      <ConfirmModal 
+        isOpen={confirmModalState.isOpen} 
+        onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
+        message={confirmModalState.message}
+        onConfirm={confirmModalState.onConfirm}
+        title="Potvrdenie archivácie"
+      />
+    </>
+  );
+};
+
+const AccountList: React.FC<{
+  accounts: Account[];
+  title: string;
+  balanceColor: string;
+}> = ({ accounts, title, balanceColor }) => (
+  <div>
+    <h2 className="text-2xl font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pt-6 pb-4">{title}</h2>
+    <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant overflow-hidden">
+      <ul className="divide-y divide-light-outlineVariant dark:divide-dark-outlineVariant">
+        {accounts.map((account, index) => (
+          <AccountListItem 
+            key={account.id}
+            account={account}
+            index={index}
+            accountsCount={accounts.length}
+            balanceColor={balanceColor}
+          />
+        ))}
+      </ul>
+    </div>
+  </div>
+);
+
+const Accounts: React.FC = () => {
+  const { accounts, getAccountBalance } = useAppContext();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  
+  const openAddModal = () => {
+    setEditingAccount(null);
     setIsModalOpen(true);
   };
 
@@ -127,8 +325,16 @@ const Accounts: React.FC = () => {
     setEditingAccount(null);
   };
   
-  const operatingAccounts = accounts.filter(a => a.accountType === 'Štandardný účet');
-  const savingsAccounts = accounts.filter(a => a.accountType === 'Sporiaci účet');
+  const { operatingAccounts, savingsAccounts, totalBalance, operatingBalance, savingsBalance } = useMemo(() => {
+    const operating = accounts.filter(a => a.accountType === 'Štandardný účet');
+    const savings = accounts.filter(a => a.accountType === 'Sporiaci účet');
+    
+    const operatingBalance = operating.reduce((sum, acc) => sum + getAccountBalance(acc.id), 0);
+    const savingsBalance = savings.reduce((sum, acc) => sum + getAccountBalance(acc.id), 0);
+    const totalBalance = operatingBalance + savingsBalance;
+
+    return { operatingAccounts: operating, savingsAccounts: savings, totalBalance, operatingBalance, savingsBalance };
+  }, [accounts, getAccountBalance]);
 
   return (
     <div className="space-y-6">
@@ -139,62 +345,29 @@ const Accounts: React.FC = () => {
           Pridať účet
         </button>
       </div>
-
-      <div>
-        <h2 className="text-2xl font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pb-4">Bežné účty</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {operatingAccounts.map(account => (
-            <div key={account.id} className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex flex-col justify-between">
-              <div>
-                <h3 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">{account.name}</h3>
-                <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{account.type}</p>
-                <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-2">
-                  {getAccountBalance(account.id).toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}
-                </p>
-              </div>
-              <div className="flex justify-end space-x-1 mt-4">
-                <button aria-label={`Upraviť účet ${account.name}`} onClick={() => openEditModal(account)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                <button aria-label={`Archivovať účet ${account.name}`} onClick={() => setConfirmModalState({
-                  isOpen: true,
-                  message: `Naozaj chcete archivovať účet "${account.name}"? Účet bude skrytý, ale jeho história zostane zachovaná.`,
-                  onConfirm: () => {
-                    archiveAccount(account.id);
-                    setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-                  }
-                })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><ArchiveBoxIcon /></button>
-              </div>
-            </div>
-          ))}
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Bežné účty</h2>
+          <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-1">{operatingBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+        </div>
+        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Sporenia</h2>
+          <p className="text-3xl font-bold text-light-secondary dark:text-dark-secondary mt-1">{savingsBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+        </div>
+        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
+          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový majetok</h2>
+          <p className="text-3xl font-bold text-light-tertiary dark:text-dark-tertiary mt-1">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
         </div>
       </div>
       
-      <div>
-        <h2 className="text-2xl font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pt-6 pb-4">Sporiace účty</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {savingsAccounts.map(account => (
-            <div key={account.id} className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex flex-col justify-between">
-              <div>
-                <h3 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">{account.name}</h3>
-                <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{account.type}</p>
-                <p className="text-3xl font-bold text-light-secondary dark:text-dark-secondary mt-2">
-                  {getAccountBalance(account.id).toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}
-                </p>
-              </div>
-              <div className="flex justify-end space-x-1 mt-4">
-                <button aria-label={`Upraviť účet ${account.name}`} onClick={() => openEditModal(account)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><PencilIcon /></button>
-                <button aria-label={`Archivovať účet ${account.name}`} onClick={() => setConfirmModalState({
-                  isOpen: true,
-                  message: `Naozaj chcete archivovať účet "${account.name}"? Účet bude skrytý, ale jeho história zostane zachovaná.`,
-                  onConfirm: () => {
-                    archiveAccount(account.id);
-                    setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-                  }
-                })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><ArchiveBoxIcon /></button>
-              </div>
-            </div>
-        ))}
-        </div>
-      </div>
+      {operatingAccounts.length > 0 && (
+        <AccountList accounts={operatingAccounts} title="Bežné účty" balanceColor="text-light-primary dark:text-dark-primary" />
+      )}
+      
+      {savingsAccounts.length > 0 && (
+        <AccountList accounts={savingsAccounts} title="Sporiace účty" balanceColor="text-light-secondary dark:text-dark-secondary" />
+      )}
       
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingAccount ? "Upraviť účet" : "Pridať účet"}>
         <AccountForm 
@@ -204,16 +377,9 @@ const Accounts: React.FC = () => {
           onCancel={closeModal} 
         />
       </Modal>
-
-      <ConfirmModal 
-        isOpen={confirmModalState.isOpen} 
-        onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
-        message={confirmModalState.message}
-        onConfirm={confirmModalState.onConfirm}
-        title="Potvrdenie archivácie"
-      />
     </div>
   );
 };
+
 
 export default Accounts;
