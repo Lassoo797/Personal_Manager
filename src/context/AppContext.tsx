@@ -1,6 +1,6 @@
-import { RecordModel } from 'pocketbase';import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
-import pb from '../lib/pocketbase';
-import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification, AccountStatus } from '../types';
+import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
+import pb from '../lib/pocketbase'; // Keep for pb.filter for now
+import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification } from '../types';
 import { systemEventService } from '../services/systemEventService';
 import { workspaceService } from '../services/workspaceService';
 import { budgetService } from '../services/budgetService';
@@ -9,7 +9,6 @@ import { accountService } from '../services/accountService';
 import { transactionService } from '../services/transactionService';
 import { useAuth } from './AuthContext';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { mapPbToWorkspace, mapPbToAccount, mapPbToCategory, mapPbToTransaction, mapPbToBudget } from '../lib/mappers';
 
 
 // PocketBase options to prevent autocancellation during batch operations
@@ -213,41 +212,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- Workspace Management ---
   const addWorkspace = useCallback(async (name: string) => {
-    const newWorkspaceRecord = await pb.collection('workspaces').create({ name: name });
-    const mapped = mapPbToWorkspace(newWorkspaceRecord);
-    setWorkspaces(prev => [...prev, mapped]);
-    setCurrentWorkspaceId(mapped.id);
+    try {
+      const newWorkspace = await workspaceService.create(name);
+      setWorkspaces(prev => [...prev, newWorkspace]);
+      setCurrentWorkspaceId(newWorkspace.id);
 
-    await pb.collection('system_events').create({
-      workspace: mapped.id,
-      type: 'workspace_created',
-      details: {
-        workspaceId: mapped.id,
-        name: mapped.name
-      }
-    });
-
-    addNotification(`Pracovný priestor "${name}" bol úspešne vytvorený.`, 'success');
+      await systemEventService.create({
+        workspace: newWorkspace.id,
+        type: 'workspace_created',
+        details: {
+          workspaceId: newWorkspace.id,
+          name: newWorkspace.name
+        }
+      });
+      addNotification(`Pracovný priestor "${name}" bol úspešne vytvorený.`, 'success');
+    } catch (e: any) {
+      console.error("Chyba pri vytváraní pracovného priestoru:", e);
+      addNotification(`Nepodarilo sa vytvoriť pracovný priestor: ${e.message}`, 'error');
+    }
   }, [setCurrentWorkspaceId, addNotification]);
 
   const updateWorkspace = useCallback(async (id: string, name: string) => {
     const originalWorkspace = workspaces.find(w => w.id === id);
     if (!originalWorkspace) return;
+    try {
+      const updated = await workspaceService.update(id, name);
+      setWorkspaces(prev => prev.map(p => p.id === id ? updated : p));
 
-    const updated = await pb.collection('workspaces').update(id, { name: name });
-    setWorkspaces(prev => prev.map(p => p.id === id ? mapPbToWorkspace(updated) : p));
-
-    await pb.collection('system_events').create({
-      workspace: id,
-      type: 'workspace_updated',
-      details: {
-        workspaceId: id,
-        oldName: originalWorkspace.name,
-        newName: name
-      }
-    });
-
-    addNotification(`Pracovný priestor "${name}" bol aktualizovaný.`, 'success');
+      await systemEventService.create({
+        workspace: id,
+        type: 'workspace_updated',
+        details: {
+          workspaceId: id,
+          oldName: originalWorkspace.name,
+          newName: name
+        }
+      });
+      addNotification(`Pracovný priestor "${name}" bol aktualizovaný.`, 'success');
+    } catch (e: any) {
+      console.error("Chyba pri aktualizácii pracovného priestoru:", e);
+      addNotification(`Nepodarilo sa aktualizovať pracovný priestor: ${e.message}`, 'error');
+    }
   }, [addNotification, workspaces]);
 
   const deleteWorkspace = useCallback(async (id: string) => {
@@ -258,25 +263,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsLoading(true);
       const filter = pb.filter('workspace = {:workspaceId}', { workspaceId: id });
       
-      // Get IDs of all related records
       const [accountsToDelete, categoriesToDelete, transactionsToDelete, budgetsToDelete] = await Promise.all([
-          pb.collection('accounts').getFullList({ filter, fields: 'id' }),
-          pb.collection('categories').getFullList({ filter, fields: 'id' }),
-          pb.collection('transactions').getFullList({ filter, fields: 'id' }),
-          pb.collection('budgets').getFullList({ filter, fields: 'id' })
+          accountService.getAll(filter),
+          categoryService.getAll(filter),
+          transactionService.getAll(filter),
+          budgetService.getAll(filter)
       ]);
 
-      // Batch delete records. PocketBase JS SDK doesn't have batch delete, so we do it in parallel.
-      // Adjust if you have a very large number of records per workspace to avoid overwhelming the server.
       await Promise.all([
-        ...accountsToDelete.map(r => pb.collection('accounts').delete(r.id)),
-        ...categoriesToDelete.map(r => pb.collection('categories').delete(r.id)),
-        ...transactionsToDelete.map(r => pb.collection('transactions').delete(r.id)),
-        ...budgetsToDelete.map(r => pb.collection('budgets').delete(r.id)),
+        ...accountsToDelete.map(r => accountService.delete(r.id)),
+        ...categoriesToDelete.map(r => categoryService.delete(r.id)),
+        ...transactionsToDelete.map(r => transactionService.delete(r.id)),
+        ...budgetsToDelete.map(r => budgetService.delete(r.id)),
       ]);
 
-      // Finally, delete the workspace itself
-      await pb.collection('workspaces').delete(id);
+      await workspaceService.delete(id);
       
       await systemEventService.create({
         workspace: id,
@@ -287,27 +288,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       });
 
-      // Update local state
       const remaining = workspaces.filter(p => p.id !== id);
       setWorkspaces(remaining);
       if (currentWorkspaceId === id) {
         setCurrentWorkspaceId(remaining.length > 0 ? remaining[0].id : null);
       }
-      
       addNotification('Pracovný priestor a všetky jeho dáta boli zmazané.', 'success');
-
     } catch(e: any) {
         setError(e);
         console.error("Chyba pri mazaní pracovného priestoru:", e);
-        addNotification('Chyba pri mazaní pracovného priestoru. Skontrolujte, či nie sú k pracovnému priestoru priradené nejaké dáta.', 'error');
+        addNotification(`Chyba pri mazaní pracovného priestoru: ${e.message}`, 'error');
     } finally {
         setIsLoading(false);
-        // We might need to refresh data if something went partially wrong
-        if (currentWorkspaceId === id) {
-           // The main useEffect will trigger due to workspace change
-        } else {
-            // If we deleted a background workspace, the current view is fine.
-        }
     }
   }, [workspaces, currentWorkspaceId, setCurrentWorkspaceId, addNotification]);
 
