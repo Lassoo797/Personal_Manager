@@ -1,6 +1,7 @@
 import { RecordModel } from 'pocketbase';import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import pb from '../lib/pocketbase';
 import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification, AccountStatus } from '../types';
+import { categoryService } from '../services/categoryService';
 import { accountService } from '../services/accountService';
 import { transactionService } from '../services/transactionService';
 import { useAuth } from './AuthContext';
@@ -133,12 +134,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const filter = pb.filter('workspace = {:workspaceId}', { workspaceId: currentWorkspaceId });
           const [accs, cats, trans, buds] = await Promise.all([
             accountService.getAll(filter), // Použitie servisu
-            pb.collection('categories').getFullList({ filter }),
+            categoryService.getAll(filter), // Použitie servisu
             transactionService.getAll(filter), // Použitie servisu
             pb.collection('budgets').getFullList({ filter }),
           ]);
           setAllAccounts(accs); // Mapper je už v servise
-          setAllCategories(cats.map(mapPbToCategory));
+          setAllCategories(cats); // Mapper je už v servise
           setTransactions(trans); // Mapper je už v servise
           setBudgets(buds.map(mapPbToBudget));
         } catch (e: any) {
@@ -316,108 +317,114 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!currentWorkspaceId) return null;
     
     const siblings = allCategories.filter(c => c.parentId === category.parentId && c.type === category.type);
-    const newOrder = siblings.length > 0 ? Math.max(...siblings.map(c => c.order)) + 1 : 0;
+    const newOrder = siblings.length > 0 ? Math.max(...siblings.map(c => c.order || 0)) + 1 : 0;
     
     const data = {
         ...category,
         workspace: currentWorkspaceId,
         order: newOrder,
         parent: category.parentId || undefined,
-        status: 'active'
+        status: 'active' as const
     };
 
     try {
-      const newCategoryRecord = await pb.collection('categories').create(data);
-      const mapped = mapPbToCategory(newCategoryRecord);
-      setAllCategories(prev => [...prev, mapped]);
+      const newCategory = await categoryService.create(data);
+      setAllCategories(prev => [...prev, newCategory]);
 
       await pb.collection('system_events').create({
         workspace: currentWorkspaceId,
         type: 'category_created',
         details: {
-          categoryId: mapped.id,
-          name: mapped.name,
-          type: mapped.type,
-          parentId: mapped.parentId
+          categoryId: newCategory.id,
+          name: newCategory.name,
+          type: newCategory.type,
+          parentId: newCategory.parentId
         }
       });
 
-      addNotification(`Kategória "${mapped.name}" bola vytvorená.`, 'success');
-      return mapped;
+      addNotification(`Kategória "${newCategory.name}" bola vytvorená.`, 'success');
+      return newCategory;
     } catch (e: any) {
-      setError(e);
-      addNotification('Nepodarilo sa vytvoriť kategóriu.', 'error');
       console.error("Nepodarilo sa vytvoriť kategóriu:", e);
+      addNotification(`Nepodarilo sa vytvoriť kategóriu: ${e.message}`, 'error');
+      setError(e);
       return null;
     }
   }, [currentWorkspaceId, allCategories, addNotification]);
 
   const updateCategory = useCallback(async (updated: Category) => {
-    const { id, name } = updated;
+    const { id, name, workspaceId } = updated;
     const originalCategory = allCategories.find(c => c.id === id);
     if (!originalCategory) return;
 
-    // Create a snapshot of changes
-    const changes: Record<string, any> = {};
-    for (const key in updated) {
-      if (key !== 'id' && updated[key as keyof Category] !== originalCategory[key as keyof Category]) {
-        changes[key] = {
-          old: originalCategory[key as keyof Category],
-          new: updated[key as keyof Category]
-        };
+    try {
+      // Create a snapshot of changes
+      const changes: Record<string, any> = {};
+      // Correctly iterate over the keys of the 'updated' object
+      for (const key of Object.keys(updated) as (keyof Category)[]) {
+        if (key !== 'id' && updated[key] !== originalCategory[key]) {
+          changes[key] = {
+            old: originalCategory[key],
+            new: updated[key]
+          };
+        }
+    }
+      
+      // Update linked account name if it's a dedicated category and name has changed
+      if (originalCategory.dedicatedAccount && name && name !== originalCategory.name) {
+          const linkedAccount = accounts.find(a => a.id === originalCategory.dedicatedAccount);
+          if (linkedAccount && linkedAccount.name !== name) {
+              await accountService.update(linkedAccount.id, { name });
+              setAllAccounts(prev => prev.map(acc => acc.id === linkedAccount.id ? { ...acc, name } : acc));
+          }
       }
-    }
-    
-    // Update linked account name if it's a dedicated category and name has changed
-    if (originalCategory.dedicatedAccount && name && name !== originalCategory.name) {
-        const linkedAccount = accounts.find(a => a.id === originalCategory.dedicatedAccount);
-        if (linkedAccount && linkedAccount.name !== name) {
-            await accountService.update(linkedAccount.id, { name });
-            setAllAccounts(prev => prev.map(acc => acc.id === linkedAccount.id ? { ...acc, name } : acc));
-        }
-    }
 
-    const payload = { ...updated, parent: updated.parentId || null, workspace: updated.workspaceId };
-    delete (payload as any).id; 
-    delete (payload as any).workspaceId;
+      const payload = { ...updated, parent: updated.parentId || null, workspace: workspaceId };
+      const updatedCategory = await categoryService.update(id, payload);
 
-    const updatedCategory = await pb.collection('categories').update(id, payload);
-    setAllCategories(prev => {
-        const newState = prev.map(c => c.id === id ? mapPbToCategory(updatedCategory) : c)
-        return newState.sort((a, b) => (a.order || 0) - (b.order || 0));
-    });
-
-    if (Object.keys(changes).length > 0) {
-      await pb.collection('system_events').create({
-        workspace: originalCategory.workspaceId,
-        type: 'category_updated',
-        details: {
-          categoryId: id,
-          name: updated.name,
-          changes
-        }
+      setAllCategories(prev => {
+          const newState = prev.map(c => c.id === id ? updatedCategory : c)
+          return newState.sort((a, b) => (a.order || 0) - (b.order || 0));
       });
-    }
 
-    addNotification(`Kategória "${updated.name}" bola aktualizovaná.`, 'success');
-  }, [addNotification, categories, accounts]);
+      if (Object.keys(changes).length > 0) {
+        await pb.collection('system_events').create({
+          workspace: originalCategory.workspaceId,
+          type: 'category_updated',
+          details: {
+            categoryId: id,
+            name: updated.name,
+            changes
+          }
+        });
+      }
+
+      addNotification(`Kategória "${updated.name}" bola aktualizovaná.`, 'success');
+    } catch (e: any) {
+      console.error("Chyba pri aktualizácii kategórie:", e);
+      addNotification(`Nepodarilo sa aktualizovať kategóriu: ${e.message}`, 'error');
+      setError(e);
+    }
+  }, [addNotification, allCategories, accounts]);
   
   const updateCategoryOrder = useCallback(async (updatedCategories: Category[]) => {
     try {
-        await Promise.all(
-            updatedCategories.map(cat => 
-                pb.collection('categories').update(cat.id, { order: cat.order })
-            )
-        );
+        const batchPayload = updatedCategories.map(cat => ({
+          id: cat.id,
+          data: { order: cat.order }
+        }));
+        await categoryService.batchUpdate(batchPayload);
+
         // Optimistically update local state to avoid re-fetch lag
         setAllCategories(prev => {
             const updatedMap = new Map(updatedCategories.map(c => [c.id, c]));
             return prev.map(c => updatedMap.get(c.id) || c);
         });
-    } catch (e) {
+    } catch (e: any) {
         console.error("Failed to update category order:", e);
+        addNotification(`Nepodarilo sa aktualizovať poradie kategórií: ${e.message}`, 'error');
         // If update fails, refetch to ensure consistency
-        // loadAppData();
+        // loadWorkspaceData(); // Consider re-fetching on error
     }
   }, []);
 
@@ -483,7 +490,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             await Promise.all(accountsToArchiveIds.map(accId => accountService.update(accId, { status: 'archived' }, noAutoCancel)));
         }
         
-        await Promise.all(allRelatedCategoryIds.map(catId => pb.collection('categories').update(catId, { status: 'archived', archivedFrom: archiveMonth }, noAutoCancel)));
+        await Promise.all(allRelatedCategoryIds.map(catId => categoryService.update(catId, { status: 'archived', archivedFrom: archiveMonth }, noAutoCancel)));
         
         await pb.collection('system_events').create({
           workspace: currentWorkspaceId,
@@ -510,10 +517,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
 
   const moveCategory = useCallback(async (categoryId: string, direction: 'up' | 'down') => {
-    const category = categories.find(c => c.id === categoryId);
+    const category = allCategories.find(c => c.id === categoryId);
     if (!category) return;
   
-    const siblings = categories
+    const siblings = allCategories
       .filter(c => c.parentId === category.parentId && c.type === category.type)
       .sort((a, b) => (a.order || 0) - (b.order || 0));
   
@@ -532,19 +539,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updatedOrders = newSiblings.map((c, index) => ({ ...c, order: index }));
   
     try {
-      await Promise.all(
-        updatedOrders.map(c => pb.collection('categories').update(c.id, { order: c.order }))
-      );
+      const batchPayload = updatedOrders.map(c => ({ id: c.id, data: { order: c.order } }));
+      await categoryService.batchUpdate(batchPayload);
+      
       setAllCategories(prev => {
         const updatedMap = new Map(updatedOrders.map(c => [c.id, c]));
         const sorted = prev.map(c => updatedMap.get(c.id) || c).sort((a,b)=> (a.order || 0) - (b.order || 0));
         return sorted;
       });
-    } catch (e) {
+    } catch (e: any) {
       console.error(`Failed to move category ${direction}:`, e);
-      // loadAppData();
+      addNotification(`Nepodarilo sa posunúť kategóriu: ${e.message}`, 'error');
     }
-  }, [allCategories]);
+  }, [allCategories, addNotification]);
   
   const moveCategoryUp = useCallback((categoryId: string) => moveCategory(categoryId, 'up'), [moveCategory]);
   const moveCategoryDown = useCallback((categoryId: string) => moveCategory(categoryId, 'down'), [moveCategory]);
