@@ -62,4 +62,12 @@ export const categoryService = {
     );
     await Promise.all(promises);
   },
+
+  /**
+   * Deletes a category record by its ID.
+   * @param id The ID of the category to delete.
+   */
+  delete: async (id: string): Promise<void> => {
+    await collection.delete(id);
+  },
 };

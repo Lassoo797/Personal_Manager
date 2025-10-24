@@ -43,5 +43,13 @@ export const accountService = {
     return mapPbToAccount(record);
   },
   
+  /**
+   * Deletes an account record by its ID.
+   * @param id The ID of the account to delete.
+   */
+  delete: async (id: string): Promise<void> => {
+    await collection.delete(id);
+  },
+  
   // No delete function is needed as we only archive accounts (which is an update operation).
 };

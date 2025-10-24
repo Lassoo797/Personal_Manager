@@ -1,6 +1,9 @@
 import { RecordModel } from 'pocketbase';import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import pb from '../lib/pocketbase';
 import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification, AccountStatus } from '../types';
+import { systemEventService } from '../services/systemEventService';
+import { workspaceService } from '../services/workspaceService';
+import { budgetService } from '../services/budgetService';
 import { categoryService } from '../services/categoryService';
 import { accountService } from '../services/accountService';
 import { transactionService } from '../services/transactionService';
@@ -100,15 +103,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setIsGlobalLoading(true);
       setError(null);
       try {
-        const workspacesData = await pb.collection('workspaces').getFullList();
-
-        const mappedWorkspaces = workspacesData.map(mapPbToWorkspace);
-        setWorkspaces(mappedWorkspaces);
+        const workspacesData = await workspaceService.getAll();
+        setWorkspaces(workspacesData);
 
         // Auto-select workspace logic after global data is loaded
-        const isInvalidStoredWorkspace = currentWorkspaceId && !mappedWorkspaces.some(p => p.id === currentWorkspaceId);
+        const isInvalidStoredWorkspace = currentWorkspaceId && !workspacesData.some(p => p.id === currentWorkspaceId);
         if (isInvalidStoredWorkspace || !currentWorkspaceId) { // Also auto-select if no workspace was selected
-          setCurrentWorkspaceId(mappedWorkspaces.length > 0 ? mappedWorkspaces[0].id : null);
+          setCurrentWorkspaceId(workspacesData.length > 0 ? workspacesData[0].id : null);
         }
       } catch (e: any) {
         if (e.name !== 'AbortError' && !e.isAbort) {
@@ -136,12 +137,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             accountService.getAll(filter), // Použitie servisu
             categoryService.getAll(filter), // Použitie servisu
             transactionService.getAll(filter), // Použitie servisu
-            pb.collection('budgets').getFullList({ filter }),
+            budgetService.getAll(filter), // Použitie servisu
           ]);
           setAllAccounts(accs); // Mapper je už v servise
           setAllCategories(cats); // Mapper je už v servise
           setTransactions(trans); // Mapper je už v servise
-          setBudgets(buds.map(mapPbToBudget));
+          setBudgets(buds); // Mapper je už v servise
         } catch (e: any) {
           if (e.name !== 'AbortError' && !e.isAbort) {
             setError(e);
@@ -277,7 +278,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Finally, delete the workspace itself
       await pb.collection('workspaces').delete(id);
       
-      await pb.collection('system_events').create({
+      await systemEventService.create({
         workspace: id,
         type: 'workspace_deleted',
         details: {
@@ -331,7 +332,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const newCategory = await categoryService.create(data);
       setAllCategories(prev => [...prev, newCategory]);
 
-      await pb.collection('system_events').create({
+      await systemEventService.create({
         workspace: currentWorkspaceId,
         type: 'category_created',
         details: {
@@ -388,7 +389,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
 
       if (Object.keys(changes).length > 0) {
-        await pb.collection('system_events').create({
+        await systemEventService.create({
           workspace: originalCategory.workspaceId,
           type: 'category_updated',
           details: {
@@ -492,7 +493,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         
         await Promise.all(allRelatedCategoryIds.map(catId => categoryService.update(catId, { status: 'archived', archivedFrom: archiveMonth }, noAutoCancel)));
         
-        await pb.collection('system_events').create({
+        await systemEventService.create({
           workspace: currentWorkspaceId,
           type: 'category_archived',
           details: { categoryId: id, name: categoryToArchive.name, childrenCount: children.length, archiveMonth }
@@ -583,7 +584,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addNotification('Účet bol úspešne archivovaný.', 'success');
         
         if (accountToArchive) {
-          await pb.collection('system_events').create({
+          await systemEventService.create({
             workspace: currentWorkspaceId,
             type: 'account_archived',
             details: {
@@ -607,7 +608,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setAllAccounts(prev => [...prev, newAccount]);
 
         // Log system event for account creation
-        await pb.collection('system_events').create({
+        await systemEventService.create({
           workspace: currentWorkspaceId,
           type: 'account_created',
           details: {
@@ -621,7 +622,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         
         // Log system event for initial balance if it exists
         if (account.initialBalance && account.initialBalance > 0) {
-          await pb.collection('system_events').create({
+          await systemEventService.create({
             workspace: currentWorkspaceId,
             type: 'initial_balance_set',
             details: {
@@ -690,7 +691,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const updatedAccount = await accountService.update(id, { name });
 
-      await pb.collection('system_events').create({
+      await systemEventService.create({
         workspace: currentWorkspaceId,
         type: 'account_updated',
         details: {
@@ -772,7 +773,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       // Spoločné logovanie udalosti (môže sa vylepšiť)
-      await pb.collection('system_events').create({
+      await systemEventService.create({
         workspace: currentWorkspaceId,
         type: 'transaction_created',
         details: { /* ... dáta pre log ... */ }
@@ -844,7 +845,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setTransactions(prev => prev.filter(t => t.id !== id));
       }
 
-      await pb.collection('system_events').create({
+      await systemEventService.create({
         workspace: currentWorkspaceId,
         type: 'transaction_deleted',
         details: { transactionId: id, type: transactionToDelete.type, amount: transactionToDelete.amount }
@@ -873,11 +874,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (hasAmountChanged) dataToUpdate.amount = budget.amount;
         if (hasNoteChanged) dataToUpdate.note = budget.note;
         
-        const updatedRecord = await pb.collection('budgets').update(existing.id, dataToUpdate);
-        const updated = mapPbToBudget(updatedRecord);
+        const updated = await budgetService.update(existing.id, dataToUpdate);
         setBudgets(prev => prev.map(b => b.id === existing.id ? updated : b));
         
-        await pb.collection('system_events').create({
+        await systemEventService.create({
           workspace: currentWorkspaceId,
           type: 'budget_updated',
           details: { /* ... logging details ... */ }
@@ -891,11 +891,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           amount: budget.amount ?? 0,
           note: budget.note || '',
         };
-        const newBudgetRecord = await pb.collection('budgets').create(data);
-        const mapped = mapPbToBudget(newBudgetRecord);
-        setBudgets(prev => [...prev, mapped]);
+        const newBudget = await budgetService.create(data);
+        setBudgets(prev => [...prev, newBudget]);
 
-        await pb.collection('system_events').create({
+        await systemEventService.create({
           workspace: currentWorkspaceId,
           type: 'budget_created',
           details: { /* ... logging details ... */ }
@@ -913,21 +912,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const budgetToDelete = budgets.find(b => b.id === id);
     if (!budgetToDelete) return;
 
-    await pb.collection('budgets').delete(id);
-    setBudgets(prev => prev.filter(b => b.id !== id));
+    try {
+      await budgetService.delete(id);
+      setBudgets(prev => prev.filter(b => b.id !== id));
 
-    await pb.collection('system_events').create({
-      workspace: currentWorkspaceId,
-      type: 'budget_deleted',
-      details: {
-        budgetId: id,
-        categoryId: budgetToDelete.categoryId,
-        month: budgetToDelete.month,
-        amount: budgetToDelete.amount
-      }
-    });
+      await systemEventService.create({
+        workspace: currentWorkspaceId,
+        type: 'budget_deleted',
+        details: {
+          budgetId: id,
+          categoryId: budgetToDelete.categoryId,
+          month: budgetToDelete.month,
+          amount: budgetToDelete.amount
+        }
+      });
 
     addNotification('Rozpočet bol zmazaný.', 'success');
+    } catch (e: any) {
+      console.error("Chyba pri mazaní rozpočtu:", e);
+      addNotification(`Nepodarilo sa zmazať rozpočet: ${e.message}`, 'error');
+    }
   }, [addNotification, budgets, currentWorkspaceId]);
 
   const publishBudgetForYear = useCallback(async (baseCategoryId: string, baseMonth: string, forAllSubcategories: boolean = false) => {
@@ -959,16 +963,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (existingBudget.amount !== sourceAmount) {
                                       // Update existujúceho
                 try {
-                    const updated = await pb.collection('budgets').update(existingBudget.id, { amount: sourceAmount }, noAutoCancel);
-                    updatedBudgets.push(mapPbToBudget(updated));
+                    const updated = await budgetService.update(existingBudget.id, { amount: sourceAmount }, noAutoCancel);
+                    updatedBudgets.push(updated);
                 } catch (e) { console.error(`Failed to update budget for ${categoryId} in ${targetMonth}:`, e); }
             }
         } else if (sourceAmount > 0) {
              // Vytvor nový, len ak je suma > 0
-            const data = { workspace: currentWorkspaceId, category: categoryId, month: targetMonth, amount: sourceAmount };
+            const data = { workspace: currentWorkspaceId, category: categoryId, month: targetMonth, amount: sourceAmount, note: sourceBudget?.note || '' };
             try {
-                const newBudget = await pb.collection('budgets').create(data, noAutoCancel);
-                newBudgets.push(mapPbToBudget(newBudget));
+                const newBudget = await budgetService.create(data, noAutoCancel);
+                newBudgets.push(newBudget);
             } catch (e) { console.error(`Failed to create budget for ${categoryId} in ${targetMonth}:`, e); }
         }
         }
@@ -1006,11 +1010,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   
         if (existingBudget) {
           if (existingBudget.amount !== sourceAmount) {
-            budgetsToUpdate.push(pb.collection('budgets').update(existingBudget.id, { amount: sourceAmount }, noAutoCancel));
+            budgetsToUpdate.push(budgetService.update(existingBudget.id, { amount: sourceAmount }, noAutoCancel));
           }
         } else if (sourceAmount > 0) {
-          const data = { workspace: currentWorkspaceId, category: categoryId, month: targetMonth, amount: sourceAmount };
-          budgetsToCreate.push(pb.collection('budgets').create(data, noAutoCancel));
+          const data = { workspace: currentWorkspaceId, category: categoryId, month: targetMonth, amount: sourceAmount, note: sourceBudget?.note || '' };
+          budgetsToCreate.push(budgetService.create(data, noAutoCancel));
         }
       }
     }
@@ -1022,9 +1026,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       
       // Update local state
       setBudgets(prev => {
-        const updatedMap = new Map(updated.map(b => [b.id, mapPbToBudget(b)]));
+        const updatedMap = new Map(updated.map(b => [b.id, b]));
         const prevWithoutUpdated = prev.map(b => updatedMap.get(b.id) || b);
-        return [...prevWithoutUpdated, ...created.map(mapPbToBudget)];
+        return [...prevWithoutUpdated, ...created];
       });
       addNotification('Celý rozpočet bol publikovaný pre nasledujúce mesiace.', 'success');
 
