@@ -14,23 +14,12 @@ const baseWorkspaceService = createPocketBaseService<Workspace, WorkspaceCreatio
 
 // `workspaceService` bol nekonzistentný (create a update brali `name` priamo).
 // Zachováme pôvodné rozhranie, aby sme nemuseli meniť AppContext, ale interne použijeme novú službu.
+// Exportujeme všetky funkcie z base servisu, ale prepíšeme `create` a `update`.
 export const workspaceService = {
-  ...baseWorkspaceService,
+  getAll: baseWorkspaceService.getAll,
+  delete: baseWorkspaceService.delete,
+  batchUpdate: baseWorkspaceService.batchUpdate,
   create: (name: string) => baseWorkspaceService.create({ name }),
   update: (id: string, name: string) => baseWorkspaceService.update(id, { name }),
 };
 
-
-
-
-
-
-
-
-// `workspaceService` bol nekonzistentný (create a update brali `name` priamo).
-// Zachováme pôvodné rozhranie, aby sme nemuseli meniť AppContext, ale interne použijeme novú službu.
-export const workspaceService = {
-  ...baseWorkspaceService,
-  create: (name: string) => baseWorkspaceService.create({ name }),
-  update: (id: string, name: string) => baseWorkspaceService.update(id, { name }),
-};
