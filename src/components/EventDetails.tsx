@@ -27,7 +27,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event }) => {
       
       // Account Events
       case 'account_created':
-        return <span>Vytvorený účet: <strong>{details.name}</strong> ({details.accountType})</span>;
+        return <span>Vytvorený účet: <strong>{details.name}</strong></span>;
       case 'account_updated':
         return <span>Účet <strong>{getAccountName(details.accountId)}</strong> premenovaný z "{details.oldName}" na <strong>"{details.newName}"</strong></span>;
       case 'account_deleted':

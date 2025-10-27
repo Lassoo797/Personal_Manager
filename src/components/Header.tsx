@@ -124,7 +124,6 @@ const Header: React.FC = () => {
       <NavLink to="/transactions" className={getNavLinkClass}>Transakcie</NavLink>
       <NavLink to="/budgets" className={getNavLinkClass}>Rozpočty</NavLink>
       <NavLink to="/accounts" className={getNavLinkClass}>Účty</NavLink>
-      <NavLink to="/analysis" className={getNavLinkClass}>Analýza</NavLink>
       <NavLink to="/system-events" className={getNavLinkClass}>Systémové Udalosti</NavLink>
     </>
   );

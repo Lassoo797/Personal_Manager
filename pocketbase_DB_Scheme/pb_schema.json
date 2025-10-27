@@ -458,19 +458,6 @@
         "type": "relation"
       },
       {
-        "cascadeDelete": false,
-        "collectionId": "pbc_2324088501",
-        "hidden": false,
-        "id": "relation820226487",
-        "maxSelect": 1,
-        "minSelect": 0,
-        "name": "dedicatedAccount",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "relation"
-      },
-      {
         "hidden": false,
         "id": "autodate2990389176",
         "name": "created",
@@ -581,19 +568,6 @@
         "maxSelect": 1,
         "minSelect": 0,
         "name": "parent",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "relation"
-      },
-      {
-        "cascadeDelete": false,
-        "collectionId": "pbc_2324088501",
-        "hidden": false,
-        "id": "relation_dedicated_account",
-        "maxSelect": 1,
-        "minSelect": 0,
-        "name": "dedicatedAccount",
         "presentable": false,
         "required": false,
         "system": false,
@@ -905,19 +879,6 @@
         "required": false,
         "system": false,
         "type": "bool"
-      },
-      {
-        "cascadeDelete": false,
-        "collectionId": "pbc_3174063690",
-        "hidden": false,
-        "id": "relation_linked_transaction",
-        "maxSelect": 1,
-        "minSelect": 0,
-        "name": "linkedTransaction",
-        "presentable": false,
-        "required": false,
-        "system": false,
-        "type": "relation"
       },
       {
         "hidden": false,

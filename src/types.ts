@@ -6,7 +6,7 @@ export type SystemEvent = {
   created: string;
 };
 export type TransactionType = 'income' | 'expense' | 'transfer';
-export type AccountType = 'Štandardný účet' | 'Sporiaci účet';
+export type AccountType = 'Štandardný účet';
 export type AccountSubtype = 'Bankový účet' | 'Hotovosť';
 
 export interface Workspace {
@@ -39,7 +39,6 @@ export interface Category {
   order: number;
   validFrom: string; // YYYY-MM
   archivedFrom?: string | null; // YYYY-MM
-  dedicatedAccount?: string | null;
   status: 'active' | 'archived';
 }
 
@@ -54,7 +53,6 @@ export interface Transaction {
   destinationAccountId?: string | null; // Destination account for transfers
   workspaceId: string;
   onBudget?: boolean; // True if transaction should be included in budgets/stats
-  linkedTransaction?: string | null; // ID of the paired transaction for savings
 }
 
 export interface Budget {

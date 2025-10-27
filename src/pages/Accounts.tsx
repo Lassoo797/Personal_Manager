@@ -6,7 +6,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { PlusIcon, PencilIcon, ArchiveBoxIcon, LandmarkIcon, WalletIcon, DotsVerticalIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons';
 import type { Account, AccountType, AccountSubtype } from '../types';
 
-const ACCOUNT_TYPES: AccountType[] = ['Štandardný účet', 'Sporiaci účet'];
+const ACCOUNT_TYPES: AccountType[] = ['Štandardný účet'];
 const ACCOUNT_SUBTYPES: AccountSubtype[] = ['Bankový účet', 'Hotovosť'];
 
 const AccountIcon: React.FC<{ type: AccountSubtype }> = ({ type }) => {
@@ -126,14 +126,6 @@ const AccountForm: React.FC<{
                 <label htmlFor="name" className={formLabelStyle}>Názov účtu</label>
             </div>
 
-            <div className="relative">
-                <select id="accountType" value={accountType} onChange={e => setAccountType(e.target.value as AccountType)} className={`${formInputStyle} h-14`} required disabled={isEditing}>
-                  {ACCOUNT_TYPES.map(t => (
-                    <option key={t} value={t} className="dark:bg-dark-surfaceContainerHigh">{t}</option>
-                  ))}
-                </select>
-                <label htmlFor="accountType" className={formLabelStyle}>Typ účtu</label>
-            </div>
             <div className="relative">
                 <select id="type" value={type} onChange={e => setType(e.target.value as AccountSubtype)} className={`${formInputStyle} h-14`} required disabled={isEditing}>
                   {ACCOUNT_SUBTYPES.map(t => (
@@ -325,15 +317,10 @@ const Accounts: React.FC = () => {
     setEditingAccount(null);
   };
   
-  const { operatingAccounts, savingsAccounts, totalBalance, operatingBalance, savingsBalance } = useMemo(() => {
-    const operating = accounts.filter(a => a.accountType === 'Štandardný účet');
-    const savings = accounts.filter(a => a.accountType === 'Sporiaci účet');
-    
-    const operatingBalance = operating.reduce((sum, acc) => sum + getAccountBalance(acc.id), 0);
-    const savingsBalance = savings.reduce((sum, acc) => sum + getAccountBalance(acc.id), 0);
-    const totalBalance = operatingBalance + savingsBalance;
+  const { totalBalance } = useMemo(() => {
+    const totalBalance = accounts.reduce((sum, acc) => sum + getAccountBalance(acc.id), 0);
 
-    return { operatingAccounts: operating, savingsAccounts: savings, totalBalance, operatingBalance, savingsBalance };
+    return { totalBalance };
   }, [accounts, getAccountBalance]);
 
   return (
@@ -348,25 +335,13 @@ const Accounts: React.FC = () => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Bežné účty</h2>
-          <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-1">{operatingBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-        </div>
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Sporenia</h2>
-          <p className="text-3xl font-bold text-light-secondary dark:text-dark-secondary mt-1">{savingsBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-        </div>
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
           <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový majetok</h2>
           <p className="text-3xl font-bold text-light-tertiary dark:text-dark-tertiary mt-1">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
         </div>
       </div>
       
-      {operatingAccounts.length > 0 && (
-        <AccountList accounts={operatingAccounts} title="Bežné účty" balanceColor="text-light-primary dark:text-dark-primary" />
-      )}
-      
-      {savingsAccounts.length > 0 && (
-        <AccountList accounts={savingsAccounts} title="Sporiace účty" balanceColor="text-light-secondary dark:text-dark-secondary" />
+      {accounts.length > 0 && (
+        <AccountList accounts={accounts} title="Všetky účty" balanceColor="text-light-primary dark:text-dark-primary" />
       )}
       
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingAccount ? "Upraviť účet" : "Pridať účet"}>

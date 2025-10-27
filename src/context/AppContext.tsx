@@ -366,15 +366,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
     }
       
-      // Update linked account name if it's a dedicated category and name has changed
-      if (originalCategory.dedicatedAccount && name && name !== originalCategory.name) {
-          const linkedAccount = accounts.find(a => a.id === originalCategory.dedicatedAccount);
-          if (linkedAccount && linkedAccount.name !== name) {
-              await accountService.update(linkedAccount.id, { name });
-              setAllAccounts(prev => prev.map(acc => acc.id === linkedAccount.id ? { ...acc, name } : acc));
-          }
-      }
-
       const payload = { ...updated, parent: updated.parentId || null, workspace: workspaceId };
       const updatedCategory = await categoryService.update(id, payload);
 
@@ -450,42 +441,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addNotification(message, 'error');
         return { success: false, message };
       }
-      
-      // 3. Validácia prepojených účtov
-      const allRelatedCategories = [categoryToArchive, ...children];
-      const dedicatedAccounts = allRelatedCategories
-          .map(c => c.dedicatedAccount ? allAccounts.find(a => a.id === c.dedicatedAccount) : null)
-          .filter((acc): acc is Account => !!acc);
-
-      for (const account of dedicatedAccounts) {
-          const balance = getAccountBalance(account.id);
-          if (Math.abs(balance) > 0.001) {
-              const message = `Kategóriu '${categoryToArchive.name}' nie je možné archivovať, pretože prepojený účet '${account.name}' má nenulový zostatok. Najprv ho musíte vynulovať.`;
-              addNotification(message, 'error');
-              return { success: false, message };
-          }
-      }
-
-      if (dedicatedAccounts.length > 0) {
-        return { 
-            success: false, 
-            needsConfirmation: true, 
-            message: `Kategória '${categoryToArchive.name}' je prepojená so sporiacim účtom/účtami. Jej archiváciou sa archivujú aj tieto účty. Prajete si pokračovať?`
-        };
-      }
     }
     
     // --- Samotná archivácia ---
     try {
-        const accountsToArchiveIds = [
-            categoryToArchive.dedicatedAccount, 
-            ...children.map(c => c.dedicatedAccount)
-        ].filter((accId): accId is string => !!accId);
-
-        if (accountsToArchiveIds.length > 0) {
-            await Promise.all(accountsToArchiveIds.map(accId => accountService.update(accId, { status: 'archived' }, noAutoCancel)));
-        }
-        
         await Promise.all(allRelatedCategoryIds.map(catId => categoryService.update(catId, { status: 'archived', archivedFrom: archiveMonth }, noAutoCancel)));
         
         await systemEventService.create({
@@ -496,9 +455,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         // Update local state
         setAllCategories(prev => prev.map(c => allRelatedCategoryIds.includes(c.id) ? { ...c, status: 'archived', archivedFrom: archiveMonth } : c));
-        if (accountsToArchiveIds.length > 0) {
-            setAllAccounts(prev => prev.map(a => accountsToArchiveIds.includes(a.id) ? { ...a, status: 'archived' } : a));
-        }
         
         addNotification(`Kategória '${categoryToArchive.name}' a jej podkategórie boli archivované od mesiaca ${archiveMonth}.`, 'success');
         return { success: true };
@@ -563,15 +519,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     try {
         const accountToArchive = allAccounts.find(a => a.id === id);
-        if (accountToArchive && accountToArchive.accountType === 'Sporiaci účet') {
-            const linkedCategory = allCategories.find(c => c.dedicatedAccount === id);
-            // We don't archive the linked category here automatically. 
-            // The user should archive the category, which in turn archives the account.
-            if (linkedCategory && linkedCategory.status === 'active') {
-                 addNotification(`Toto je sporiaci účet prepojený s kategóriou '${linkedCategory.name}'. Pre archiváciu prosím archivujte danú kategóriu.`, 'info');
-                 return;
-            }
-        }
         
         await accountService.update(id, { status: 'archived' });
 
@@ -599,7 +546,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!account) return;
 
     const siblings = allAccounts
-        .filter(a => a.accountType === account.accountType)
         .sort((a, b) => (a.order || 0) - (b.order || 0));
 
     const currentIndex = siblings.findIndex(a => a.id === accountId);
@@ -697,7 +643,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const siblings = allAccounts.filter(a => a.accountType === account.accountType);
         const newOrder = siblings.length > 0 ? Math.max(...siblings.map(a => a.order || 0)) + 1 : 0;
 
-        const newAccount = await accountService.create({ ...account, workspace: currentWorkspaceId, status: 'active', order: newOrder });
+        const data = {
+          ...account,
+          initialBalance: account.initialBalance ? Math.round((account.initialBalance + Number.EPSILON) * 100) / 100 : 0,
+        };
+
+        const newAccount = await accountService.create({ ...data, workspace: currentWorkspaceId, status: 'active', order: newOrder });
         setAllAccounts(prev => [...prev, newAccount]);
 
         // Log system event for account creation
@@ -714,55 +665,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
         
         // Log system event for initial balance if it exists
-        if (account.initialBalance && account.initialBalance > 0) {
+        if (data.initialBalance && data.initialBalance > 0) {
           await systemEventService.create({
             workspace: currentWorkspaceId,
             type: 'initial_balance_set',
             details: {
               accountId: newAccount.id,
               name: newAccount.name,
-              initialBalance: account.initialBalance,
-              initialBalanceDate: account.initialBalanceDate
+              initialBalance: data.initialBalance,
+              initialBalanceDate: data.initialBalanceDate
             }
           });
-        }
-        
-        if (account.accountType === 'Sporiaci účet') {
-            // --- Kategória pre VKLAD na sporenie (Výdavok) ---
-            let expenseParent = categories.find(c => c.name === 'Sporenie' && c.type === 'expense' && !c.parentId);
-            if (!expenseParent) {
-                const parentData = { name: 'Sporenie', type: 'expense', parentId: null, validFrom: account.initialBalanceDate.substring(0, 7) };
-                expenseParent = await addCategory(parentData);
-            }
-
-            if (expenseParent) {
-                const subcategoryData = {
-                    name: account.name,
-                    type: 'expense',
-                    parentId: expenseParent.id,
-                    validFrom: account.initialBalanceDate.substring(0, 7),
-                    dedicatedAccount: newAccount.id
-                };
-                await addCategory(subcategoryData);
-            }
-
-            // --- Kategória pre VÝBER zo sporenia (Príjem) ---
-            let incomeParent = categories.find(c => c.name === 'Príjem zo sporenia' && c.type === 'income' && !c.parentId);
-            if (!incomeParent) {
-                const parentData = { name: 'Príjem zo sporenia', type: 'income', parentId: null, validFrom: account.initialBalanceDate.substring(0, 7) };
-                incomeParent = await addCategory(parentData);
-            }
-
-            if (incomeParent) {
-                const subcategoryData = {
-                    name: account.name,
-                    type: 'income',
-                    parentId: incomeParent.id,
-                    validFrom: account.initialBalanceDate.substring(0, 7),
-                    dedicatedAccount: newAccount.id
-                };
-                await addCategory(subcategoryData);
-            }
         }
 
         addNotification(`Účet "${account.name}" bol pridaný.`, 'success');
@@ -770,7 +683,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         console.error("Chyba pri vytváraní účtu:", e);
         addNotification(`Nepodarilo sa vytvoriť účet: ${e.message}`, 'error');
     }
-  }, [currentWorkspaceId, addNotification, categories, addCategory]);
+  }, [currentWorkspaceId, addNotification, categories, addCategory, allAccounts]);
 
   const updateAccount = useCallback(async (accountToUpdate: Partial<Account> & Pick<Account, 'id'>) => {
     if (!currentWorkspaceId) return;
@@ -793,14 +706,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           newName: name
         }
       });
-
-      // If it's a savings account, find and update the linked category
-      if (originalAccount.accountType === 'Sporiaci účet') {
-          const linkedCategory = allCategories.find(c => c.dedicatedAccount === id);
-          if (linkedCategory && linkedCategory.name !== name) {
-              await updateCategory({ ...linkedCategory, name });
-          }
-      }
       
       // Optimistically update local state
       setAllAccounts(prev => prev.map(acc => acc.id === id ? updatedAccount : acc));
@@ -817,53 +722,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'workspaceId'>) => {
     if (!currentWorkspaceId) return;
 
-    // --- LOGIKA PRE SPORENIE ---
-    const category = categories.find(c => c.id === transaction.categoryId);
-    const isSavingExpense = transaction.type === 'expense' && category?.dedicatedAccount;
-    const isSavingIncome = transaction.type === 'income' && category?.dedicatedAccount;
-
     try {
-      if (isSavingIncome) {
-        // --- LOGIKA PRE VÝBER ZO SPORENIA ---
-        const incomeData = {
-          ...transaction,
-          workspace: currentWorkspaceId,
-          onBudget: true,
+        const data = {
+            ...transaction,
+            amount: Math.round((transaction.amount + Number.EPSILON) * 100) / 100,
+            workspace: currentWorkspaceId,
+            account: transaction.accountId,
+            category: transaction.type !== 'transfer' ? transaction.categoryId : null,
+            destinationAccount: transaction.type === 'transfer' ? transaction.destinationAccountId : null,
+            onBudget: transaction.onBudget !== false, // Default to true
         };
-        const incomeRecord = await transactionService.create(incomeData, noAutoCancel);
 
-        const expenseData = {
-          ...transaction,
-          workspace: currentWorkspaceId,
-          type: 'expense' as TransactionType,
-          accountId: category!.dedicatedAccount!,
-          categoryId: null,
-          onBudget: false,
-          notes: `Výber zo sporenia: ${transaction.notes || category!.name}`,
-          linkedTransaction: incomeRecord.id,
-        };
-        const expenseRecord = await transactionService.create(expenseData, noAutoCancel);
-        
-        const finalIncomeRecord = await transactionService.update(incomeRecord.id, { linkedTransaction: expenseRecord.id }, noAutoCancel);
-
-        setTransactions(prev => [...prev, finalIncomeRecord, expenseRecord]);
-        addNotification('Výber zo sporenia bol úspešne zaevidovaný.', 'success');
-
-      } else {
-          // --- PÔVODNÁ LOGIKA ---
-          const data = {
-              ...transaction,
-              workspace: currentWorkspaceId,
-              account: transaction.accountId,
-              category: transaction.type !== 'transfer' ? transaction.categoryId : null,
-              destinationAccount: transaction.type === 'transfer' ? transaction.destinationAccountId : null,
-              onBudget: transaction.onBudget !== false, // Default to true
-          };
-
-          const newTransaction = await transactionService.create(data);
-          setTransactions(prev => [...prev, newTransaction]);
-          addNotification('Transakcia bola pridaná.', 'success');
-      }
+        const newTransaction = await transactionService.create(data);
+        setTransactions(prev => [...prev, newTransaction]);
+        addNotification('Transakcia bola pridaná.', 'success');
 
       // Spoločné logovanie udalosti (môže sa vylepšiť)
       await systemEventService.create({
@@ -875,8 +747,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       console.error("Chyba pri pridávaní transakcie:", e);
       addNotification(`Nepodarilo sa pridať transakciu: ${e.message}`, 'error');
     }
-
-
   }, [currentWorkspaceId, addNotification, categories]);
 
   const updateTransaction = useCallback(async (updated: Transaction) => {
@@ -885,35 +755,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!originalTransaction) return;
 
     try {
-      if (originalTransaction.linkedTransaction) {
-          const linkedTransaction = transactions.find(t => t.id === originalTransaction.linkedTransaction);
-          if (linkedTransaction) {
-              const updatedRecord = await transactionService.update(id, data, noAutoCancel);
-
-              const notePrefix = originalTransaction.type === 'expense' ? 'Sporenie: ' : 'Výber zo sporenia: ';
-              const linkedPayload = { 
-                  amount: data.amount, 
-                  transactionDate: data.transactionDate,
-                  notes: `${notePrefix}${data.notes || ''}`,
-              };
-              const updatedLinkedRecord = await transactionService.update(linkedTransaction.id, linkedPayload, noAutoCancel);
-              
-              setTransactions(prev => prev.map(t => {
-                  if (t.id === id) return updatedRecord;
-                  if (t.id === linkedTransaction.id) return updatedLinkedRecord;
-                  return t;
-              }));
-          }
-      } else {
-          const payload = { 
-              ...data,
-              account: data.accountId,
-              category: data.type !== 'transfer' ? data.categoryId : null,
-              destinationAccount: data.type === 'transfer' ? data.destinationAccountId : null,
-          };
-          const updatedTransaction = await transactionService.update(id, payload);
-          setTransactions(prev => prev.map(t => t.id === id ? updatedTransaction : t));
-      }
+        const payload = { 
+            ...data,
+            amount: Math.round((data.amount + Number.EPSILON) * 100) / 100,
+            account: data.accountId,
+            category: data.type !== 'transfer' ? data.categoryId : null,
+            destinationAccount: data.type === 'transfer' ? data.destinationAccountId : null,
+        };
+        const updatedTransaction = await transactionService.update(id, payload);
+        setTransactions(prev => prev.map(t => t.id === id ? updatedTransaction : t));
       
       addNotification('Transakcia bola aktualizovaná.', 'success');
       // Logovanie sa tu môže doplniť...
@@ -929,14 +779,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!transactionToDelete) return;
 
     try {
-      if (transactionToDelete.linkedTransaction) {
-          await transactionService.delete(id, noAutoCancel);
-          await transactionService.delete(transactionToDelete.linkedTransaction, noAutoCancel);
-          setTransactions(prev => prev.filter(t => t.id !== id && t.id !== transactionToDelete.linkedTransaction));
-      } else {
-          await transactionService.delete(id);
-          setTransactions(prev => prev.filter(t => t.id !== id));
-      }
+        await transactionService.delete(id);
+        setTransactions(prev => prev.filter(t => t.id !== id));
 
       await systemEventService.create({
         workspace: currentWorkspaceId,
@@ -964,7 +808,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (!hasAmountChanged && !hasNoteChanged) return;
 
         const dataToUpdate: Partial<Budget> = {};
-        if (hasAmountChanged) dataToUpdate.amount = budget.amount;
+        if (hasAmountChanged) dataToUpdate.amount = Math.round((budget.amount! + Number.EPSILON) * 100) / 100;
         if (hasNoteChanged) dataToUpdate.note = budget.note;
         
         const updated = await budgetService.update(existing.id, dataToUpdate);
@@ -981,7 +825,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           workspace: currentWorkspaceId,
           category: budget.categoryId,
           month: budget.month,
-          amount: budget.amount ?? 0,
+          amount: budget.amount ? Math.round((budget.amount + Number.EPSILON) * 100) / 100 : 0,
           note: budget.note || '',
         };
         const newBudget = await budgetService.create(data);

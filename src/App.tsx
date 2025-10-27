@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Accounts from './pages/Accounts';
 import Budgets from './pages/Budgets';
-import Analysis from './pages/Analysis';
 import { useAppContext } from './context/AppContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './pages/Login';
@@ -60,7 +59,6 @@ const AppContent: React.FC = () => {
               <Route path="/transactions" element={<Transactions />} />
               <Route path="/accounts" element={<Accounts />} />
               <Route path="/budgets" element={<Budgets />} />
-              <Route path="/analysis" element={<Analysis />} />
               <Route path="/system-events" element={<SystemEvents />} />
             </>
           ) : (

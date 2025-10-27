@@ -6,6 +6,8 @@ import {
 import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 
+const COLORS = ['#0061A4', '#535F70', '#6B5778', '#00C49F', '#FFBB28', '#FF8042'];
+
 const Dashboard: React.FC = () => {
   const { accounts, transactions, categories, budgets, getAccountBalance, getFinancialSummary } = useAppContext();
   const { theme } = useTheme();
@@ -28,39 +30,24 @@ const Dashboard: React.FC = () => {
     return { currentMonthName: currentName, previousMonthLabel: previousLabel };
   }, []);
 
-  const { 
-    operatingAccounts,
-    savingsAccounts
-  } = useMemo(() => {
-    const operating = accounts.filter(a => a.accountType === 'Štandardný účet');
-    const savings = accounts.filter(a => a.accountType === 'Sporiaci účet');
-    return { operatingAccounts: operating, savingsAccounts: savings };
-  }, [accounts]);
+  const totalBalance = useMemo(() => {
+    return accounts.reduce((sum, account) => sum + getAccountBalance(account.id), 0);
+  }, [accounts, getAccountBalance]);
   
-  const operatingBalance = useMemo(() => {
-    return operatingAccounts.reduce((sum, account) => sum + getAccountBalance(account.id), 0);
-  }, [operatingAccounts, getAccountBalance]);
-
-  const savingsBalance = useMemo(() => {
-    return savingsAccounts.reduce((sum, account) => sum + getAccountBalance(account.id), 0);
-  }, [savingsAccounts, getAccountBalance]);
-  
-  const totalBalance = operatingBalance + savingsBalance;
-  
-  const operatingAccountIds = useMemo(() => new Set(operatingAccounts.map(a => a.id)), [operatingAccounts]);
+  const accountIds = useMemo(() => new Set(accounts.map(a => a.id)), [accounts]);
 
   const budgetTransactions = useMemo(() => 
-    transactions.filter(t => operatingAccountIds.has(t.accountId)),
-    [transactions, operatingAccountIds]
+    transactions.filter(t => accountIds.has(t.accountId)),
+    [transactions, accountIds]
   );
   
   const { 
     monthlyIncome, 
-    monthlyExpenses, 
-    expenseByCategory, 
+    monthlyExpenses,
     monthlyChartData,
     averageMonthlyIncome,
-    averageMonthlyExpense
+    averageMonthlyExpense,
+    pieChartData,
   } = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -107,7 +94,13 @@ const Dashboard: React.FC = () => {
       }
     });
 
-    const expenseData = Object.entries(byCategory).map(([name, value]) => ({ name, value }));
+    const pieChartData = Object.entries(byCategory)
+      .map(([name, value]) => ({
+        name,
+        value: parseFloat(value.toFixed(2)),
+      }))
+      .sort((a, b) => b.value - a.value);
+
     const chartData = Object.entries(lastSixMonthsData).map(([name, values]) => ({ name, ...values }));
     const avgIncome = monthsPassed > 0 ? totalYearIncome / monthsPassed : 0;
     const avgExpense = monthsPassed > 0 ? totalYearExpenses / monthsPassed : 0;
@@ -115,12 +108,13 @@ const Dashboard: React.FC = () => {
     return { 
         monthlyIncome, 
         monthlyExpenses, 
-        expenseByCategory: expenseData, 
+        pieChartData, 
         monthlyChartData: chartData,
         averageMonthlyIncome: avgIncome,
-        averageMonthlyExpense: avgExpense
+        averageMonthlyExpense: avgExpense,
     };
   }, [budgetTransactions, categories, getFinancialSummary]);
+
 
 const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMemo(() => {
     const now = new Date();
@@ -129,19 +123,19 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     const yearStartDate = new Date(currentYear, 0, 1);
 
     // Filter once for performance
-    const allOperatingTransactions = transactions.filter(t => 
-        operatingAccountIds.has(t.accountId) || (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId))
+    const allTransactions = transactions.filter(t => 
+        accountIds.has(t.accountId) || (t.destinationAccountId && accountIds.has(t.destinationAccountId))
     );
 
     // 1. Calculate the precise balance at the beginning of the year
     let yearStartBalance = 0;
-    operatingAccounts.forEach(acc => {
+    accounts.forEach(acc => {
         if (!acc.initialBalanceDate) return;
         const initialDate = new Date(acc.initialBalanceDate);
         if (initialDate < yearStartDate) {
             yearStartBalance += acc.initialBalance || 0;
             
-            const pastTransactions = allOperatingTransactions.filter(t => {
+            const pastTransactions = allTransactions.filter(t => {
                 const tDate = new Date(t.transactionDate);
                 const isForThisAccount = t.accountId === acc.id || t.destinationAccountId === acc.id;
                 return isForThisAccount && tDate >= initialDate && tDate < yearStartDate;
@@ -187,7 +181,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
 
     let runningPlanBalance = yearStartBalance;
     for (let i = 0; i < 12; i++) {
-        operatingAccounts.forEach(acc => {
+        accounts.forEach(acc => {
             if (!acc.initialBalanceDate) return;
             const initialDate = new Date(acc.initialBalanceDate);
             if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
@@ -201,7 +195,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     // --- Actual Balance Calculation (for past months ONLY) ---
     let runningActualBalance = yearStartBalance;
     for (let i = 0; i < currentMonth; i++) { // Loop up to, but NOT including, the current month
-        operatingAccounts.forEach(acc => {
+        accounts.forEach(acc => {
              if (!acc.initialBalanceDate) return;
             const initialDate = new Date(acc.initialBalanceDate);
             if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
@@ -209,16 +203,16 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
             }
         });
         
-        const monthlyTransactions = allOperatingTransactions.filter(t => {
+        const monthlyTransactions = allTransactions.filter(t => {
             const tDate = new Date(t.transactionDate);
             return tDate.getFullYear() === currentYear && tDate.getMonth() === i;
         });
 
         const monthlyDelta = monthlyTransactions.reduce((sum, t) => {
             if (t.type === 'transfer') {
-                if (operatingAccountIds.has(t.accountId)) sum -= t.amount;
-                if (t.destinationAccountId && operatingAccountIds.has(t.destinationAccountId)) sum += t.amount;
-            } else if (operatingAccountIds.has(t.accountId)) {
+                if (accountIds.has(t.accountId)) sum -= t.amount;
+                if (t.destinationAccountId && accountIds.has(t.destinationAccountId)) sum += t.amount;
+            } else if (accountIds.has(t.accountId)) {
                 sum += (t.type === 'income' ? t.amount : -t.amount);
             }
             return sum;
@@ -234,7 +228,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     chartData[currentMonth].forecast = lastKnownActualBalance; // Connect forecast to the last actual point
 
     for (let i = currentMonth; i < 12; i++) {
-        operatingAccounts.forEach(acc => {
+        accounts.forEach(acc => {
              if (!acc.initialBalanceDate) return;
             const initialDate = new Date(acc.initialBalanceDate);
             if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
@@ -268,10 +262,9 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     }
 
     return { chartData, months, currentMonthIndex: currentMonth, yAxisDomain, yAxisTicks };
-}, [accounts, transactions, budgets, categories, operatingAccountIds, operatingAccounts]);
+}, [accounts, transactions, budgets, categories, accountIds]);
 
 
-  const COLORS = ['#0061A4', '#535F70', '#6B5778', '#00C49F', '#FFBB28', '#FF8042'];
   const tickColor = theme === 'dark' ? '#C3C7CF' : '#43474E';
   const tooltipStyles = {
     contentStyle: { 
@@ -288,23 +281,8 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dostupné v rozpočte</h2>
-          <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-1">{operatingBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-        </div>
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Sporenia</h2>
-          <p className="text-3xl font-bold text-light-secondary dark:text-dark-secondary mt-1">{savingsBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-        </div>
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
           <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový majetok</h2>
           <p className="text-3xl font-bold text-light-tertiary dark:text-dark-tertiary mt-1">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový zostatok</h2>
-          <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-1">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
         </div>
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
           <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Príjmy tento mesiac</h2>
@@ -345,11 +323,11 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         </div>
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
           <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface">Výdavky podľa kategórií (Tento mesiac)</h2>
-          {expenseByCategory.length > 0 ? (
+          {pieChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
-                <Pie data={expenseByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={110} fill="#8884d8" labelLine={false} label={{ fill: '#fff', fontSize: 12, fontWeight: 'bold' }}>
-                    {expenseByCategory.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                <Pie data={pieChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={110} fill="#8884d8" labelLine={false} label={{ fill: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+                    {pieChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                 </Pie>
                 <Tooltip {...tooltipStyles} formatter={(value: number) => value.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })} />
                 <Legend wrapperStyle={{ color: tickColor, fontSize: 14 }} />

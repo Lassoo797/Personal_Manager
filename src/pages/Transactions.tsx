@@ -15,7 +15,6 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     const [accountId, setAccountId] = useState(transaction?.accountId || '');
     const [destinationAccountId, setDestinationAccountId] = useState(transaction?.destinationAccountId || '');
     const [error, setError] = useState<string | null>(null);
-    const [dedicatedAccountInfo, setDedicatedAccountInfo] = useState<{ name: string, type: 'income' | 'expense' } | null>(null);
     const dateInputRef = React.useRef<HTMLInputElement>(null);
 
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
@@ -41,32 +40,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             setAccountId(defaultAccount?.id || '');
             setDestinationAccountId('');
         }
-    }, [transaction]);
-
-    // Effect to show info about dedicated (savings) account
-    useEffect(() => {
-        const category = allCategories.find(c => c.id === categoryId);
-        if (category?.dedicatedAccount) {
-            const account = accounts.find(a => a.id === category.dedicatedAccount);
-            if (account) {
-                setDedicatedAccountInfo({ name: account.name, type: category.type as 'income' | 'expense' });
-                // Ak ide o vklad na sporenie, zdrojový účet sa nemení (mal by byť default)
-                // Ak ide o výber zo sporenia, zdrojový účet je sporiaci účet
-                if (category.type === 'income') {
-                    setAccountId(account.id);
-                }
-            }
-        } else {
-            setDedicatedAccountInfo(null);
-            // Ak sa zmení kategória na "nesporiacu", a ide o novú transakciu, vrátime sa k default účtu
-            if (!transaction) {
-                const defaultAccount = accounts.find(a => a.isDefault && a.accountType === 'Štandardný účet');
-                if (defaultAccount) {
-                    setAccountId(defaultAccount.id);
-                }
-            }
-        }
-    }, [categoryId, allCategories, accounts, transaction]);
+    }, [transaction, accounts]);
 
     const filteredCategories = useMemo(() => {
         const transactionMonth = transactionDate.substring(0, 7);
@@ -107,8 +81,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         return subcategories;
     }, [allCategories, type, transactionDate]);
     
-    // Filter accounts for transfers - only standard accounts
-    const standardAccounts = useMemo(() =>
+    const availableAccounts = useMemo(() =>
         accounts.filter((a: Account) => a.accountType === 'Štandardný účet'),
         [accounts]);
 
@@ -176,13 +149,13 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     <div className="relative">
                         <select id="account" value={accountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Z účtu...</option>
-                            {standardAccounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                            {availableAccounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                         </select>
                     </div>
                     <div className="relative">
                         <select id="destinationAccount" value={destinationAccountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setDestinationAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Na účet...</option>
-                            {standardAccounts.filter((a: Account) => a.id !== accountId).map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                            {availableAccounts.filter((a: Account) => a.id !== accountId).map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                         </select>
                     </div>
                 </>
@@ -201,23 +174,9 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     <div className="relative">
                         <select id="account" value={accountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte účet</option>
-                            {standardAccounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                            {availableAccounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                         </select>
                     </div>
-
-                    {dedicatedAccountInfo && (
-                        <div className="relative">
-                            <input 
-                                type="text" 
-                                value={dedicatedAccountInfo.name} 
-                                className={`${formInputStyle} h-14 text-light-onSurfaceVariant/70 dark:text-dark-onSurfaceVariant/70`} 
-                                disabled 
-                            />
-                            <label className={`${formLabelStyle} text-light-onSurfaceVariant/70 dark:text-dark-onSurfaceVariant/70`}>
-                                {dedicatedAccountInfo.type === 'expense' ? 'Na sporiaci účet' : 'Zo sporiaceho účtu'}
-                            </label>
-                        </div>
-                    )}
                 </>
             )}
 
@@ -420,13 +379,12 @@ const Transactions: React.FC = () => {
             <tbody>
               {filteredTransactions.map(t => {
                 const isTransfer = t.type === 'transfer';
-                const isSaving = t.type === 'expense' && t.linkedTransaction;
 
                 return (
                   <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
                     <td className="py-4 px-4">{new Date(t.transactionDate).toLocaleDateString('sk-SK')}</td>
                     <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
-                      {isSaving ? `Sporenie: ${getCategoryDisplayName(t)}` : (isTransfer ? 'Prevod' : getCategoryDisplayName(t))}
+                      {isTransfer ? 'Prevod' : getCategoryDisplayName(t)}
                     </td>
                     <td className="py-4 px-4">{t.notes}</td>
                     <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
@@ -442,7 +400,7 @@ const Transactions: React.FC = () => {
                           <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"><PencilIcon /></button>
                           <button aria-label="Zmazať transakciu" onClick={() => setConfirmModalState({
                             isOpen: true,
-                            message: `Naozaj chcete zmazať túto transakciu? ${isSaving ? 'Týmto sa zmaže aj súvisiaci príjem na sporiacom účte.' : ''}`,
+                            message: `Naozaj chcete zmazať túto transakciu?`,
                             onConfirm: () => {
                               deleteTransaction(t.id);
                               setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
