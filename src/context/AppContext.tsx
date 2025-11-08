@@ -264,39 +264,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     try {
       setIsLoading(true);
-      const filter = pb.filter('workspace = {:workspaceId}', { workspaceId: id });
       
-      const [accountsToDelete, categoriesToDelete, transactionsToDelete, budgetsToDelete] = await Promise.all([
-          accountService.getAll(filter),
-          categoryService.getAll(filter),
-          transactionService.getAll(filter),
-          budgetService.getAll(filter)
-      ]);
-
-      await Promise.all([
-        ...accountsToDelete.map(r => accountService.delete(r.id)),
-        ...categoriesToDelete.map(r => categoryService.delete(r.id)),
-        ...transactionsToDelete.map(r => transactionService.delete(r.id)),
-        ...budgetsToDelete.map(r => budgetService.delete(r.id)),
-      ]);
-
-      await workspaceService.delete(id);
+      await workspaceService.deleteCascade(id);
       
-      await systemEventService.create({
-        workspace: id,
-        type: 'workspace_deleted',
-        details: {
-          workspaceId: id,
-          name: workspaceToDelete.name
-        }
-      });
+      const remainingWorkspaces = workspaces.filter(p => p.id !== id);
+      setWorkspaces(remainingWorkspaces);
 
-      const remaining = workspaces.filter(p => p.id !== id);
-      setWorkspaces(remaining);
       if (currentWorkspaceId === id) {
-        setCurrentWorkspaceId(remaining.length > 0 ? remaining[0].id : null);
+        const newWorkspaceId = remainingWorkspaces.length > 0 ? remainingWorkspaces[0].id : null;
+        setCurrentWorkspaceId(newWorkspaceId);
+        
+        if (!newWorkspaceId) {
+          setAllAccounts([]);
+          setAllCategories([]);
+          setTransactions([]);
+          setBudgets([]);
+        }
       }
-      addNotification('Pracovný priestor a všetky jeho dáta boli zmazané.', 'success');
+      
+      addNotification(`Pracovný priestor "${workspaceToDelete.name}" a všetky jeho dáta boli úspešne zmazané.`, 'success');
+      
     } catch(e: any) {
         setError(e);
         console.error("Chyba pri mazaní pracovného priestoru:", e);

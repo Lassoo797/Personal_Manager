@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
     BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, 
     ComposedChart, Line, CartesianGrid, ReferenceArea
@@ -11,6 +11,7 @@ const COLORS = ['#0061A4', '#535F70', '#6B5778', '#00C49F', '#FFBB28', '#FF8042'
 const Dashboard: React.FC = () => {
   const { accounts, transactions, categories, budgets, getAccountBalance, getFinancialSummary } = useAppContext();
   const { theme } = useTheme();
+  const [displayedYear, setDisplayedYear] = useState(new Date().getFullYear());
 
   const { currentMonthName, previousMonthLabel } = useMemo(() => {
     const now = new Date();
@@ -119,15 +120,13 @@ const Dashboard: React.FC = () => {
 const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth(); // 0-11
-    const yearStartDate = new Date(currentYear, 0, 1);
+    const currentMonth = now.getMonth(); 
+    const yearStartDate = new Date(displayedYear, 0, 1);
 
-    // Filter once for performance
     const allTransactions = transactions.filter(t => 
         accountIds.has(t.accountId) || (t.destinationAccountId && accountIds.has(t.destinationAccountId))
     );
 
-    // 1. Calculate the precise balance at the beginning of the year
     let yearStartBalance = 0;
     accounts.forEach(acc => {
         if (!acc.initialBalanceDate) return;
@@ -154,10 +153,10 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         }
     });
     
-    const months = Array.from({ length: 12 }, (_, i) => new Date(currentYear, i, 1).toLocaleString('sk-SK', { month: 'short' }));
+    const months = Array.from({ length: 12 }, (_, i) => new Date(displayedYear, i, 1).toLocaleString('sk-SK', { month: 'short' }));
     
     const chartData = [{
-        name: (currentYear - 1).toString(),
+        name: (displayedYear - 1).toString(),
         actual: yearStartBalance,
         plan: yearStartBalance,
         forecast: null as number | null
@@ -168,12 +167,11 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         forecast: null as number | null
     }))];
 
-    // --- Plan Calculation ---
     const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
     const monthlyBudgetDeltas = Array(12).fill(0);
     budgets.forEach(b => {
         const [bYear, bMonth] = b.month.split('-').map(Number);
-        if (bYear === currentYear) {
+        if (bYear === displayedYear) {
             const monthIndex = bMonth - 1;
             monthlyBudgetDeltas[monthIndex] += incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount;
         }
@@ -184,7 +182,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         accounts.forEach(acc => {
             if (!acc.initialBalanceDate) return;
             const initialDate = new Date(acc.initialBalanceDate);
-            if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
+            if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) {
                 runningPlanBalance += acc.initialBalance || 0;
             }
         });
@@ -192,20 +190,21 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         chartData[i + 1].plan = runningPlanBalance;
     }
 
-    // --- Actual Balance Calculation (for past months ONLY) ---
     let runningActualBalance = yearStartBalance;
-    for (let i = 0; i < currentMonth; i++) { // Loop up to, but NOT including, the current month
+    const effectiveCurrentMonth = displayedYear === currentYear ? currentMonth : 12;
+
+    for (let i = 0; i < effectiveCurrentMonth; i++) { 
         accounts.forEach(acc => {
              if (!acc.initialBalanceDate) return;
             const initialDate = new Date(acc.initialBalanceDate);
-            if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
+            if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) {
                 runningActualBalance += acc.initialBalance || 0;
             }
         });
         
         const monthlyTransactions = allTransactions.filter(t => {
             const tDate = new Date(t.transactionDate);
-            return tDate.getFullYear() === currentYear && tDate.getMonth() === i;
+            return tDate.getFullYear() === displayedYear && tDate.getMonth() === i;
         });
 
         const monthlyDelta = monthlyTransactions.reduce((sum, t) => {
@@ -222,24 +221,25 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         chartData[i + 1].actual = runningActualBalance;
     }
 
-    // --- Forecast Calculation ---
-    const lastKnownActualBalance = chartData[currentMonth].actual ?? yearStartBalance;
-    let runningForecastBalance = lastKnownActualBalance;
-    chartData[currentMonth].forecast = lastKnownActualBalance; // Connect forecast to the last actual point
+    if (displayedYear >= currentYear) {
+        const lastKnownActualBalanceIndex = effectiveCurrentMonth;
+        const lastKnownActualBalance = chartData[lastKnownActualBalanceIndex].actual ?? yearStartBalance;
+        let runningForecastBalance = lastKnownActualBalance;
+        chartData[lastKnownActualBalanceIndex].forecast = lastKnownActualBalance;
 
-    for (let i = currentMonth; i < 12; i++) {
-        accounts.forEach(acc => {
-             if (!acc.initialBalanceDate) return;
-            const initialDate = new Date(acc.initialBalanceDate);
-            if (initialDate.getFullYear() === currentYear && initialDate.getMonth() === i) {
-                runningForecastBalance += acc.initialBalance || 0;
-            }
-        });
-        runningForecastBalance += monthlyBudgetDeltas[i];
-        chartData[i + 1].forecast = runningForecastBalance;
+        for (let i = lastKnownActualBalanceIndex; i < 12; i++) {
+            accounts.forEach(acc => {
+                if (!acc.initialBalanceDate) return;
+                const initialDate = new Date(acc.initialBalanceDate);
+                if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) {
+                    runningForecastBalance += acc.initialBalance || 0;
+                }
+            });
+            runningForecastBalance += monthlyBudgetDeltas[i];
+            chartData[i + 1].forecast = runningForecastBalance;
+        }
     }
     
-    // --- Y-Axis Domain and Ticks Calculation ---
     const allValues = chartData
         .flatMap(d => [d.actual, d.plan, d.forecast])
         .filter((v): v is number => typeof v === 'number');
@@ -250,19 +250,27 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     if (allValues.length > 0) {
         const dataMin = Math.min(...allValues);
         const dataMax = Math.max(...allValues);
-        const bottom = Math.floor(dataMin / 1000) * 1000;
-        const top = Math.ceil(dataMax / 1000) * 1000;
+        const buffer = (dataMax - dataMin) * 0.1; 
+        const bottom = Math.floor((dataMin - buffer) / 1000) * 1000;
+        const top = Math.ceil((dataMax + buffer) / 1000) * 1000;
         yAxisDomain = [bottom, top];
         
         const ticks = [];
-        for (let i = bottom; i <= top; i += 1000) {
+        const step = Math.max(1000, Math.round((top - bottom) / 5 / 1000) * 1000);
+        for (let i = bottom; i <= top; i += step) {
             ticks.push(i);
         }
         yAxisTicks = ticks;
     }
 
-    return { chartData, months, currentMonthIndex: currentMonth, yAxisDomain, yAxisTicks };
-}, [accounts, transactions, budgets, categories, accountIds]);
+    return { 
+        chartData, 
+        months, 
+        currentMonthIndex: effectiveCurrentMonth, 
+        yAxisDomain, 
+        yAxisTicks 
+    };
+}, [accounts, transactions, budgets, categories, accountIds, displayedYear]);
 
 
   const tickColor = theme === 'dark' ? '#C3C7CF' : '#43474E';
@@ -338,7 +346,27 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
       </div>
       
       <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-        <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface">Vývoj zostatku na účtoch (Tento rok)</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">Vývoj zostatku na účtoch ({displayedYear})</h2>
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => setDisplayedYear(displayedYear - 1)}
+              className="p-1 rounded-full hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"
+              aria-label="Predchádzajúci rok"
+            >
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <span className="text-lg font-semibold">{displayedYear}</span>
+            <button 
+              onClick={() => setDisplayedYear(displayedYear + 1)}
+              disabled={displayedYear === new Date().getFullYear()}
+              className="p-1 rounded-full hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Nasledujúci rok"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+        </div>
         <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#43474E' : '#C3C7CF'} />
@@ -348,8 +376,21 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
                 {...tooltipStyles} 
                 formatter={(value: number, name: string, props) => {
                     const hoveredMonthIndex = months.indexOf(props.payload.name);
+                    const isFutureYear = displayedYear > new Date().getFullYear();
+                    const isCurrentYear = displayedYear === new Date().getFullYear();
+                    const currentMonth = new Date().getMonth();
+
+                    if (name === 'Prognóza' && !isFutureYear) {
+                         if (!isCurrentYear || (hoveredMonthIndex !== -1 && hoveredMonthIndex < currentMonth)) {
+                            return null;
+                         }
+                    }
                     
-                    if (name === 'Prognóza' && (hoveredMonthIndex === -1 || hoveredMonthIndex < currentMonthIndex)) {
+                    if (name === 'Skutočný stav' && isFutureYear) {
+                        return null;
+                    }
+                    
+                    if (name === 'Skutočný stav' && isCurrentYear && hoveredMonthIndex > currentMonth) {
                         return null;
                     }
 
@@ -361,7 +402,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
                 }}
             />
             <Legend wrapperStyle={{ color: tickColor, fontSize: 14 }} />
-            <ReferenceArea x1={previousMonthLabel} x2={currentMonthName} stroke="none" fill={theme === 'dark' ? 'rgba(255, 180, 171, 0.1)' : 'rgba(186, 26, 26, 0.1)'} />
+            {displayedYear === new Date().getFullYear() && <ReferenceArea x1={previousMonthLabel} x2={currentMonthName} stroke="none" fill={theme === 'dark' ? 'rgba(255, 180, 171, 0.1)' : 'rgba(186, 26, 26, 0.1)'} />}
             <Line type="monotone" dataKey="plan" stroke="#ffc658" strokeWidth={2} name="Plán" strokeDasharray="5 5" dot={false} connectNulls />
             <Line type="monotone" dataKey="forecast" stroke={theme === 'dark' ? '#55DDA2' : '#00875A'} strokeWidth={2} name="Prognóza" strokeDasharray="3 7" dot={false} connectNulls />
             <Line type="monotone" dataKey="actual" stroke={theme === 'dark' ? '#9FCAFF' : '#0061A4'} strokeWidth={3} name="Skutočný stav" connectNulls={false} dot={{ r: 4 }} />

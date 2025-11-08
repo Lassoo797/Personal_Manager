@@ -38,7 +38,7 @@ const WorkspaceManager: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const handleDeleteRequest = (workspace: Workspace) => {
         setConfirmModalState({
             isOpen: true,
-            message: `Naozaj chcete natrvalo zmazať pracovný priestor "${workspace.name}"? Týmto sa zmažú všetky súvisiace účty, transakcie a rozpočty.`,
+            message: `Ste si absolútne istý? Zmazaním pracovného priestoru "${workspace.name}" sa natrvalo a nenávratne odstránia všetky priradené dáta vrátane účtov, transakcií, rozpočtov a kategórií. Táto akcia sa nedá vrátiť späť.`,
             onConfirm: () => {
                 deleteWorkspace(workspace.id);
                 setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
