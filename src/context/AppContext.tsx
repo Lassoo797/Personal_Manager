@@ -9,6 +9,7 @@ import { accountService } from '../services/accountService';
 import { transactionService } from '../services/transactionService';
 import { useAuth } from './AuthContext';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { roundToTwoDecimals } from '../lib/utils';
 
 
 // PocketBase options to prevent autocancellation during batch operations
@@ -197,7 +198,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return balance;
     }, 0);
 
-    return (account.initialBalance || 0) + transactionsTotal;
+    return roundToTwoDecimals((account.initialBalance || 0) + transactionsTotal);
   }, [allAccounts, transactions]);
 
   const getFinancialSummary = useCallback((transactionsToSummarize: Transaction[]): { actualIncome: number, actualExpense: number } => {
@@ -422,7 +423,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       // 2. Validácia oproti budgetom
-      const conflictingBudget = budgets.find(b => allRelatedCategoryIds.includes(b.categoryId) && b.month >= archiveMonth);
+      const conflictingBudget = budgets.find(b => allRelatedCategoryIds.includes(b.categoryId) && b.month >= archiveMonth && b.amount > 0);
       if (conflictingBudget) {
         const message = `Kategóriu nie je možné archivovať, pretože ona alebo jej podkategória má v mesiaci ${archiveMonth} alebo neskôr naplánovaný rozpočet.`;
         addNotification(message, 'error');
@@ -432,16 +433,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     // --- Samotná archivácia ---
     try {
-        await Promise.all(allRelatedCategoryIds.map(catId => categoryService.update(catId, { status: 'archived', archivedFrom: archiveMonth }, noAutoCancel)));
+        // Find future budget records with amount 0 to delete
+        const budgetsToDelete = budgets.filter(b => 
+            allRelatedCategoryIds.includes(b.categoryId) && 
+            b.month >= archiveMonth && 
+            b.amount <= 0
+        );
+
+        const deletePromises = budgetsToDelete.map(b => budgetService.delete(b.id, noAutoCancel));
+        const updatePromises = allRelatedCategoryIds.map(catId => categoryService.update(catId, { status: 'archived', archivedFrom: archiveMonth }, noAutoCancel));
+
+        // Execute all updates and deletions in parallel
+        await Promise.all([...updatePromises, ...deletePromises]);
         
         await systemEventService.create({
           workspace: currentWorkspaceId,
           type: 'category_archived',
-          details: { categoryId: id, name: categoryToArchive.name, childrenCount: children.length, archiveMonth }
+          details: { categoryId: id, name: categoryToArchive.name, childrenCount: children.length, archiveMonth, deletedZeroBudgets: budgetsToDelete.length }
         });
 
-        // Update local state
+        // Update local state for both categories and budgets
         setAllCategories(prev => prev.map(c => allRelatedCategoryIds.includes(c.id) ? { ...c, status: 'archived', archivedFrom: archiveMonth } : c));
+        if (budgetsToDelete.length > 0) {
+            const idsToDelete = new Set(budgetsToDelete.map(b => b.id));
+            setBudgets(prev => prev.filter(b => !idsToDelete.has(b.id)));
+        }
         
         addNotification(`Kategória '${categoryToArchive.name}' a jej podkategórie boli archivované od mesiaca ${archiveMonth}.`, 'success');
         return { success: true };
@@ -804,7 +820,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await systemEventService.create({
           workspace: currentWorkspaceId,
           type: 'budget_updated',
-          details: { /* ... logging details ... */ }
+          details: { 
+            budgetId: existing.id,
+            categoryId: existing.categoryId,
+            month: existing.month,
+            oldAmount: existing.amount,
+            newAmount: updated.amount,
+            // You can add note changes here as well if needed
+           }
         });
 
       } else {
@@ -821,7 +844,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await systemEventService.create({
           workspace: currentWorkspaceId,
           type: 'budget_created',
-          details: { /* ... logging details ... */ }
+          details: { 
+            budgetId: newBudget.id,
+            categoryId: newBudget.categoryId,
+            month: newBudget.month,
+            amount: newBudget.amount
+           }
         });
       }
       addNotification('Rozpočet bol uložený.', 'success');

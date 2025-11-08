@@ -6,7 +6,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import type { Transaction, TransactionType, Account, Category } from '../types';
 
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
-    const { accounts, allCategories, addTransaction, updateTransaction } = useAppContext();
+    const { accounts, allCategories, addTransaction, updateTransaction, transactions } = useAppContext();
     const [type, setType] = useState<TransactionType>(transaction?.type || 'expense');
     const [transactionDate, setTransactionDate] = useState(transaction?.transactionDate.slice(0, 10) || new Date().toISOString().slice(0, 10));
     const [notes, setNotes] = useState(transaction?.notes || '');
@@ -42,10 +42,31 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         }
     }, [transaction, accounts]);
 
-    const filteredCategories = useMemo(() => {
+    const { top5Categories, otherCategories } = useMemo(() => {
         const transactionMonth = transactionDate.substring(0, 7);
         
-        // Získame všetky relevantné podkategórie pre daný typ a mesiac
+        // --- Calculate Top 5 Categories ---
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+
+        const recentTransactions = transactions.filter(t => new Date(t.transactionDate) >= threeMonthsAgo && t.type === type && t.categoryId);
+
+        const categoryUsage: { [key: string]: number } = {};
+        recentTransactions.forEach(t => {
+            if(t.categoryId) {
+                categoryUsage[t.categoryId] = (categoryUsage[t.categoryId] || 0) + 1;
+            }
+        });
+        
+        const top5CategoryIds = Object.keys(categoryUsage)
+            .sort((a, b) => categoryUsage[b] - categoryUsage[a])
+            .slice(0, 5);
+
+        const top5Categories = top5CategoryIds.map(id => allCategories.find(c => c.id === id)).filter((c): c is Category => !!c);
+        const top5IdsSet = new Set(top5CategoryIds);
+
+
+        // --- Get All Other Categories ---
         const subcategories = allCategories.filter(c =>
             c.type === type &&
             c.parentId && 
@@ -53,33 +74,29 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             (c.status === 'active' || (c.archivedFrom && c.archivedFrom > transactionMonth))
         );
 
-        // Vytvoríme mapu rodičov pre rýchly prístup k ich dátam (hlavne 'order')
         const parentCategoryMap = new Map<string, Category>(
             allCategories
                 .filter(c => !c.parentId)
                 .map(p => [p.id, p])
         );
 
-        // Zoradíme podkategórie
         subcategories.sort((a, b) => {
             const parentA = parentCategoryMap.get(a.parentId!);
             const parentB = parentCategoryMap.get(b.parentId!);
 
-            // 1. Zoraď podľa poradia rodičovskej kategórie
             const parentOrderA = parentA?.order ?? 999;
             const parentOrderB = parentB?.order ?? 999;
             if (parentOrderA !== parentOrderB) {
                 return parentOrderA - parentOrderB;
             }
 
-            // 2. Ak sú rodičia rovnakí (alebo neexistujú), zoraď podľa poradia podkategórie
             const subcategoryOrderA = a.order ?? 999;
             const subcategoryOrderB = b.order ?? 999;
             return subcategoryOrderA - subcategoryOrderB;
         });
 
-        return subcategories;
-    }, [allCategories, type, transactionDate]);
+        return { top5Categories, otherCategories: subcategories };
+    }, [allCategories, type, transactionDate, transactions]);
     
     const availableAccounts = useMemo(() =>
         accounts.filter((a: Account) => a.accountType === 'Štandardný účet'),
@@ -164,7 +181,12 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     <div className="relative">
                         <select id="category" value={categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCategoryId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
-                            {filteredCategories.map((c: Category) => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{allCategories.find((p: Category) => p.id === c.parentId)?.name} - {c.name}</option>)}
+                            {top5Categories.length > 0 && [
+                                <option key="top-header" disabled className="font-bold text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant dark:bg-dark-surfaceContainerHigh">Najpoužívanejšie</option>,
+                                ...top5Categories.map((c: Category) => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{allCategories.find((p: Category) => p.id === c.parentId)?.name} - {c.name}</option>)
+                            ]}
+                            <option key="all-header" disabled className="font-bold text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant dark:bg-dark-surfaceContainerHigh">Všetky kategórie</option>
+                            {otherCategories.map((c: Category) => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{allCategories.find((p: Category) => p.id === c.parentId)?.name} - {c.name}</option>)}
                         </select>
                     </div>
                     <div className="relative">
@@ -245,7 +267,14 @@ const Transactions: React.FC = () => {
         if (filters.type && t.type !== filters.type) return false;
         return true;
       })
-      .sort((a, b) => new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime());
+      .sort((a, b) => {
+        const dateComparison = new Date(b.transactionDate).getTime() - new Date(a.transactionDate).getTime();
+        if (dateComparison !== 0) {
+          return dateComparison;
+        }
+        // If dates are the same, sort by creation time (newest first)
+        return new Date(b.created).getTime() - new Date(a.created).getTime();
+      });
   }, [transactions, filters]);
 
   const categoryMap = useMemo(() =>

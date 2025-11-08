@@ -28,6 +28,9 @@ export interface Account {
   status: AccountStatus;
   order: number;
   isDefault?: boolean;
+  totalBalance?: number;
+  savedAmount?: number;
+  availableForBudget?: number;
 }
 
 export interface Category {
@@ -40,6 +43,8 @@ export interface Category {
   validFrom: string; // YYYY-MM
   archivedFrom?: string | null; // YYYY-MM
   status: 'active' | 'archived';
+  isSaving?: boolean;
+  savingAccount?: string | null;
 }
 
 export interface Transaction {
@@ -53,6 +58,7 @@ export interface Transaction {
   destinationAccountId?: string | null; // Destination account for transfers
   workspaceId: string;
   onBudget?: boolean; // True if transaction should be included in budgets/stats
+  created: string;
 }
 
 export interface Budget {

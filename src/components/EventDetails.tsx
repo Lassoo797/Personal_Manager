@@ -34,6 +34,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({ event }) => {
         return <span>Zmazaný účet: <strong>{details.name}</strong></span>;
       case 'initial_balance_set':
         return <span>Počiatočný zostatok pre účet <strong>{getAccountName(details.accountId)}</strong> nastavený na <strong>{formatCurrency(details.initialBalance)}</strong></span>;
+      case 'default_account_set':
+        return <span>Účet <strong>{getAccountName(details.accountId)}</strong> bol nastavený ako predvolený.</span>;
         
       // Category Events
       case 'category_created':

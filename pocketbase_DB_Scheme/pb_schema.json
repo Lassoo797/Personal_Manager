@@ -646,6 +646,28 @@
         "presentable": false,
         "system": false,
         "type": "autodate"
+      },
+      {
+        "hidden": false,
+        "id": "bool_is_saving",
+        "name": "isSaving",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "bool"
+      },
+      {
+        "cascadeDelete": false,
+        "collectionId": "pbc_2324088501",
+        "hidden": false,
+        "id": "relation_saving_account",
+        "maxSelect": 1,
+        "minSelect": 0,
+        "name": "savingAccount",
+        "presentable": false,
+        "required": false,
+        "system": false,
+        "type": "relation"
       }
     ],
     "indexes": [],

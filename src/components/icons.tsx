@@ -152,4 +152,16 @@ export const WalletIcon: React.FC<{ className?: string }> = ({ className = "h-6 
     </svg>
 );
 
+export const PiggyBankIcon: React.FC<{ className?: string }> = ({ className = "h-6 w-6" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8.25c-2.488 0-4.5 2.012-4.5 4.5s2.012 4.5 4.5 4.5 4.5-2.012 4.5-4.5-2.012-4.5-4.5-4.5z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 12.75c0-5.25-4.125-9.75-9.375-9.75S3 7.5 3 12.75m18.75 0c0 4.142-3.358 7.5-7.5 7.5s-7.5-3.358-7.5-7.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 12.75h.008v.008H12v-.008z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12.75h.75" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12.75h.75" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 8.25l-1.5-1.5" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18.75 6.75l-1.5 1.5" />
+    </svg>
+);
+
 
