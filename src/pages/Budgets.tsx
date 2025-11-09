@@ -884,7 +884,11 @@ const SubcategoryItem: React.FC<{
 
         if (amount > 0 || (amount === 0 && noteExists)) {
             if (amount !== budgetAmount) {
-                await addOrUpdateBudget({ categoryId: category.id, month: currentMonth, amount: amount, note: budget?.note });
+                const result = await addOrUpdateBudget({ categoryId: category.id, month: currentMonth, amount: amount, note: budget?.note });
+                if (!result.success) {
+                    // Chyba bola zobrazená v kontexte, tu len zabránime zatvoreniu inputu
+                    return;
+                }
             }
         } 
         else if (amount === 0 && !noteExists && budget) {

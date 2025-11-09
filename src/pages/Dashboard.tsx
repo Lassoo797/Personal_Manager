@@ -13,6 +13,16 @@ const Dashboard: React.FC = () => {
   const { theme } = useTheme();
   const [displayedYear, setDisplayedYear] = useState(new Date().getFullYear());
 
+  const maxBudgetYear = useMemo(() => {
+    const budgetYears = budgets.map(b => parseInt(b.month.split('-')[0], 10));
+    return budgetYears.length > 0 ? Math.max(...budgetYears) : new Date().getFullYear();
+  }, [budgets]);
+
+  const minBudgetYear = useMemo(() => {
+    const budgetYears = budgets.map(b => parseInt(b.month.split('-')[0], 10));
+    return budgetYears.length > 0 ? Math.min(...budgetYears) : new Date().getFullYear();
+  }, [budgets]);
+
   const { currentMonthName, previousMonthLabel } = useMemo(() => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -121,93 +131,21 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth(); 
-    const yearStartDate = new Date(displayedYear, 0, 1);
 
     const allTransactions = transactions.filter(t => 
         accountIds.has(t.accountId) || (t.destinationAccountId && accountIds.has(t.destinationAccountId))
     );
-
-    let yearStartBalance = 0;
-    accounts.forEach(acc => {
-        if (!acc.initialBalanceDate) return;
-        const initialDate = new Date(acc.initialBalanceDate);
-        if (initialDate < yearStartDate) {
-            yearStartBalance += acc.initialBalance || 0;
-            
-            const pastTransactions = allTransactions.filter(t => {
-                const tDate = new Date(t.transactionDate);
-                const isForThisAccount = t.accountId === acc.id || t.destinationAccountId === acc.id;
-                return isForThisAccount && tDate >= initialDate && tDate < yearStartDate;
-            });
-
-            const balanceChange = pastTransactions.reduce((sum, t) => {
-                if (t.type === 'transfer') {
-                    if (t.accountId === acc.id) return sum - t.amount;
-                    if (t.destinationAccountId === acc.id) return sum + t.amount;
-                } else if (t.accountId === acc.id) {
-                    return sum + (t.type === 'income' ? t.amount : -t.amount);
-                }
-                return sum;
-            }, 0);
-            yearStartBalance += balanceChange;
-        }
-    });
-    
-    const months = Array.from({ length: 12 }, (_, i) => new Date(displayedYear, i, 1).toLocaleString('sk-SK', { month: 'short' }));
-    
-    const chartData = [{
-        name: (displayedYear - 1).toString(),
-        actual: yearStartBalance,
-        plan: yearStartBalance,
-        forecast: null as number | null
-    }, ...months.map(name => ({
-        name,
-        actual: null as number | null,
-        plan: null as number | null,
-        forecast: null as number | null
-    }))];
-
     const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
-    const monthlyBudgetDeltas = Array(12).fill(0);
-    budgets.forEach(b => {
-        const [bYear, bMonth] = b.month.split('-').map(Number);
-        if (bYear === displayedYear) {
-            const monthIndex = bMonth - 1;
-            monthlyBudgetDeltas[monthIndex] += incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount;
-        }
-    });
 
-    let runningPlanBalance = yearStartBalance;
-    for (let i = 0; i < 12; i++) {
+    const getBalanceUpToDate = (targetDate: Date): number => {
+        let balance = 0;
         accounts.forEach(acc => {
-            if (!acc.initialBalanceDate) return;
-            const initialDate = new Date(acc.initialBalanceDate);
-            if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) {
-                runningPlanBalance += acc.initialBalance || 0;
+            if (acc.initialBalanceDate && new Date(acc.initialBalanceDate) < targetDate) {
+                balance += acc.initialBalance || 0;
             }
         });
-        runningPlanBalance += monthlyBudgetDeltas[i];
-        chartData[i + 1].plan = runningPlanBalance;
-    }
-
-    let runningActualBalance = yearStartBalance;
-    const effectiveCurrentMonth = displayedYear === currentYear ? currentMonth : 12;
-
-    for (let i = 0; i < effectiveCurrentMonth; i++) { 
-        accounts.forEach(acc => {
-             if (!acc.initialBalanceDate) return;
-            const initialDate = new Date(acc.initialBalanceDate);
-            if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) {
-                runningActualBalance += acc.initialBalance || 0;
-            }
-        });
-        
-        const monthlyTransactions = allTransactions.filter(t => {
-            const tDate = new Date(t.transactionDate);
-            return tDate.getFullYear() === displayedYear && tDate.getMonth() === i;
-        });
-
-        const monthlyDelta = monthlyTransactions.reduce((sum, t) => {
+        const relevantTransactions = allTransactions.filter(t => new Date(t.transactionDate) < targetDate);
+        const delta = relevantTransactions.reduce((sum, t) => {
             if (t.type === 'transfer') {
                 if (accountIds.has(t.accountId)) sum -= t.amount;
                 if (t.destinationAccountId && accountIds.has(t.destinationAccountId)) sum += t.amount;
@@ -216,33 +154,211 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
             }
             return sum;
         }, 0);
+        return balance + delta;
+    };
+
+    let yearStartBalance = 0;
+
+    if (displayedYear <= currentYear) {
+        yearStartBalance = getBalanceUpToDate(new Date(displayedYear, 0, 1));
+    } else {
+        const startOfCurrentMonthBalance = getBalanceUpToDate(new Date(currentYear, currentMonth, 1));
         
-        runningActualBalance += monthlyDelta;
-        chartData[i + 1].actual = runningActualBalance;
-    }
+        const currentMonthTransactions = allTransactions.filter(t => new Date(t.transactionDate).getFullYear() === currentYear && new Date(t.transactionDate).getMonth() === currentMonth);
+        const currentMonthBudgets = budgets.filter(b => b.month === `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}`);
+        
+        const categoryData = new Map<string, { plan: number, actual: number, type: 'income' | 'expense' }>();
 
-    if (displayedYear >= currentYear) {
-        const lastKnownActualBalanceIndex = effectiveCurrentMonth;
-        const lastKnownActualBalance = chartData[lastKnownActualBalanceIndex].actual ?? yearStartBalance;
-        let runningForecastBalance = lastKnownActualBalance;
-        chartData[lastKnownActualBalanceIndex].forecast = lastKnownActualBalance;
+        const allCategoryIds = new Set([
+            ...currentMonthBudgets.map(b => b.categoryId),
+            ...currentMonthTransactions.map(t => t.categoryId).filter((id): id is string => !!id)
+        ]);
 
-        for (let i = lastKnownActualBalanceIndex; i < 12; i++) {
-            accounts.forEach(acc => {
-                if (!acc.initialBalanceDate) return;
-                const initialDate = new Date(acc.initialBalanceDate);
-                if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) {
-                    runningForecastBalance += acc.initialBalance || 0;
+        allCategoryIds.forEach(categoryId => {
+            const category = categories.find(c => c.id === categoryId);
+            if(category) {
+                categoryData.set(categoryId, { plan: 0, actual: 0, type: category.type });
+            }
+        });
+
+        currentMonthBudgets.forEach(b => {
+            const data = categoryData.get(b.categoryId);
+            if (data) data.plan = b.amount;
+        });
+
+        currentMonthTransactions.forEach(t => {
+            if (t.type !== 'transfer' && t.categoryId) {
+                const data = categoryData.get(t.categoryId);
+                if (data) data.actual += t.amount;
+            }
+        });
+
+        let effectiveCurrentMonthDelta = 0;
+        categoryData.forEach(data => {
+            const value = Math.max(data.actual, data.plan);
+            if (data.type === 'income') effectiveCurrentMonthDelta += value;
+            else effectiveCurrentMonthDelta -= value;
+        });
+
+        let initialBalanceInCurrentMonth = 0;
+        accounts.forEach(acc => {
+            if (acc.initialBalanceDate) {
+                const d = new Date(acc.initialBalanceDate);
+                if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) initialBalanceInCurrentMonth += acc.initialBalance || 0;
+            }
+        });
+
+        const endOfCurrentMonthForecast = startOfCurrentMonthBalance + effectiveCurrentMonthDelta + initialBalanceInCurrentMonth;
+
+        let forecastForEndOfYear = endOfCurrentMonthForecast;
+        for (let m = currentMonth + 1; m < 12; m++) {
+            budgets.forEach(b => {
+                const [bYear, bMonth] = b.month.split('-').map(Number);
+                if (bYear === currentYear && (bMonth - 1) === m) {
+                    forecastForEndOfYear += incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount;
                 }
             });
-            runningForecastBalance += monthlyBudgetDeltas[i];
+            accounts.forEach(acc => {
+                if (acc.initialBalanceDate) {
+                    const d = new Date(acc.initialBalanceDate);
+                    if (d.getFullYear() === currentYear && d.getMonth() === m) forecastForEndOfYear += acc.initialBalance || 0;
+                }
+            });
+        }
+        
+        let runningProjectedBalance = forecastForEndOfYear;
+        for (let year = currentYear + 1; year < displayedYear; year++) {
+            const yearBudgets = budgets.filter(b => b.month.startsWith(year.toString()));
+            runningProjectedBalance += yearBudgets.reduce((sum, b) => sum + (incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount), 0);
+            accounts.forEach(acc => {
+                if(acc.initialBalanceDate) {
+                    const d = new Date(acc.initialBalanceDate);
+                    if (d.getFullYear() === year) runningProjectedBalance += acc.initialBalance || 0;
+                }
+            });
+        }
+        yearStartBalance = runningProjectedBalance;
+    }
+    
+    const months = Array.from({ length: 12 }, (_, i) => new Date(displayedYear, i, 1).toLocaleString('sk-SK', { month: 'short' }));
+    
+    const chartData = [{
+        name: (displayedYear - 1).toString(),
+        actual: yearStartBalance, plan: yearStartBalance, forecast: null as number | null,
+    }, ...months.map(name => ({
+        name, actual: null as number | null, plan: null as number | null, forecast: null as number | null
+    }))];
+
+    const monthlyBudgetDeltas = Array(12).fill(0);
+    budgets.forEach(b => {
+        const [bYear, bMonth] = b.month.split('-').map(Number);
+        if (bYear === displayedYear) {
+            monthlyBudgetDeltas[bMonth - 1] += incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount;
+        }
+    });
+
+    let runningPlanBalance = yearStartBalance;
+    for (let i = 0; i < 12; i++) {
+        accounts.forEach(acc => {
+            if (acc.initialBalanceDate) {
+                const initialDate = new Date(acc.initialBalanceDate);
+                if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) runningPlanBalance += acc.initialBalance || 0;
+            }
+        });
+        runningPlanBalance += monthlyBudgetDeltas[i];
+        chartData[i + 1].plan = runningPlanBalance;
+    }
+    
+    if (displayedYear <= currentYear) {
+        let runningActualBalance = yearStartBalance;
+        const effectiveMonthCount = displayedYear < currentYear ? 12 : currentMonth;
+        for (let i = 0; i < effectiveMonthCount; i++) { 
+            accounts.forEach(acc => {
+                if (acc.initialBalanceDate) {
+                    const initialDate = new Date(acc.initialBalanceDate);
+                    if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) runningActualBalance += acc.initialBalance || 0;
+                }
+            });
+            const monthlyTransactions = allTransactions.filter(t => new Date(t.transactionDate).getFullYear() === displayedYear && new Date(t.transactionDate).getMonth() === i);
+            const monthlyDelta = monthlyTransactions.reduce((sum, t) => {
+                if (t.type === 'transfer') {
+                    if (accountIds.has(t.accountId)) sum -= t.amount;
+                    if (t.destinationAccountId && accountIds.has(t.destinationAccountId)) sum += t.amount;
+                } else if (accountIds.has(t.accountId)) { sum += (t.type === 'income' ? t.amount : -t.amount); }
+                return sum;
+            }, 0);
+            runningActualBalance += monthlyDelta;
+            chartData[i + 1].actual = runningActualBalance;
+        }
+    }
+
+    if (displayedYear === currentYear) {
+        const startOfCurrentMonthBalance = chartData[currentMonth].actual ?? getBalanceUpToDate(new Date(currentYear, currentMonth, 1));
+        chartData[currentMonth].forecast = startOfCurrentMonthBalance;
+        
+        const currentMonthTransactions = allTransactions.filter(t => new Date(t.transactionDate).getFullYear() === currentYear && new Date(t.transactionDate).getMonth() === currentMonth);
+        const currentMonthBudgets = budgets.filter(b => b.month === `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}`);
+        
+        const categoryData = new Map<string, { plan: number, actual: number, type: 'income' | 'expense' }>();
+        const allCategoryIds = new Set([
+            ...currentMonthBudgets.map(b => b.categoryId),
+            ...currentMonthTransactions.map(t => t.categoryId).filter((id): id is string => !!id)
+        ]);
+
+        allCategoryIds.forEach(categoryId => {
+            const category = categories.find(c => c.id === categoryId);
+            if(category) {
+                categoryData.set(categoryId, { plan: 0, actual: 0, type: category.type });
+            }
+        });
+
+        currentMonthBudgets.forEach(b => {
+            const data = categoryData.get(b.categoryId);
+            if (data) data.plan = b.amount;
+        });
+
+        currentMonthTransactions.forEach(t => {
+            if (t.type !== 'transfer' && t.categoryId) {
+                const data = categoryData.get(t.categoryId);
+                if (data) data.actual += t.amount;
+            }
+        });
+
+        let effectiveCurrentMonthDelta = 0;
+        categoryData.forEach(data => {
+            const value = Math.max(data.actual, data.plan);
+            if (data.type === 'income') effectiveCurrentMonthDelta += value;
+            else effectiveCurrentMonthDelta -= value;
+        });
+        
+        let initialBalanceInCurrentMonth = 0;
+        accounts.forEach(acc => {
+            if (acc.initialBalanceDate) {
+                const d = new Date(acc.initialBalanceDate);
+                if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) initialBalanceInCurrentMonth += acc.initialBalance || 0;
+            }
+        });
+        
+        const endOfCurrentMonthForecast = startOfCurrentMonthBalance + effectiveCurrentMonthDelta + initialBalanceInCurrentMonth;
+        chartData[currentMonth + 1].forecast = endOfCurrentMonthForecast;
+        
+        let runningForecastBalance = endOfCurrentMonthForecast;
+        for (let i = currentMonth + 1; i < 12; i++) {
+            let monthlyInitialBalance = 0;
+            accounts.forEach(acc => {
+                if (acc.initialBalanceDate) {
+                    const initialDate = new Date(acc.initialBalanceDate);
+                    if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) monthlyInitialBalance += acc.initialBalance || 0;
+                }
+            });
+            runningForecastBalance += monthlyInitialBalance + monthlyBudgetDeltas[i];
             chartData[i + 1].forecast = runningForecastBalance;
         }
     }
     
     const allValues = chartData
         .flatMap(d => [d.actual, d.plan, d.forecast])
-        .filter((v): v is number => typeof v === 'number');
+        .filter((v): v is number => v !== null);
 
     let yAxisDomain: [number, number] = [0, 5000];
     let yAxisTicks: number[] = [0, 1000, 2000, 3000, 4000, 5000];
@@ -257,8 +373,10 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         
         const ticks = [];
         const step = Math.max(1000, Math.round((top - bottom) / 5 / 1000) * 1000);
-        for (let i = bottom; i <= top; i += step) {
-            ticks.push(i);
+        if (step > 0) {
+            for (let i = bottom; i <= top; i += step) {
+                ticks.push(i);
+            }
         }
         yAxisTicks = ticks;
     }
@@ -266,7 +384,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     return { 
         chartData, 
         months, 
-        currentMonthIndex: effectiveCurrentMonth, 
+        currentMonthIndex: displayedYear === currentYear ? currentMonth : -1, 
         yAxisDomain, 
         yAxisTicks 
     };
@@ -351,7 +469,8 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
           <div className="flex items-center space-x-2">
             <button 
               onClick={() => setDisplayedYear(displayedYear - 1)}
-              className="p-1 rounded-full hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"
+              disabled={displayedYear <= minBudgetYear}
+              className="p-1 rounded-full hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Predchádzajúci rok"
             >
              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -359,7 +478,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
             <span className="text-lg font-semibold">{displayedYear}</span>
             <button 
               onClick={() => setDisplayedYear(displayedYear + 1)}
-              disabled={displayedYear === new Date().getFullYear()}
+              disabled={displayedYear >= maxBudgetYear}
               className="p-1 rounded-full hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label="Nasledujúci rok"
             >
