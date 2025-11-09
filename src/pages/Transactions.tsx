@@ -102,7 +102,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         accounts.filter((a: Account) => a.accountType === 'Štandardný účet'),
         [accounts]);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = (e: React.FormEvent, keepOpen: boolean = false) => {
         e.preventDefault();
         setError(null);
         
@@ -139,11 +139,34 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         } else {
             addTransaction(transactionData);
         }
-        onSave();
+        
+        if (keepOpen) {
+            // Reset form but keep date
+            const defaultAccount = accounts.find(a => a.isDefault && a.accountType === 'Štandardný účet');
+            setType('expense');
+            // transactionDate is kept
+            setNotes('');
+            setAmount('');
+            setCategoryId('');
+            setAccountId(defaultAccount?.id || '');
+            setDestinationAccountId('');
+        } else {
+            onSave();
+        }
+    };
+
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLFormElement>) => {
+        if (event.key === 'Enter' && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+            // Check if the focused element is not a button to avoid double submission
+            if (document.activeElement?.tagName.toLowerCase() !== 'button') {
+                event.preventDefault();
+                handleSubmit(event, true);
+            }
+        }
     };
 
     return (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-6">
             <div>
                 <label className="block text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-2">Typ transakcie</label>
                 <div className="flex rounded-full border-2 border-light-outline dark:border-dark-outline overflow-hidden">
@@ -210,6 +233,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             {error && <p className="text-sm text-light-error dark:text-dark-error">{error}</p>}
             <div className="flex justify-end space-x-2 pt-4">
                 <button type="button" onClick={onCancel} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
+                <button type="button" onClick={(e) => handleSubmit(e, true)} className="px-6 py-2.5 bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer rounded-full hover:shadow-lg font-medium transition-shadow">Uložiť a nová</button>
                 <button type="submit" className="px-6 py-2.5 bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary rounded-full hover:shadow-lg font-medium transition-shadow">Uložiť</button>
             </div>
         </form>
