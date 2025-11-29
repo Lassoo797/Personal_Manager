@@ -1,6 +1,5 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import Transactions from './pages/Transactions';
 import Accounts from './pages/Accounts';
@@ -11,6 +10,7 @@ import LoginPage from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationsContainer from './components/Notifications';
 import SystemEvents from './pages/SystemEvents';
+import Layout from './components/Layout';
 
 const App: React.FC = () => {
   return (
@@ -71,13 +71,10 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-light-surface dark:bg-dark-surface text-light-onSurface dark:text-dark-onSurface">
-      {user && <Header />}
-      <main className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-        {renderContent()}
-      </main>
+    <Layout>
+      {renderContent()}
       <NotificationsContainer />
-    </div>
+    </Layout>
   );
 };
 

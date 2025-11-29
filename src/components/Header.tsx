@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { NavLink } from 'react-router-dom';
-import { MenuIcon, XIcon, ChevronDownIcon, UserCircleIcon, ArrowRightOnRectangleIcon } from './icons';
+import { MenuIcon, ChevronDownIcon, UserCircleIcon, ArrowRightOnRectangleIcon } from './icons';
 import ThemeSwitcher from './ThemeSwitcher';
 import { useAppContext } from '../context/AppContext';
 import Modal from './Modal';
@@ -77,8 +76,11 @@ const UserMenu: React.FC<{
   );
 };
 
-const Header: React.FC = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+interface HeaderProps {
+    onMenuClick: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -110,31 +112,20 @@ const Header: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [dropdownRef]);
 
-
-  const linkClasses = "px-3 py-2 rounded-full text-sm font-medium transition-colors";
-  const activeLinkClasses = "bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer";
-  const inactiveLinkClasses = "text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest";
-
-  const getNavLinkClass = ({ isActive }: { isActive: boolean }) => 
-    `${linkClasses} ${isActive ? activeLinkClasses : inactiveLinkClasses}`;
-
-  const navLinks = (
-    <>
-      <NavLink to="/" className={getNavLinkClass}>Nástenka</NavLink>
-      <NavLink to="/transactions" className={getNavLinkClass}>Transakcie</NavLink>
-      <NavLink to="/budgets" className={getNavLinkClass}>Rozpočty</NavLink>
-      <NavLink to="/accounts" className={getNavLinkClass}>Účty</NavLink>
-      <NavLink to="/system-events" className={getNavLinkClass}>Systémové Udalosti</NavLink>
-    </>
-  );
-
   return (
     <>
       <header className="bg-light-surface dark:bg-dark-surface sticky top-0 z-30 border-b border-light-outlineVariant dark:border-dark-outlineVariant">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
-              <div className="flex-shrink-0">
+                <button
+                    onClick={onMenuClick}
+                    className="p-2 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh focus:outline-none md:hidden"
+                    aria-label="Open sidebar"
+                >
+                    <MenuIcon />
+                </button>
+              <div className="flex-shrink-0 ml-4 md:ml-0">
                 <div className="relative" ref={dropdownRef}>
                   <button 
                     onClick={() => setIsWorkspaceDropdownOpen((prev: boolean) => !prev)}
@@ -179,13 +170,6 @@ const Header: React.FC = () => {
                   )}
                 </div>
               </div>
-              {currentWorkspaceId && (
-                <div className="hidden md:block">
-                  <div className="ml-10 flex items-baseline space-x-1">
-                    {navLinks}
-                  </div>
-                </div>
-              )}
             </div>
             <div className="flex items-center space-x-2">
               <span className="text-xs text-green-500">
@@ -207,32 +191,9 @@ const Header: React.FC = () => {
                    />
                 </div>
               )}
-
-              {currentWorkspaceId && (
-                <div className="-mr-2 flex md:hidden">
-                  <button
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    type="button"
-                    className="inline-flex items-center justify-center p-2 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh focus:outline-none"
-                    aria-controls="mobile-menu"
-                    aria-expanded="false"
-                  >
-                    <span className="sr-only">Otvoriť hlavné menu</span>
-                    {isMobileMenuOpen ? <XIcon /> : <MenuIcon />}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
-
-        {isMobileMenuOpen && currentWorkspaceId && (
-          <div className="md:hidden" id="mobile-menu">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 flex flex-col items-start">
-              {navLinks}
-            </div>
-          </div>
-        )}
       </header>
       <Modal isOpen={isWorkspaceModalOpen} onClose={() => setIsWorkspaceModalOpen(false)} title="Správa pracovných priestorov">
           <WorkspaceManager onClose={() => setIsWorkspaceModalOpen(false)} />
