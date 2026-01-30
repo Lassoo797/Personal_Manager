@@ -43,8 +43,6 @@ export interface Category {
   validFrom: string; // YYYY-MM
   archivedFrom?: string | null; // YYYY-MM
   status: 'active' | 'archived';
-  isSaving?: boolean;
-  savingAccount?: string | null;
 }
 
 export interface Transaction {

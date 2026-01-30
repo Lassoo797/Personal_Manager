@@ -217,54 +217,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- Start of new calculation logic ---
 
-  const calculateTotalSavings = useCallback((untilMonth: string): number => {
-    const savingCategoryIds = new Set(allCategories.filter(c => c.isSaving).map(c => c.id));
-    
-    const totalSavedAmount = budgets.reduce((sum, budget) => {
-      if (savingCategoryIds.has(budget.categoryId) && budget.month <= untilMonth) {
-        sum += budget.amount;
-      }
-      return sum;
-    }, 0);
-
-    return roundToTwoDecimals(totalSavedAmount);
-  }, [allCategories, budgets]);
-
-  const calculateProjectedAvailableBalance = useCallback((targetMonth: string): number => {
-    const currentDate = new Date();
-    const currentMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-    
-    // 1. Zisti aktuálny reálny zostatok na všetkých účtoch
-    const totalCurrentBalance = allAccounts
-      .filter(a => a.status === 'active')
-      .reduce((sum, account) => sum + getAccountBalance(account.id), 0);
-
-    // 2. Vypočítaj plánované príjmy a výdavky odTERAZ do cieľového mesiaca
-    const nonSavingCategoryIds = new Set(allCategories.filter(c => !c.isSaving).map(c => c.id));
-    const incomeCategoryIds = new Set(allCategories.filter(c => c.type === 'income').map(c => c.id));
-
-    let projectedNetIncome = 0;
-    budgets.forEach(budget => {
-      // Zahrň rozpočty od aktuálneho mesiaca (vrátane) do cieľového mesiaca (vrátane)
-      if (nonSavingCategoryIds.has(budget.categoryId) && budget.month >= currentMonth && budget.month <= targetMonth) {
-        if (incomeCategoryIds.has(budget.categoryId)) {
-          projectedNetIncome += budget.amount; // Príjem
-        } else {
-          projectedNetIncome -= budget.amount; // Výdavok
-        }
-      }
-    });
-
-    // 3. Vypočítaj celkovú sumu, ktorá už je našetrená (v minulosti a teraz)
-    const totalPastAndCurrentSavings = calculateTotalSavings(targetMonth);
-
-    // Výsledok: Aktuálny zostatok + budúce čisté príjmy - už našetrená suma
-    const availableBalance = totalCurrentBalance + projectedNetIncome - totalPastAndCurrentSavings;
-    
-    return roundToTwoDecimals(availableBalance);
-
-  }, [allAccounts, allCategories, budgets, getAccountBalance, calculateTotalSavings]);
-
   // --- End of new calculation logic ---
 
   // --- Workspace Management ---
@@ -696,7 +648,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!currentWorkspaceId) return;
 
     try {
-        const siblings = allAccounts.filter(a => a.accountType === account.accountType);
+        const siblings = allAccounts.filter(a => a.type === account.type);
         const newOrder = siblings.length > 0 ? Math.max(...siblings.map(a => a.order || 0)) + 1 : 0;
 
         const data = {
@@ -861,14 +813,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const amountChange = newAmount - oldAmount;
 
     // --- Validácia pre sporiace kategórie ---
-    if (category?.isSaving && amountChange > 0) {
-      const availableFunds = calculateProjectedAvailableBalance(budget.month);
-      if (amountChange > availableFunds) {
-        const message = `Plánovanú sumu nie je možné uložiť. Prekračuje dostupné prostriedky (${availableFunds.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}) o ${(amountChange - availableFunds).toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}.`;
-        addNotification(message, 'error');
-        return { success: false, message };
-      }
-    }
     // --- Koniec validácie ---
 
     try {
@@ -927,7 +871,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addNotification(message, 'error');
       return { success: false, message };
     }
-  }, [currentWorkspaceId, budgets, allCategories, calculateProjectedAvailableBalance, addNotification]);
+  }, [currentWorkspaceId, budgets, allCategories, addNotification]);
   
   const deleteBudget = useCallback(async(id:string) => {
     if (!currentWorkspaceId) return;
@@ -1083,8 +1027,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     notifications, addNotification, removeNotification,
     getFinancialSummary,
-    calculateProjectedAvailableBalance, 
-    calculateTotalSavings
   ]);
 
   return (

@@ -86,7 +86,7 @@ const AccountForm: React.FC<{
     const [initialBalance, setInitialBalance] = useState(account?.initialBalance?.toString() || '0');
     const [initialBalanceDate, setInitialBalanceDate] = useState(account?.initialBalanceDate?.slice(0,10) || new Date().toISOString().slice(0, 10));
     const [currency, setCurrency] = useState<'EUR' | 'USD' | 'CZK'>(account?.currency || 'EUR');
-    const [accountType, setAccountType] = useState<AccountType>(account?.accountType || 'Štandardný účet');
+    const [accountType, ] = useState<AccountType>(account?.accountType || 'Štandardný účet');
     const [type, setType] = useState<AccountSubtype>(account?.type || 'Bankový účet');
     
     const dateInputRef = useRef<HTMLInputElement>(null);
@@ -102,7 +102,7 @@ const AccountForm: React.FC<{
             if (!name || !account) return;
             // Note: Editing initial balance might need more complex logic, e.g., creating a corrective transaction.
             // For now, we only allow updating descriptive fields.
-            updateAccount({ id: account.id, name, currency, accountType, type });
+            updateAccount({ id: account.id, name, currency, type });
         } else {
             if (!name) return;
             
@@ -172,12 +172,10 @@ const AccountListItem: React.FC<{
   account: Account;
   index: number;
   accountsCount: number;
-  isExpanded: boolean;
-  onToggle: () => void;
-}> = ({ account, index, accountsCount, isExpanded, onToggle }) => {
+}> = ({ account, index, accountsCount }) => {
   const { 
     getAccountBalance, moveAccountUp, moveAccountDown, 
-    archiveAccount, setDefaultAccount, allCategories, budgets, transactions 
+    archiveAccount, setDefaultAccount
   } = useAppContext();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -185,56 +183,9 @@ const AccountListItem: React.FC<{
   const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
-  const { totalBalance, availableForBudget, savingDetails } = useMemo(() => {
-    const totalBalance = getAccountBalance(account.id);
-    const today = new Date();
-    
-    const savingCategories = allCategories.filter(c => 
-      c.isSaving && c.savingAccount === account.id && c.type === 'expense'
-    );
-
-    const details: { categoryId: string, categoryName: string, saved: number }[] = [];
-    let totalSavedAmount = 0;
-
-    savingCategories.forEach(cat => {
-      let totalSavedForCategory = 0;
-      const startDate = new Date(cat.validFrom);
-      // Loop until the start of the month after the archive date, or the current month.
-      const endDate = cat.archivedFrom ? new Date(cat.archivedFrom) : new Date(today.getFullYear(), today.getMonth() + 1, 1);
-
-      // Iterate through each month the category was active
-      for (let d = startDate; d < endDate; d.setMonth(d.getMonth() + 1)) {
-        const monthStr = d.toISOString().slice(0, 7);
-
-        // Don't calculate for future months
-        if (monthStr > today.toISOString().slice(0,7)) continue;
-        
-        const budget = budgets.find(b => b.categoryId === cat.id && b.month === monthStr);
-        const budgetAmount = budget?.amount || 0;
-
-        if (budgetAmount > 0) {
-            const spentAmount = transactions
-            .filter(t => t.categoryId === cat.id && t.transactionDate.startsWith(monthStr))
-            .reduce((sum, t) => sum + t.amount, 0);
-            
-            const savedInMonth = budgetAmount - spentAmount;
-
-            if (savedInMonth > 0) {
-                totalSavedForCategory += savedInMonth;
-            }
-        }
-      }
-
-      if (totalSavedForCategory > 0) {
-        totalSavedAmount += totalSavedForCategory;
-        details.push({ categoryId: cat.id, categoryName: cat.name, saved: totalSavedForCategory });
-      }
-    });
-    
-    const availableForBudget = totalBalance - totalSavedAmount;
-
-    return { totalBalance, availableForBudget, savingDetails: details };
-  }, [account.id, getAccountBalance, allCategories, budgets, transactions]);
+  const totalBalance = useMemo(() => {
+    return getAccountBalance(account.id);
+  }, [account.id, getAccountBalance]);
 
   const openEditModal = (acc: Account) => {
     setEditingAccount(acc);
@@ -250,7 +201,7 @@ const AccountListItem: React.FC<{
   return (
     <>
       <li className="flex flex-col hover:bg-light-surfaceContainer dark:hover:bg-dark-surfaceContainer transition-colors duration-150">
-        <div onClick={onToggle} className="p-4 flex items-center justify-between cursor-pointer">
+        <div className="p-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <div className="p-3 bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full">
               <AccountIcon type={account.type} />
@@ -318,32 +269,6 @@ const AccountListItem: React.FC<{
             </div>
           </div>
         </div>
-        {isExpanded && (
-          <div className="pb-4 px-6">
-            <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 rounded-lg">
-                <ul className="space-y-2">
-                    <li className="flex justify-between items-center">
-                        <span>Voľné prostriedky</span>
-                        <span>{availableForBudget.toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}</span>
-                    </li>
-                    <li className="flex justify-between items-center">
-                        <span>Viazané prostriedky</span>
-                        <span>{(totalBalance - availableForBudget).toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}</span>
-                    </li>
-                    {savingDetails.length > 0 && (
-                      <ul className="pl-4 pt-1 space-y-1">
-                        {savingDetails.map(detail => (
-                            <li key={detail.categoryId} className="flex justify-between items-center text-sm">
-                                <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{detail.categoryName}</span>
-                                <span>{detail.saved.toLocaleString('sk-SK', { style: 'currency', currency: account.currency })}</span>
-                            </li>
-                        ))}
-                      </ul>
-                    )}
-                </ul>
-            </div>
-          </div>
-        )}
       </li>
       {isModalOpen && (
         <Modal isOpen={isModalOpen} onClose={closeModal} title="Upraviť účet">
@@ -369,9 +294,7 @@ const AccountListItem: React.FC<{
 const AccountList: React.FC<{
   accounts: Account[];
   title: string;
-  expandedAccountId: string | null;
-  onToggleExpand: (accountId: string) => void;
-}> = ({ accounts, title, expandedAccountId, onToggleExpand }) => (
+}> = ({ accounts, title }) => (
   <div>
     <h2 className="text-2xl font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pt-6 pb-4">{title}</h2>
     <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant overflow-hidden">
@@ -382,8 +305,6 @@ const AccountList: React.FC<{
             account={account}
             index={index}
             accountsCount={accounts.length}
-            isExpanded={expandedAccountId === account.id}
-            onToggle={() => onToggleExpand(account.id)}
           />
         ))}
       </ul>
@@ -395,11 +316,6 @@ const Accounts: React.FC = () => {
   const { accounts, getAccountBalance } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [expandedAccountId, setExpandedAccountId] = useState<string | null>(null);
-  
-  const handleToggleExpand = (accountId: string) => {
-    setExpandedAccountId(prevId => (prevId === accountId ? null : accountId));
-  };
   
   const openAddModal = () => {
     setEditingAccount(null);
@@ -438,8 +354,6 @@ const Accounts: React.FC = () => {
         <AccountList 
           accounts={accounts} 
           title="Všetky účty"
-          expandedAccountId={expandedAccountId}
-          onToggleExpand={handleToggleExpand}
         />
       )}
       

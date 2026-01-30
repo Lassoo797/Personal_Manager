@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 
 import { useAppContext } from '../context/AppContext';
 import type { TransactionType, Category, Budget } from '../types';
-import { PlusIcon, ArchiveBoxIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon, ChatBubbleLeftIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, PiggyBankIcon } from '../components/icons';
+import { PlusIcon, ArchiveBoxIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon, ChatBubbleLeftIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '../components/icons';
 import Modal from '../components/Modal';
 import { roundToTwoDecimals } from '../lib/utils';
 
@@ -158,11 +158,11 @@ const InlineCategoryForm: React.FC<{
 }> = ({ type, parentId, validFrom, onCancel, onSaveSuccess }) => {
     const { addCategory } = useAppContext();
     const [name, setName] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
+    const [_isSaving, setIsSaving] = useState(false);
     
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (name.trim() && !isSaving) {
+        if (name.trim()) {
             setIsSaving(true);
             const newCategory = await addCategory({ name: name.trim(), type, parentId, validFrom });
             setIsSaving(false);
@@ -177,8 +177,8 @@ const InlineCategoryForm: React.FC<{
         <form onSubmit={handleSubmit} className="flex items-center space-x-2 p-4">
             <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder={parentId ? "Názov podkategórie" : "Názov skupiny"}
                 className="flex-grow bg-light-surface dark:bg-dark-surface text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 text-sm" autoFocus />
-            <button type="submit" disabled={isSaving} className="px-4 py-2 bg-light-primary text-light-onPrimary rounded-full text-sm font-medium disabled:bg-gray-400">
-                {isSaving ? 'Ukladám...' : 'Uložiť'}
+            <button type="submit" className="px-4 py-2 bg-light-primary text-light-onPrimary rounded-full text-sm font-medium disabled:bg-gray-400">
+                Uložiť
             </button>
             <button type="button" onClick={onCancel} className="p-2 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"><XIcon className="h-5 w-5"/></button>
         </form>
@@ -206,7 +206,6 @@ const Budgets: React.FC = () => {
     const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>({ isOpen: false, message: '', onConfirm: () => {}, confirmText: 'Archivovať' });
     const [archiveModalState, setArchiveModalState] = useState<{ isOpen: boolean, category: Category | null }>({ isOpen: false, category: null });
     const [noteModalState, setNoteModalState] = useState<{ isOpen: boolean, budget: Budget | null, categoryId: string | null, month: string | null }>({ isOpen: false, budget: null, categoryId: null, month: null });
-    const [savingSettingsModalState, setSavingSettingsModalState] = useState<{ isOpen: boolean, category: Category | null }>({ isOpen: false, category: null });
     
     
     const handleSaveSuccess = (newCategory: Category) => {
@@ -361,7 +360,6 @@ const Budgets: React.FC = () => {
                             toggleExpansion={() => toggleGroupExpansion(parent.id)}
                             setConfirmModalState={setConfirmModalState}
                             setNoteModalState={setNoteModalState}
-                            setSavingSettingsModalState={setSavingSettingsModalState}
                         />
                     </div>
                 ))}
@@ -622,11 +620,6 @@ const Budgets: React.FC = () => {
                     categoryId={noteModalState.categoryId}
                     month={noteModalState.month}
                 />
-                <SavingSettingsModal
-                    isOpen={savingSettingsModalState.isOpen}
-                    onClose={() => setSavingSettingsModalState({ isOpen: false, category: null })}
-                    category={savingSettingsModalState.category}
-                />
             </div>
         </>
     );
@@ -649,13 +642,12 @@ interface CategoryGroupProps {
     isDragging: boolean;
     setConfirmModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>>;
     setNoteModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, budget: Budget | null, categoryId: string | null, month: string | null }>>;
-    setSavingSettingsModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, category: Category | null }>>;
 }
 
 const CategoryGroup: React.FC<CategoryGroupProps> = ({ 
     parent, parentIndex, siblingsCount, categories, currentMonth, getActualAmount, onArchiveRequest, 
     onAddSubcategory, isAddingSubcategory, onCancelAddSubcategory, onSaveSubcategorySuccess,
-    isExpanded, toggleExpansion, isDragging, setConfirmModalState, setNoteModalState, setSavingSettingsModalState
+    isExpanded, toggleExpansion, isDragging, setConfirmModalState, setNoteModalState
 }) => {
     const { budgets, moveCategoryUp, moveCategoryDown, publishBudgetForYear } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
@@ -807,7 +799,7 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
             
             {isExpanded && (
                 <div className="divide-y divide-light-outlineVariant/50 dark:divide-dark-outlineVariant/50">
-                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onArchiveRequest={onArchiveRequest} getBarColor={getBarColor} setConfirmModalState={setConfirmModalState} setNoteModalState={setNoteModalState} setSavingSettingsModalState={setSavingSettingsModalState} />)}
+                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onArchiveRequest={onArchiveRequest} getBarColor={getBarColor} setConfirmModalState={setConfirmModalState} setNoteModalState={setNoteModalState} />)}
                     
                     {isAddingSubcategory ? (
                         <div className="p-2">
@@ -842,8 +834,7 @@ const SubcategoryItem: React.FC<{
     getBarColor: (ratio: number, type: TransactionType) => string;
     setConfirmModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, message: string, onConfirm: () => void, confirmText?: string }>>;
     setNoteModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, budget: Budget | null, categoryId: string | null, month: string | null }>>;
-    setSavingSettingsModalState: React.Dispatch<React.SetStateAction<{ isOpen: boolean, category: Category | null }>>;
-}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onArchiveRequest, getBarColor, setConfirmModalState, setNoteModalState, setSavingSettingsModalState }) => {
+}> = ({ category, subcategoryIndex, siblingsCount, currentMonth, getActualAmount, onArchiveRequest, getBarColor, setConfirmModalState, setNoteModalState }) => {
     const { budgets, addOrUpdateBudget, moveCategoryUp, moveCategoryDown, publishBudgetForYear, deleteBudget } = useAppContext();
     const [isEditingName, setIsEditingName] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -905,7 +896,6 @@ const SubcategoryItem: React.FC<{
             <div className="flex items-center gap-4 w-full">
                 {/* Názov kategórie */}
                 <div className="w-1/3 flex-shrink-0 pl-[2.25rem] flex items-center gap-2">
-                    {category.isSaving && <PiggyBankIcon className="h-5 w-5 text-light-tertiary dark:text-dark-tertiary flex-shrink-0" />}
                     <EditableCategoryName category={category} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                     {budget?.note && budget.note.trim() !== '' && (
                         <>
@@ -989,17 +979,6 @@ const SubcategoryItem: React.FC<{
                             </button>
                             <button onClick={() => setNoteModalState({ isOpen: true, budget, categoryId: category.id, month: currentMonth })} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
                                 <ChatBubbleLeftIcon className="h-5 w-5 mr-3"/> {budget?.note && budget.note.trim() !== '' ? 'Upraviť poznámku' : 'Pridať poznámku'}
-                            </button>
-                             <button 
-                                onClick={() => {
-                                    if (category.type === 'expense') {
-                                        setSavingSettingsModalState({ isOpen: true, category: category });
-                                    }
-                                }}
-                                className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
-                                disabled={category.type !== 'expense'}
-                            >
-                                <PencilIcon className="h-5 w-5 mr-3"/> Nastavenia sporenia
                             </button>
                              <button 
                                 onClick={() => {
@@ -1125,111 +1104,6 @@ const ArchiveCategoryModal: React.FC<{
 };
 
 export default Budgets;
-
-
-const SavingSettingsModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    category: Category | null;
-}> = ({ isOpen, onClose, category }) => {
-    const { accounts, updateCategory } = useAppContext();
-    const [isSaving, setIsSaving] = useState(category?.isSaving || false);
-    const [selectedAccount, setSelectedAccount] = useState(category?.savingAccount || '');
-    const [error, setError] = useState('');
-
-    useEffect(() => {
-        if (category) {
-            setIsSaving(category.isSaving || false);
-            setSelectedAccount(category.savingAccount || '');
-            setError('');
-        }
-    }, [category]);
-
-    const handleSave = async () => {
-        if (!category) return;
-
-        if (isSaving && !selectedAccount) {
-            setError('Pre sporiacu kategóriu je povinné vybrať účet.');
-            return;
-        }
-
-        await updateCategory({
-            ...category,
-            isSaving: isSaving,
-            savingAccount: isSaving ? selectedAccount : null,
-        });
-        onClose();
-    };
-
-    if (!isOpen || !category) return null;
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title={`Nastavenia sporenia pre "${category.name}"`}>
-            <div className="space-y-6">
-                <div className="flex items-start p-4 bg-light-tertiaryContainer/30 dark:bg-dark-tertiaryContainer/30 rounded-lg">
-                    <PiggyBankIcon className="h-8 w-8 text-light-tertiary dark:text-dark-tertiary mt-1 mr-4 flex-shrink-0"/>
-                    <div>
-                        <h4 className="font-semibold text-light-onSurface dark:text-dark-onSurface">Čo je sporiaca kategória?</h4>
-                        <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mt-1">
-                            Ak je kategória sporiaca, rozdiel medzi plánovaným a skutočným výdavkom sa bude evidovať ako ušetrená suma. Táto suma bude virtuálne viazaná na zvolený účet, aby ste mali lepší prehľad o svojich úsporách.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="relative flex items-start">
-                    <div className="flex h-6 items-center">
-                        <input
-                            id="isSaving"
-                            aria-describedby="isSaving-description"
-                            name="isSaving"
-                            type="checkbox"
-                            checked={isSaving}
-                            onChange={(e) => setIsSaving(e.target.checked)}
-                            className="h-4 w-4 rounded border-gray-300 text-light-primary focus:ring-light-primary"
-                        />
-                    </div>
-                    <div className="ml-3 text-sm leading-6">
-                        <label htmlFor="isSaving" className="font-medium text-light-onSurface dark:text-dark-onSurface">
-                            Aktivovať ako sporiacu kategóriu
-                        </label>
-                    </div>
-                </div>
-
-                {isSaving && (
-                    <div>
-                        <label htmlFor="savingAccount" className="block text-sm font-medium leading-6 text-light-onSurface dark:text-dark-onSurface">
-                            Prepojiť s účtom
-                        </label>
-                        <select
-                            id="savingAccount"
-                            name="savingAccount"
-                            value={selectedAccount}
-                            onChange={(e) => {
-                                setSelectedAccount(e.target.value)
-                                if(error) setError('');
-                            }}
-                            className="mt-2 block w-full rounded-md border-0 py-1.5 pl-3 pr-10 text-gray-900 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-light-primary sm:text-sm sm:leading-6"
-                        >
-                            <option value="">-- Vyberte účet --</option>
-                            {accounts.filter(a => a.status === 'active').map(account => (
-                                <option key={account.id} value={account.id}>{account.name}</option>
-                            ))}
-                        </select>
-                        {error && <p className="mt-2 text-sm text-light-error dark:text-dark-error">{error}</p>}
-                    </div>
-                )}
-                
-                <div className="flex justify-end space-x-2 pt-4">
-                    <button type="button" onClick={onClose} className="px-4 py-2.5 text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 font-medium">Zrušiť</button>
-                    <button type="button" onClick={handleSave} className="px-6 py-2.5 rounded-full bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary hover:shadow-lg font-medium transition-shadow">
-                        Uložiť
-                    </button>
-                </div>
-            </div>
-        </Modal>
-    );
-};
-
 
 const NoteModal: React.FC<{
     isOpen: boolean;

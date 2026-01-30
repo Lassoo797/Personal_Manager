@@ -31,7 +31,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             setDestinationAccountId(transaction.destinationAccountId || '');
         } else {
             // Reset form for a new transaction
-            const defaultAccount = accounts.find(a => a.isDefault && a.accountType === 'Štandardný účet');
+            const defaultAccount = accounts.find(a => a.isDefault);
             setType('expense');
             setTransactionDate(new Date().toISOString().slice(0, 10));
             setNotes('');
@@ -99,7 +99,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
     }, [allCategories, type, transactionDate, transactions]);
     
     const availableAccounts = useMemo(() =>
-        accounts.filter((a: Account) => a.accountType === 'Štandardný účet'),
+        accounts.filter((a: Account) => a.status === 'active'),
         [accounts]);
 
     const handleSubmit = (e: React.FormEvent, keepOpen: boolean = false) => {
@@ -142,13 +142,12 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         
         if (keepOpen) {
             // Reset form but keep date
-            const defaultAccount = accounts.find(a => a.isDefault && a.accountType === 'Štandardný účet');
             setType('expense');
             // transactionDate is kept
             setNotes('');
             setAmount('');
             setCategoryId('');
-            setAccountId(defaultAccount?.id || '');
+            setAccountId(accounts.find(a => a.isDefault)?.id || '');
             setDestinationAccountId('');
         } else {
             onSave();
