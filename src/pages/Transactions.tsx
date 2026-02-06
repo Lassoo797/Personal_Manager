@@ -3,10 +3,11 @@ import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { PlusIcon, PencilIcon, TrashIcon, FunnelIcon, MagnifyingGlassIcon, XIcon, CalendarDaysIcon, ArrowUpCircleIcon, ArrowDownCircleIcon } from '../components/icons';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { roundToTwoDecimals } from '../lib/utils';
 import type { Transaction, TransactionType, Account, Category } from '../types';
 
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
-    const { accounts, allCategories, addTransaction, updateTransaction, transactions } = useAppContext();
+    const { accounts, allCategories, addTransaction, updateTransaction, transactions, getAccountBalance } = useAppContext();
     const [type, setType] = useState<TransactionType>(transaction?.type || 'expense');
     const [transactionDate, setTransactionDate] = useState(transaction?.transactionDate.slice(0, 10) || new Date().toISOString().slice(0, 10));
     const [notes, setNotes] = useState(transaction?.notes || '');
@@ -136,6 +137,14 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         accounts.filter((a: Account) => a.status === 'active'),
         [accounts]);
 
+    // Use availableAccounts instead of filtering inline to be consistent and include savings accounts if needed
+    // However, depending on business logic, maybe savings accounts shouldn't be available for regular Expense/Income?
+    // The requirement was: "takze pre prijmy a vydavky sa ani nedaju vybrat ked davam tranzakciu, iba pre prevody"
+    
+    const availableAccountsForRegular = useMemo(() => 
+        availableAccounts.filter(a => !a.isSavings),
+        [availableAccounts]);
+
     const handleSubmit = (e: React.FormEvent, keepOpen: boolean = false) => {
         e.preventDefault();
         setError(null);
@@ -158,10 +167,34 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
 
         if (!isValid) return;
 
+        const amountVal = parseFloat(String(amount));
+
+        // Validation for negative balance
+        if (type === 'expense' || type === 'transfer') {
+            let simulatedBalance = getAccountBalance(accountId);
+
+            // Ak upravujeme existujúcu transakciu, musíme "vrátiť" jej vplyv na zostatok,
+            // aby sme zistili reálne dostupné prostriedky pre novú sumu.
+            if (transaction && transaction.accountId === accountId) {
+                if (transaction.type === 'income') {
+                    // Ak to bol predtým príjem, jeho odstránením sa zostatok zníži
+                    simulatedBalance -= transaction.amount;
+                } else {
+                    // Ak to bol výdavok alebo prevod, jeho odstránením (vrátením peňazí) sa zostatok zvýši
+                    simulatedBalance += transaction.amount;
+                }
+            }
+
+            if (roundToTwoDecimals(simulatedBalance - amountVal) < 0) {
+                setError(`Nedostatok prostriedkov na účte. Disponibilný zostatok pre túto operáciu: ${simulatedBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}`);
+                return;
+            }
+        }
+
         const transactionData = {
             transactionDate,
             notes,
-            amount: parseFloat(String(amount)),
+            amount: amountVal,
             type,
             categoryId: type !== 'transfer' ? categoryId : null,
             accountId,
@@ -278,7 +311,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                     <div className="relative">
                         <select id="account" value={accountId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setAccountId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte účet</option>
-                            {availableAccounts.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
+                            {availableAccountsForRegular.map((a: Account) => <option key={a.id} value={a.id} className="dark:bg-dark-surfaceContainerHigh">{a.name}</option>)}
                         </select>
                     </div>
                 </>

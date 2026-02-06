@@ -375,6 +375,16 @@
         "presentable": false,
         "unique": false,
         "options": {}
+      },
+      {
+        "id": "bool_is_savings",
+        "name": "isSavings",
+        "type": "bool",
+        "system": false,
+        "required": false,
+        "presentable": false,
+        "unique": false,
+        "options": {}
       }
     ],
     "indexes": [],

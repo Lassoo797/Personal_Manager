@@ -42,7 +42,7 @@ interface AppContextType {
   getAccountBalance: (accountId: string) => number;
   moveAccountUp: (accountId: string) => Promise<void>;
   moveAccountDown: (accountId: string) => Promise<void>;
-  setDefaultAccount: (accountId: string) => Promise<void>;
+  setSavingsAccount: (accountId: string, isSavings: boolean) => Promise<void>;
   
   addCategory: (category: Omit<Category, 'id' | 'workspaceId' | 'order' | 'status'>) => Promise<Category | null>;
   updateCategory: (category: Category) => Promise<void>;
@@ -643,6 +643,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [allAccounts, currentWorkspaceId, addNotification]);
   
+  const setSavingsAccount = useCallback(async (accountId: string, isSavings: boolean) => {
+    if (!currentWorkspaceId) return;
+
+    try {
+        await accountService.update(accountId, { isSavings });
+
+        setAllAccounts(prev => 
+            prev.map(a => 
+                a.id === accountId ? { ...a, isSavings } : a
+            )
+        );
+
+        addNotification(`Účet bol nastavený ako ${isSavings ? 'sporiaci' : 'bežný'}.`, 'success');
+        
+    } catch (e: any) {
+        console.error("Failed to set savings account:", e);
+        addNotification(`Nepodarilo sa zmeniť typ účtu: ${e.message}`, 'error');
+    }
+  }, [currentWorkspaceId, addNotification]);
+  
   // ACCOUNT MANAGEMENT
   const createAccount = useCallback(async (account: Omit<Account, 'id' | 'workspaceId' | 'status' | 'order'>) => {
     if (!currentWorkspaceId) return;
@@ -749,7 +769,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await systemEventService.create({
         workspace: currentWorkspaceId,
         type: 'transaction_created',
-        details: { /* ... dáta pre log ... */ }
+        details: { 
+            transactionId: newTransaction.id,
+            amount: newTransaction.amount,
+            type: newTransaction.type,
+            accountId: newTransaction.accountId,
+            categoryId: newTransaction.categoryId,
+            transactionDate: newTransaction.transactionDate,
+            notes: newTransaction.notes
+        }
       });
     } catch (e: any) {
       console.error("Chyba pri pridávaní transakcie:", e);
@@ -1010,7 +1038,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const value = useMemo(() => ({
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
-    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance, moveAccountUp, moveAccountDown, setDefaultAccount,
+    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance, moveAccountUp, moveAccountDown, setDefaultAccount, setSavingsAccount,
     categories, allCategories, addCategory, updateCategory, archiveCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
@@ -1020,7 +1048,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }), [
     isLoading, error,
     workspaces, currentWorkspaceId, setCurrentWorkspaceId, addWorkspace, updateWorkspace, deleteWorkspace,
-    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance, moveAccountUp, moveAccountDown, setDefaultAccount,
+    accounts, createAccount, updateAccount, archiveAccount, getAccountBalance, moveAccountUp, moveAccountDown, setDefaultAccount, setSavingsAccount,
     categories, allCategories, addCategory, updateCategory, archiveCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,

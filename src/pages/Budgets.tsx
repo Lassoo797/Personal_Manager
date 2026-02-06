@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 
 import { useAppContext } from '../context/AppContext';
 import type { TransactionType, Category, Budget } from '../types';
-import { PlusIcon, ArchiveBoxIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon, ChatBubbleLeftIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon } from '../components/icons';
+import { PlusIcon, ArchiveBoxIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon, ChatBubbleLeftIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, BanknotesIcon } from '../components/icons';
 import Modal from '../components/Modal';
 import { roundToTwoDecimals } from '../lib/utils';
 

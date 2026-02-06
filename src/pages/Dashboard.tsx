@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { 
-    BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, 
+    Area, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, 
     ComposedChart, Line, CartesianGrid, ReferenceArea
 } from 'recharts';
 import { useAppContext } from '../context/AppContext';
@@ -44,11 +44,17 @@ const Dashboard: React.FC = () => {
   const totalBalance = useMemo(() => {
     return accounts.reduce((sum, account) => sum + getAccountBalance(account.id), 0);
   }, [accounts, getAccountBalance]);
+
+  const totalSavings = useMemo(() => {
+      return accounts
+        .filter(a => a.isSavings)
+        .reduce((sum, account) => sum + getAccountBalance(account.id), 0);
+  }, [accounts, getAccountBalance]);
   
   const accountIds = useMemo(() => new Set(accounts.map(a => a.id)), [accounts]);
 
   const budgetTransactions = useMemo(() => 
-    transactions.filter(t => accountIds.has(t.accountId)),
+    transactions.filter(t => accountIds.has(t.accountId) && t.onBudget !== false),
     [transactions, accountIds]
   );
   
@@ -137,9 +143,12 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     );
     const incomeCategoryIds = new Set(categories.filter(c => c.type === 'income').map(c => c.id));
 
-    const getBalanceUpToDate = (targetDate: Date): number => {
+    const getBalanceUpToDate = (targetDate: Date, onlyBudgetAccounts = false): number => {
         let balance = 0;
-        accounts.forEach(acc => {
+        const targetAccounts = onlyBudgetAccounts ? accounts.filter(a => !a.isSavings) : accounts;
+        const targetAccountIds = new Set(targetAccounts.map(a => a.id));
+
+        targetAccounts.forEach(acc => {
             if (acc.initialBalanceDate && new Date(acc.initialBalanceDate) < targetDate) {
                 balance += acc.initialBalance || 0;
             }
@@ -147,9 +156,9 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         const relevantTransactions = allTransactions.filter(t => new Date(t.transactionDate) < targetDate);
         const delta = relevantTransactions.reduce((sum, t) => {
             if (t.type === 'transfer') {
-                if (accountIds.has(t.accountId)) sum -= t.amount;
-                if (t.destinationAccountId && accountIds.has(t.destinationAccountId)) sum += t.amount;
-            } else if (accountIds.has(t.accountId)) {
+                if (targetAccountIds.has(t.accountId)) sum -= t.amount;
+                if (t.destinationAccountId && targetAccountIds.has(t.destinationAccountId)) sum += t.amount;
+            } else if (targetAccountIds.has(t.accountId)) {
                 sum += (t.type === 'income' ? t.amount : -t.amount);
             }
             return sum;
@@ -158,36 +167,51 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     };
 
     let yearStartBalance = 0;
+    let yearStartSavings = 0;
 
     if (displayedYear <= currentYear) {
-        yearStartBalance = getBalanceUpToDate(new Date(displayedYear, 0, 1));
+        yearStartBalance = getBalanceUpToDate(new Date(displayedYear, 0, 1), true);
+        yearStartSavings = getBalanceUpToDate(new Date(displayedYear, 0, 1)) - yearStartBalance;
     } else {
-        const startOfCurrentMonthBalance = getBalanceUpToDate(new Date(currentYear, currentMonth, 1));
+        // ... (predikcia pre budúce roky - tu by bolo vhodné tiež zohľadniť rozdelenie, ale pre zjednodušenie necháme zatiaľ logiku "všetko v jednom" alebo ju upravíme neskôr ak bude treba)
+        // Pre jednoduchosť, predikcia vychádza z aktuálneho stavu budget účtov
+        const startOfCurrentMonthBalance = getBalanceUpToDate(new Date(currentYear, currentMonth, 1), true);
+        const startOfCurrentMonthTotal = getBalanceUpToDate(new Date(currentYear, currentMonth, 1));
+        const startOfCurrentMonthSavings = startOfCurrentMonthTotal - startOfCurrentMonthBalance;
         
-        const currentMonthTransactions = allTransactions.filter(t => new Date(t.transactionDate).getFullYear() === currentYear && new Date(t.transactionDate).getMonth() === currentMonth);
+        // ... (zvyšok logiky pre predikciu - tu treba dať pozor, aby sme počítali len budget účty pre 'balance' a savings pre 'savings')
+        // Pre tento moment zjednodušíme a povieme, že forecast pre budúce roky sa týka len "budget" peňazí, keďže sporiace sa hýbu len manuálne.
+        
+        // REVIZOVANÁ LOGIKA PREDIKCIE (iba pre budget účty):
+        const currentMonthTransactions = allTransactions.filter(t => {
+            const d = new Date(t.transactionDate);
+            return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+        });
         const currentMonthBudgets = budgets.filter(b => b.month === `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}`);
         
+        // ... výpočet delty pre aktuálny mesiac ...
         const categoryData = new Map<string, { plan: number, actual: number, type: 'income' | 'expense' }>();
-
+        // ... (naplnenie categoryData ako doteraz) ...
         const allCategoryIds = new Set([
             ...currentMonthBudgets.map(b => b.categoryId),
             ...currentMonthTransactions.map(t => t.categoryId).filter((id): id is string => !!id)
         ]);
-
         allCategoryIds.forEach(categoryId => {
             const category = categories.find(c => c.id === categoryId);
             if(category) {
                 categoryData.set(categoryId, { plan: 0, actual: 0, type: category.type });
             }
         });
-
         currentMonthBudgets.forEach(b => {
             const data = categoryData.get(b.categoryId);
             if (data) data.plan = b.amount;
         });
-
         currentMonthTransactions.forEach(t => {
-            if (t.type !== 'transfer' && t.categoryId) {
+             // Tu by sme mali brať do úvahy len transakcie z budget účtov? 
+             // Zatiaľ berieme všetky, lebo budget sa týka kategórií, nie účtov.
+             // Ale reálne, ak zaplatím zo sporiaceho, nemalo by to ovplyvniť budget forecast bežného účtu?
+             // Pre zjednodušenie: Budget = plán pre bežné výdavky.
+             if (t.type !== 'transfer' && t.categoryId) {
                 const data = categoryData.get(t.categoryId);
                 if (data) data.actual += t.amount;
             }
@@ -201,8 +225,8 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         });
 
         let initialBalanceInCurrentMonth = 0;
-        accounts.forEach(acc => {
-            if (acc.initialBalanceDate) {
+        accounts.filter(a => !a.isSavings).forEach(acc => {
+             if (acc.initialBalanceDate) {
                 const d = new Date(acc.initialBalanceDate);
                 if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) initialBalanceInCurrentMonth += acc.initialBalance || 0;
             }
@@ -210,6 +234,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
 
         const endOfCurrentMonthForecast = startOfCurrentMonthBalance + effectiveCurrentMonthDelta + initialBalanceInCurrentMonth;
 
+        // ... forecast do konca roka ...
         let forecastForEndOfYear = endOfCurrentMonthForecast;
         for (let m = currentMonth + 1; m < 12; m++) {
             budgets.forEach(b => {
@@ -218,7 +243,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
                     forecastForEndOfYear += incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount;
                 }
             });
-            accounts.forEach(acc => {
+            accounts.filter(a => !a.isSavings).forEach(acc => {
                 if (acc.initialBalanceDate) {
                     const d = new Date(acc.initialBalanceDate);
                     if (d.getFullYear() === currentYear && d.getMonth() === m) forecastForEndOfYear += acc.initialBalance || 0;
@@ -226,27 +251,36 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
             });
         }
         
+        // ... forecast pre ďalšie roky až po displayedYear ...
         let runningProjectedBalance = forecastForEndOfYear;
         for (let year = currentYear + 1; year < displayedYear; year++) {
             const yearBudgets = budgets.filter(b => b.month.startsWith(year.toString()));
             runningProjectedBalance += yearBudgets.reduce((sum, b) => sum + (incomeCategoryIds.has(b.categoryId) ? b.amount : -b.amount), 0);
-            accounts.forEach(acc => {
+             accounts.filter(a => !a.isSavings).forEach(acc => {
                 if(acc.initialBalanceDate) {
                     const d = new Date(acc.initialBalanceDate);
                     if (d.getFullYear() === year) runningProjectedBalance += acc.initialBalance || 0;
                 }
             });
         }
+        
         yearStartBalance = runningProjectedBalance;
+        
+        // Savings forecast - assume constant unless transfers are planned (which we don't have planned transfers yet)
+        yearStartSavings = startOfCurrentMonthSavings; 
     }
     
     const months = Array.from({ length: 12 }, (_, i) => new Date(displayedYear, i, 1).toLocaleString('sk-SK', { month: 'short' }));
     
     const chartData = [{
         name: (displayedYear - 1).toString(),
-        actual: yearStartBalance, plan: yearStartBalance, forecast: null as number | null,
+        actual: yearStartBalance, 
+        plan: yearStartBalance, 
+        forecast: null as number | null,
+        savings: yearStartSavings,
+        savingsPlan: yearStartSavings
     }, ...months.map(name => ({
-        name, actual: null as number | null, plan: null as number | null, forecast: null as number | null
+        name, actual: null as number | null, plan: null as number | null, forecast: null as number | null, savings: null as number | null, savingsPlan: null as number | null
     }))];
 
     const monthlyBudgetDeltas = Array(12).fill(0);
@@ -258,44 +292,91 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     });
 
     let runningPlanBalance = yearStartBalance;
+    let runningSavingsPlanBalance = yearStartSavings;
+
     for (let i = 0; i < 12; i++) {
-        accounts.forEach(acc => {
+        accounts.filter(a => !a.isSavings).forEach(acc => {
             if (acc.initialBalanceDate) {
                 const initialDate = new Date(acc.initialBalanceDate);
                 if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) runningPlanBalance += acc.initialBalance || 0;
             }
         });
+        
+        accounts.filter(a => a.isSavings).forEach(acc => {
+            if (acc.initialBalanceDate) {
+                const initialDate = new Date(acc.initialBalanceDate);
+                if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) runningSavingsPlanBalance += acc.initialBalance || 0;
+            }
+        });
+
         runningPlanBalance += monthlyBudgetDeltas[i];
         chartData[i + 1].plan = runningPlanBalance;
+        chartData[i + 1].savingsPlan = runningSavingsPlanBalance;
     }
     
+    // Výpočet ACTUAL a SAVINGS pre minulosť a prítomnosť
+    // Zadefinovanie množín ID účtov pre rýchlejšie vyhľadávanie
+    const budgetAccountIds = useMemo(() => new Set(accounts.filter(a => !a.isSavings).map(a => a.id)), [accounts]);
+    const savingsAccountIds = useMemo(() => new Set(accounts.filter(a => a.isSavings).map(a => a.id)), [accounts]);
+
     if (displayedYear <= currentYear) {
         let runningActualBalance = yearStartBalance;
+        let runningSavingsBalance = yearStartSavings;
         const effectiveMonthCount = displayedYear < currentYear ? 12 : currentMonth;
+        
         for (let i = 0; i < effectiveMonthCount; i++) { 
+            // Initial balances in this month
             accounts.forEach(acc => {
                 if (acc.initialBalanceDate) {
                     const initialDate = new Date(acc.initialBalanceDate);
-                    if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) runningActualBalance += acc.initialBalance || 0;
+                    if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) {
+                        if (acc.isSavings) runningSavingsBalance += acc.initialBalance || 0;
+                        else runningActualBalance += acc.initialBalance || 0;
+                    }
                 }
             });
+
             const monthlyTransactions = allTransactions.filter(t => new Date(t.transactionDate).getFullYear() === displayedYear && new Date(t.transactionDate).getMonth() === i);
-            const monthlyDelta = monthlyTransactions.reduce((sum, t) => {
+            
+            monthlyTransactions.forEach(t => {
                 if (t.type === 'transfer') {
-                    if (accountIds.has(t.accountId)) sum -= t.amount;
-                    if (t.destinationAccountId && accountIds.has(t.destinationAccountId)) sum += t.amount;
-                } else if (accountIds.has(t.accountId)) { sum += (t.type === 'income' ? t.amount : -t.amount); }
-                return sum;
-            }, 0);
-            runningActualBalance += monthlyDelta;
+                    // Odchod z budget účtu
+                    if (budgetAccountIds.has(t.accountId)) runningActualBalance -= t.amount;
+                    // Príchod na budget účet
+                    if (t.destinationAccountId && budgetAccountIds.has(t.destinationAccountId)) runningActualBalance += t.amount;
+                    
+                    // Odchod zo savings účtu
+                    if (savingsAccountIds.has(t.accountId)) runningSavingsBalance -= t.amount;
+                    // Príchod na savings účet
+                    if (t.destinationAccountId && savingsAccountIds.has(t.destinationAccountId)) runningSavingsBalance += t.amount;
+                    
+                } else {
+                    // Income/Expense
+                    if (budgetAccountIds.has(t.accountId)) {
+                        runningActualBalance += (t.type === 'income' ? t.amount : -t.amount);
+                    }
+                    if (savingsAccountIds.has(t.accountId)) {
+                         runningSavingsBalance += (t.type === 'income' ? t.amount : -t.amount);
+                    }
+                }
+            });
+
             chartData[i + 1].actual = runningActualBalance;
+            chartData[i + 1].savings = runningSavingsBalance;
         }
     }
 
+    // FORECAST pre aktuálny rok
     if (displayedYear === currentYear) {
-        const startOfCurrentMonthBalance = chartData[currentMonth].actual ?? getBalanceUpToDate(new Date(currentYear, currentMonth, 1));
+        const startOfCurrentMonthBalance = chartData[currentMonth].actual ?? getBalanceUpToDate(new Date(currentYear, currentMonth, 1), true);
+        const startOfCurrentMonthSavings = chartData[currentMonth].savings ?? (getBalanceUpToDate(new Date(currentYear, currentMonth, 1)) - startOfCurrentMonthBalance);
+
         chartData[currentMonth].forecast = startOfCurrentMonthBalance;
         
+        // Pre jednoduchosť, savings forecast držíme konštantný od posledného známeho bodu, ale musíme zohľadniť aktuálne prevody v tomto mesiaci
+        let runningSavingsForecast = startOfCurrentMonthSavings;
+        
+        // ... (Logika pre forecast balance beží rovnako ako predtým, len s odfiltrovaním savings účtov pre initialBalance) ...
         const currentMonthTransactions = allTransactions.filter(t => new Date(t.transactionDate).getFullYear() === currentYear && new Date(t.transactionDate).getMonth() === currentMonth);
         const currentMonthBudgets = budgets.filter(b => b.month === `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}`);
         
@@ -317,10 +398,25 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
             if (data) data.plan = b.amount;
         });
 
+        let currentMonthTransferDeltaBudget = 0;
+        let currentMonthTransferDeltaSavings = 0;
+
         currentMonthTransactions.forEach(t => {
+            // Income/Expense categories logic
             if (t.type !== 'transfer' && t.categoryId) {
                 const data = categoryData.get(t.categoryId);
                 if (data) data.actual += t.amount;
+            }
+
+            // Transfer Logic for Forecast
+            if (t.type === 'transfer') {
+                // Budget Accounts Impact
+                if (budgetAccountIds.has(t.accountId)) currentMonthTransferDeltaBudget -= t.amount;
+                if (t.destinationAccountId && budgetAccountIds.has(t.destinationAccountId)) currentMonthTransferDeltaBudget += t.amount;
+
+                // Savings Accounts Impact
+                if (savingsAccountIds.has(t.accountId)) currentMonthTransferDeltaSavings -= t.amount;
+                if (t.destinationAccountId && savingsAccountIds.has(t.destinationAccountId)) currentMonthTransferDeltaSavings += t.amount;
             }
         });
 
@@ -332,20 +428,26 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         });
         
         let initialBalanceInCurrentMonth = 0;
-        accounts.forEach(acc => {
+        accounts.filter(a => !a.isSavings).forEach(acc => {
             if (acc.initialBalanceDate) {
                 const d = new Date(acc.initialBalanceDate);
                 if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) initialBalanceInCurrentMonth += acc.initialBalance || 0;
             }
         });
         
-        const endOfCurrentMonthForecast = startOfCurrentMonthBalance + effectiveCurrentMonthDelta + initialBalanceInCurrentMonth;
+        // Forecast na konci mesiaca = (Start) + (Plan vs Actual Income/Expense) + (Transfers) + (Initials)
+        const endOfCurrentMonthForecast = startOfCurrentMonthBalance + effectiveCurrentMonthDelta + currentMonthTransferDeltaBudget + initialBalanceInCurrentMonth;
+        
+        // Update savings forecast with transfers happened this month
+        runningSavingsForecast += currentMonthTransferDeltaSavings;
+
         chartData[currentMonth + 1].forecast = endOfCurrentMonthForecast;
+        chartData[currentMonth + 1].savings = runningSavingsForecast;
         
         let runningForecastBalance = endOfCurrentMonthForecast;
         for (let i = currentMonth + 1; i < 12; i++) {
             let monthlyInitialBalance = 0;
-            accounts.forEach(acc => {
+            accounts.filter(a => !a.isSavings).forEach(acc => {
                 if (acc.initialBalanceDate) {
                     const initialDate = new Date(acc.initialBalanceDate);
                     if (initialDate.getFullYear() === displayedYear && initialDate.getMonth() === i) monthlyInitialBalance += acc.initialBalance || 0;
@@ -353,11 +455,67 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
             });
             runningForecastBalance += monthlyInitialBalance + monthlyBudgetDeltas[i];
             chartData[i + 1].forecast = runningForecastBalance;
+            chartData[i + 1].savings = runningSavingsForecast;
         }
     }
     
-    const allValues = chartData
-        .flatMap(d => [d.actual, d.plan, d.forecast])
+    // Fill savings for past years or future years if needed (simple constant extension for now)
+    if (displayedYear !== currentYear) {
+         // Ak pozeráme minulý rok, savings sú už vypočítané v 'actual' loope vyššie.
+         // Ak pozeráme budúci rok, mali by sme ich naplniť z posledného známeho stavu.
+         if (displayedYear > currentYear) {
+             const latestSavings = getBalanceUpToDate(new Date()) - getBalanceUpToDate(new Date(), true);
+             chartData.forEach(d => d.savings = latestSavings);
+         }
+    }
+
+    const processedChartData = chartData.map(d => {
+        const rawSavings = d.savings ?? 0;
+        const rawActual = d.actual;
+        const rawForecast = d.forecast;
+        const rawPlan = d.plan;
+
+        // --- VÝPOČET ZOBRAZOVANÉHO SPORENIA ---
+        // Ak je budget (actual alebo forecast) záporný, znamená to, že "požierame" sporenie.
+        // Vtedy sa krivka sporenia zníži o túto stratu.
+        
+        let visualSavingsActual = null;
+        let visualTotalActual = null;
+
+        if (rawActual !== null) {
+            // Celkový majetok je vždy Sporenie + Budget
+            visualTotalActual = rawSavings + rawActual;
+            // Zobrazované sporenie: Ak je budget < 0, sporenie klesá (rovná sa celkovému majetku)
+            // Ak je budget > 0, sporenie ostáva na svojej úrovni
+            visualSavingsActual = rawActual < 0 ? visualTotalActual : rawSavings;
+        }
+
+        let visualSavingsForecast = null;
+        let visualTotalForecast = null;
+
+        if (rawForecast !== null) {
+            visualTotalForecast = rawSavings + rawForecast;
+            // Rovnaká logika pre prognózu
+            visualSavingsForecast = rawForecast < 0 ? visualTotalForecast : rawSavings;
+        }
+
+        // Plán tiež pripočítame k sporeniu pre kontext celkového majetku,
+        // ale použijeme 'savingsPlan', ktorý ignoruje interné prevody v rámci roka,
+        // aby 'Total Plan' (Celkový majetok) ostal konzistentný.
+        const totalPlan = rawPlan !== null ? (d.savingsPlan ?? 0) + rawPlan : null;
+
+        return {
+            ...d,
+            visualSavingsActual,
+            visualTotalActual,
+            visualSavingsForecast,
+            visualTotalForecast,
+            totalPlan
+        };
+    });
+    
+    const allValues = processedChartData
+        .flatMap(d => [d.visualTotalActual, d.totalPlan, d.visualTotalForecast, d.visualSavingsActual, d.visualSavingsForecast])
         .filter((v): v is number => v !== null);
 
     let yAxisDomain: [number, number] = [0, 5000];
@@ -366,8 +524,11 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     if (allValues.length > 0) {
         const dataMin = Math.min(...allValues);
         const dataMax = Math.max(...allValues);
-        const buffer = (dataMax - dataMin) * 0.1; 
-        const bottom = Math.floor((dataMin - buffer) / 1000) * 1000;
+        // Ensure 0 is always included/visible context if numbers are positive
+        const effectiveMin = Math.min(0, dataMin);
+        
+        const buffer = (dataMax - effectiveMin) * 0.1; 
+        const bottom = Math.floor((effectiveMin - buffer) / 1000) * 1000;
         const top = Math.ceil((dataMax + buffer) / 1000) * 1000;
         yAxisDomain = [bottom, top];
         
@@ -382,7 +543,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     }
 
     return { 
-        chartData, 
+        chartData: processedChartData, 
         months, 
         currentMonthIndex: displayedYear === currentYear ? currentMonth : -1, 
         yAxisDomain, 
@@ -409,6 +570,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
           <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový majetok</h2>
           <p className="text-3xl font-bold text-light-tertiary dark:text-dark-tertiary mt-1">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+          <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mt-1">z toho sporenie: {totalSavings.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
         </div>
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
           <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Príjmy tento mesiac</h2>
@@ -465,7 +627,7 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
       
       <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">Vývoj zostatku na účtoch ({displayedYear})</h2>
+          <h2 className="text-xl font-medium text-light-onSurface dark:text-dark-onSurface">Vývoj celkového majetku (Sporenie + Budget) - {displayedYear}</h2>
           <div className="flex items-center space-x-2">
             <button 
               onClick={() => setDisplayedYear(displayedYear - 1)}
@@ -499,20 +661,22 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
                     const isCurrentYear = displayedYear === new Date().getFullYear();
                     const currentMonth = new Date().getMonth();
 
-                    if (name === 'Prognóza' && !isFutureYear) {
+                    // Hide Forecast in past/current
+                    if (name.includes('Prognóza') && !isFutureYear) {
                          if (!isCurrentYear || (hoveredMonthIndex !== -1 && hoveredMonthIndex < currentMonth)) {
                             return null;
                          }
                     }
                     
-                    if (name === 'Skutočný stav' && isFutureYear) {
+                    // Hide Actual in future
+                    if (name.includes('Aktuálne') && isFutureYear) {
                         return null;
                     }
                     
-                    if (name === 'Skutočný stav' && isCurrentYear && hoveredMonthIndex > currentMonth) {
+                    if (name.includes('Aktuálne') && isCurrentYear && hoveredMonthIndex > currentMonth) {
                         return null;
                     }
-
+                    
                     const formattedValue = typeof value === 'number'
                         ? value.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })
                         : value;
@@ -522,9 +686,62 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
             />
             <Legend wrapperStyle={{ color: tickColor, fontSize: 14 }} />
             {displayedYear === new Date().getFullYear() && <ReferenceArea x1={previousMonthLabel} x2={currentMonthName} stroke="none" fill={theme === 'dark' ? 'rgba(255, 180, 171, 0.1)' : 'rgba(186, 26, 26, 0.1)'} />}
-            <Line type="monotone" dataKey="plan" stroke="#ffc658" strokeWidth={2} name="Plán" strokeDasharray="5 5" dot={false} connectNulls />
-            <Line type="monotone" dataKey="forecast" stroke={theme === 'dark' ? '#55DDA2' : '#00875A'} strokeWidth={2} name="Prognóza" strokeDasharray="3 7" dot={false} connectNulls />
-            <Line type="monotone" dataKey="actual" stroke={theme === 'dark' ? '#9FCAFF' : '#0061A4'} strokeWidth={3} name="Skutočný stav" connectNulls={false} dot={{ r: 4 }} />
+            
+            {/* Total Plan Line */}
+            <Line 
+                type="monotone" 
+                dataKey="totalPlan" 
+                stroke="#ffc658" 
+                strokeWidth={2} 
+                name="Plán (Spolu)" 
+                strokeDasharray="5 5" 
+                dot={false} 
+                connectNulls 
+            />
+
+             {/* Savings Lines (Actual & Forecast) */}
+             <Line 
+                type="monotone" 
+                dataKey="visualSavingsActual" 
+                stroke={theme === 'dark' ? '#D6BBFB' : '#6B5778'} 
+                strokeWidth={3}
+                name="Sporenie (Aktuálne)"
+                connectNulls={false}
+                dot={{ r: 4 }}
+            />
+            <Line 
+                type="monotone" 
+                dataKey="visualSavingsForecast" 
+                stroke={theme === 'dark' ? '#D6BBFB' : '#6B5778'} 
+                strokeWidth={2}
+                name="Sporenie (Prognóza)"
+                strokeDasharray="3 7" 
+                connectNulls
+                dot={false}
+            />
+
+            {/* Total Wealth Lines (Actual & Forecast) */}
+            <Line 
+                type="monotone" 
+                dataKey="visualTotalForecast" 
+                stroke={theme === 'dark' ? '#55DDA2' : '#00875A'} 
+                strokeWidth={2} 
+                name="Majetok (Prognóza)" 
+                strokeDasharray="3 7" 
+                connectNulls 
+                dot={false}
+            />
+
+            <Line 
+                type="monotone" 
+                dataKey="visualTotalActual" 
+                stroke={theme === 'dark' ? '#9FCAFF' : '#0061A4'} 
+                strokeWidth={3} 
+                name="Majetok (Aktuálne)" 
+                connectNulls={false} 
+                dot={{ r: 4 }} 
+            />
+            
             </ComposedChart>
         </ResponsiveContainer>
       </div>

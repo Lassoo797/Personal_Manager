@@ -28,6 +28,7 @@ export interface Account {
   status: AccountStatus;
   order: number;
   isDefault?: boolean;
+  isSavings?: boolean;
   totalBalance?: number;
   savedAmount?: number;
   availableForBudget?: number;

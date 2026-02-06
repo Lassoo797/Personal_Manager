@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
-import { PlusIcon, PencilIcon, ArchiveBoxIcon, LandmarkIcon, WalletIcon, DotsVerticalIcon, ChevronUpIcon, ChevronDownIcon } from '../components/icons';
+import { PlusIcon, PencilIcon, ArchiveBoxIcon, LandmarkIcon, WalletIcon, DotsVerticalIcon, ChevronUpIcon, ChevronDownIcon, BanknotesIcon } from '../components/icons';
 import type { Account, AccountType, AccountSubtype } from '../types';
 
 const ACCOUNT_TYPES: AccountType[] = ['Štandardný účet'];
@@ -175,7 +175,7 @@ const AccountListItem: React.FC<{
 }> = ({ account, index, accountsCount }) => {
   const { 
     getAccountBalance, moveAccountUp, moveAccountDown, 
-    archiveAccount, setDefaultAccount
+    archiveAccount, setDefaultAccount, setSavingsAccount
   } = useAppContext();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -211,7 +211,10 @@ const AccountListItem: React.FC<{
                 {account.name}
                 {account.isDefault && <span className="ml-2 text-yellow-500" role="img" aria-label="Default">★</span>}
               </h3>
-              <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{account.type}</p>
+              <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                {account.type}
+                {account.isSavings && <span className="ml-2 text-blue-500 font-medium">(Sporiaci)</span>}
+              </p>
             </div>
           </div>
           <div className="flex items-center space-x-2">
@@ -246,6 +249,12 @@ const AccountListItem: React.FC<{
                     className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-50"
                   >
                     <span className="w-5 h-5 mr-3">★</span> Nastaviť ako predvolený
+                  </button>
+                  <button 
+                    onClick={() => { setSavingsAccount(account.id, !account.isSavings); setIsMenuOpen(false); }} 
+                    className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5"
+                  >
+                    <BanknotesIcon className="h-5 w-5 mr-3"/> {account.isSavings ? 'Zmeniť na bežný účet' : 'Nastaviť ako sporiaci'}
                   </button>
                   <button onClick={(e) => { e.stopPropagation(); openEditModal(account); }} className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5">
                     <PencilIcon className="h-5 w-5 mr-3"/> Upraviť
