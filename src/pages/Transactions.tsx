@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
-import { PlusIcon, PencilIcon, TrashIcon } from '../components/icons';
+import { PlusIcon, PencilIcon, TrashIcon, FunnelIcon, MagnifyingGlassIcon, XIcon, CalendarDaysIcon, ArrowUpCircleIcon, ArrowDownCircleIcon } from '../components/icons';
 import { ConfirmModal } from '../components/ConfirmModal';
 import type { Transaction, TransactionType, Account, Category } from '../types';
 
@@ -19,6 +19,35 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
 
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
+    
+    // --- Helper for grouping categories in select ---
+    // (Used in both TransactionForm and Filter)
+    const renderCategoryOptions = (groupedCats: { income: any[], expense: any[] }) => {
+        return (
+            <>
+                <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
+                {groupedCats.expense.length > 0 && (
+                    <optgroup label="Výdavky" className="font-semibold text-light-error dark:text-dark-error">
+                         {groupedCats.expense.map((c: any) => (
+                             <option key={c.id} value={c.id} className="text-light-onSurface dark:text-dark-onSurface dark:bg-dark-surfaceContainerHigh">
+                                {c.displayName}
+                             </option>
+                        ))}
+                    </optgroup>
+                )}
+                {groupedCats.income.length > 0 && (
+                    <optgroup label="Príjmy" className="font-semibold text-green-600 dark:text-green-400">
+                         {groupedCats.income.map((c: any) => (
+                             <option key={c.id} value={c.id} className="text-light-onSurface dark:text-dark-onSurface dark:bg-dark-surfaceContainerHigh">
+                                {c.displayName}
+                             </option>
+                        ))}
+                    </optgroup>
+                )}
+            </>
+        );
+    };
+
 
     useEffect(() => {
         if (transaction) {
@@ -42,7 +71,7 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
         }
     }, [transaction, accounts]);
 
-    const { top5Categories, otherCategories } = useMemo(() => {
+    const { top5Categories, groupedOtherCategories: otherCategories } = useMemo(() => {
         const transactionMonth = transactionDate.substring(0, 7);
         
         // --- Calculate Top 5 Categories ---
@@ -74,28 +103,33 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             (c.status === 'active' || (c.archivedFrom && c.archivedFrom > transactionMonth))
         );
 
-        const parentCategoryMap = new Map<string, Category>(
-            allCategories
-                .filter(c => !c.parentId)
-                .map(p => [p.id, p])
-        );
-
-        subcategories.sort((a, b) => {
-            const parentA = parentCategoryMap.get(a.parentId!);
-            const parentB = parentCategoryMap.get(b.parentId!);
-
-            const parentOrderA = parentA?.order ?? 999;
-            const parentOrderB = parentB?.order ?? 999;
-            if (parentOrderA !== parentOrderB) {
-                return parentOrderA - parentOrderB;
-            }
-
-            const subcategoryOrderA = a.order ?? 999;
-            const subcategoryOrderB = b.order ?? 999;
-            return subcategoryOrderA - subcategoryOrderB;
+        // Map for easier sorting and display name generation
+        const mappedSubcategories = subcategories.map(c => {
+             const parent = allCategories.find(p => p.id === c.parentId);
+             return {
+                 ...c,
+                 displayName: `${parent ? parent.name : '...'} - ${c.name}`,
+                 parentOrder: parent?.order ?? 999,
+                 categoryOrder: c.order ?? 999
+             }
         });
 
-        return { top5Categories, otherCategories: subcategories };
+        // Sort by parent order then category order
+        mappedSubcategories.sort((a, b) => {
+            if (a.parentOrder !== b.parentOrder) {
+                return a.parentOrder - b.parentOrder;
+            }
+            return a.categoryOrder - b.categoryOrder;
+        });
+
+        return { 
+            top5Categories, 
+            // We group "other" categories for the dropdown, but Top 5 are handled separately in the UI
+            groupedOtherCategories: {
+                income: mappedSubcategories.filter(c => c.type === 'income'),
+                expense: mappedSubcategories.filter(c => c.type === 'expense')
+            }
+        };
     }, [allCategories, type, transactionDate, transactions]);
     
     const availableAccounts = useMemo(() =>
@@ -204,11 +238,37 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
                         <select id="category" value={categoryId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCategoryId(e.target.value)} className={`${formInputStyle} h-14`} required>
                             <option value="" className="dark:bg-dark-surfaceContainerHigh">Vyberte kategóriu</option>
                             {top5Categories.length > 0 && [
-                                <option key="top-header" disabled className="font-bold text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant dark:bg-dark-surfaceContainerHigh">Najpoužívanejšie</option>,
-                                ...top5Categories.map((c: Category) => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{allCategories.find((p: Category) => p.id === c.parentId)?.name} - {c.name}</option>)
+                                <optgroup key="top-header" label="Najpoužívanejšie" className="font-bold text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                                     {top5Categories.map((c: Category) => {
+                                         const parent = allCategories.find((p: Category) => p.id === c.parentId);
+                                         return (
+                                            <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">
+                                                {parent ? parent.name : '...'} - {c.name}
+                                            </option>
+                                         );
+                                     })}
+                                </optgroup>
                             ]}
-                            <option key="all-header" disabled className="font-bold text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant dark:bg-dark-surfaceContainerHigh">Všetky kategórie</option>
-                            {otherCategories.map((c: Category) => <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{allCategories.find((p: Category) => p.id === c.parentId)?.name} - {c.name}</option>)}
+                            
+                            {/* Render grouped categories based on transaction type context - although 'type' state restricts choices already, grouping helps visual consistency */}
+                             {otherCategories.income.length > 0 && (
+                                <optgroup label="Príjmy" className="font-semibold text-green-600 dark:text-green-400">
+                                    {otherCategories.income.map((c: any) => (
+                                        <option key={c.id} value={c.id} className="text-light-onSurface dark:text-dark-onSurface dark:bg-dark-surfaceContainerHigh">
+                                            {c.displayName}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            )}
+                             {otherCategories.expense.length > 0 && (
+                                <optgroup label="Výdavky" className="font-semibold text-light-error dark:text-dark-error">
+                                    {otherCategories.expense.map((c: any) => (
+                                        <option key={c.id} value={c.id} className="text-light-onSurface dark:text-dark-onSurface dark:bg-dark-surfaceContainerHigh">
+                                            {c.displayName}
+                                        </option>
+                                    ))}
+                                </optgroup>
+                            )}
                         </select>
                     </div>
                     <div className="relative">
@@ -256,6 +316,8 @@ const Transactions: React.FC = () => {
     maxAmount: '',
     type: '',
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -271,11 +333,13 @@ const Transactions: React.FC = () => {
       maxAmount: '',
       type: '',
     });
+    setSearchQuery('');
   };
 
   const filteredTransactions = useMemo(() => {
     return [...transactions]
       .filter(t => {
+        if (searchQuery && !t.notes?.toLowerCase().includes(searchQuery.toLowerCase())) return false;
         if (filters.startDate && new Date(t.transactionDate) < new Date(filters.startDate)) return false;
         if (filters.endDate && new Date(t.transactionDate) > new Date(filters.endDate)) return false;
         
@@ -345,74 +409,233 @@ const Transactions: React.FC = () => {
     }
   }
 
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+
+  const removeFilter = (key: keyof typeof filters) => {
+    setFilters(prev => ({ ...prev, [key]: '' }));
+  };
+
+  const groupedCategories = useMemo(() => {
+      const subcategories = categories.filter((c: Category) => c.parentId);
+      
+      const mapped = subcategories.map((c: Category) => {
+          const parent = categoryMap.get(c.parentId!);
+          return {
+              ...c,
+              displayName: `${parent ? parent.name : '...'} - ${c.name}`,
+              parentOrder: parent?.order ?? 999,
+              categoryOrder: c.order ?? 999
+          };
+      });
+
+      // Sort by parent order then category order
+      mapped.sort((a: any, b: any) => {
+          if (a.parentOrder !== b.parentOrder) {
+              return a.parentOrder - b.parentOrder;
+          }
+          return a.categoryOrder - b.categoryOrder;
+      });
+
+      return {
+          income: mapped.filter((c: any) => c.type === 'income'),
+          expense: mapped.filter((c: any) => c.type === 'expense')
+      };
+  }, [categories, categoryMap]);
+
+  const activeFiltersList = [
+      { key: 'startDate', label: `Od: ${new Date(filters.startDate).toLocaleDateString('sk-SK')}`, value: filters.startDate },
+      { key: 'endDate', label: `Do: ${new Date(filters.endDate).toLocaleDateString('sk-SK')}`, value: filters.endDate },
+      { key: 'categoryId', label: categoryMap.get(filters.categoryId)?.name, value: filters.categoryId },
+      { key: 'type', label: filters.type === 'income' ? 'Príjem' : filters.type === 'expense' ? 'Výdavok' : 'Prevod', value: filters.type },
+      { key: 'minAmount', label: `> ${filters.minAmount} €`, value: filters.minAmount },
+      { key: 'maxAmount', label: `< ${filters.maxAmount} €`, value: filters.maxAmount },
+  ].filter(f => f.value);
+  
+  // --- Helper for grouping categories in select ---
+  // (Duplicated here because Transactions component can't see the one inside TransactionForm. Ideally should be moved to utils or a separate component)
+  const renderCategoryOptions = (groupedCats: { income: any[], expense: any[] }) => {
+        return (
+            <>
+                <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky kategórie</option>
+                {groupedCats.expense.length > 0 && (
+                    <optgroup label="Výdavky" className="font-semibold text-light-error dark:text-dark-error">
+                         {groupedCats.expense.map((c: any) => (
+                             <option key={c.id} value={c.id} className="text-light-onSurface dark:text-dark-onSurface dark:bg-dark-surfaceContainerHigh">
+                                {c.displayName}
+                             </option>
+                        ))}
+                    </optgroup>
+                )}
+                {groupedCats.income.length > 0 && (
+                    <optgroup label="Príjmy" className="font-semibold text-green-600 dark:text-green-400">
+                         {groupedCats.income.map((c: any) => (
+                             <option key={c.id} value={c.id} className="text-light-onSurface dark:text-dark-onSurface dark:bg-dark-surfaceContainerHigh">
+                                {c.displayName}
+                             </option>
+                        ))}
+                    </optgroup>
+                )}
+            </>
+        );
+    };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Transakcie</h1>
-        <button onClick={openAddModal} className="flex items-center px-6 py-3 bg-light-tertiaryContainer text-light-onTertiaryContainer dark:bg-dark-tertiaryContainer dark:text-dark-onTertiaryContainer rounded-2xl hover:shadow-md font-medium transition-shadow">
+        <button onClick={openAddModal} className="flex items-center px-6 py-3 bg-light-tertiaryContainer text-light-onTertiaryContainer dark:bg-dark-tertiaryContainer dark:text-dark-onTertiaryContainer rounded-2xl hover:shadow-md font-medium transition-shadow w-full sm:w-auto justify-center">
           <PlusIcon className="h-5 w-5 mr-2" />
           Pridať transakciu
         </button>
       </div>
 
-      <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
-          
-          {/* Dátum od */}
-          <div className="relative cursor-pointer" onClick={() => startDateRef.current?.showPicker()}>
-            <label htmlFor="startDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Dátum od</label>
-            <input ref={startDateRef} type="date" name="startDate" id="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 cursor-pointer" />
-          </div>
-
-          {/* Dátum do */}
-          <div className="relative cursor-pointer" onClick={() => endDateRef.current?.showPicker()}>
-            <label htmlFor="endDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Dátum do</label>
-            <input ref={endDateRef} type="date" name="endDate" id="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 cursor-pointer" />
-          </div>
-
-          {/* Kategória */}
-          <div className="relative">
-            <label htmlFor="category-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Kategória</label>
-            <select id="category-filter" name="categoryId" value={filters.categoryId} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 appearance-none">
-                <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky kategórie</option>
-                {categories.filter((c: Category) => c.parentId).sort((a: Category, b: Category) => a.name.localeCompare(b.name)).map((c: Category) => {
-                    const parent = categoryMap.get(c.parentId!);
-                    const displayName = `${parent ? parent.name : '...'} - ${c.name}`;
-                    return <option key={c.id} value={c.id} className="dark:bg-dark-surfaceContainerHigh">{displayName}</option>
-                })}
-            </select>
-          </div>
-          
-          {/* Typ */}
-          <div className="relative">
-            <label htmlFor="type-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Typ</label>
-            <select id="type-filter" name="type" value={filters.type} onChange={handleFilterChange} className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2 appearance-none">
-                <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky typy</option>
-                <option value="income" className="dark:bg-dark-surfaceContainerHigh">Príjem</option>
-                <option value="expense" className="dark:bg-dark-surfaceContainerHigh">Výdavok</option>
-                <option value="transfer" className="dark:bg-dark-surfaceContainerHigh">Prevod</option>
-            </select>
-          </div>
-
-          {/* Suma od */}
-           <div className="relative">
-            <label htmlFor="minAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Suma od</label>
-            <input type="number" name="minAmount" id="minAmount" value={filters.minAmount} onChange={handleFilterChange} placeholder="0,00" className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2" />
-          </div>
-
-          {/* Suma do */}
-           <div className="relative">
-            <label htmlFor="maxAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1">Suma do</label>
-            <input type="number" name="maxAmount" id="maxAmount" value={filters.maxAmount} onChange={handleFilterChange} placeholder="100,00" className="w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 px-3 py-2" />
-          </div>
-
-          {/* Tlačidlo na reset */}
-          <div className="sm:col-start-2 md:col-start-3 lg:col-start-4 flex justify-end">
-            <button onClick={resetFilters} className="px-4 py-2 text-sm font-medium text-light-primary dark:text-dark-primary rounded-full hover:bg-light-primary/10 dark:hover:bg-dark-primary/10 self-end">
-                Zrušiť filtre
+      <div className="space-y-4">
+        {/* Search and Filter Toggle Bar */}
+        <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-grow">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <MagnifyingGlassIcon className="h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant" />
+                </div>
+                <input
+                    type="text"
+                    placeholder="Hľadať v poznámkach..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="block w-full pl-10 pr-3 py-3 border-none rounded-2xl bg-light-surfaceContainerHigh dark:bg-dark-surfaceContainerHigh text-light-onSurface dark:text-dark-onSurface placeholder-light-onSurfaceVariant dark:placeholder-dark-onSurfaceVariant focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary transition-all"
+                />
+            </div>
+            <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center justify-center px-5 py-3 rounded-2xl font-medium transition-all ${showFilters || activeFilterCount > 0 
+                    ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' 
+                    : 'bg-light-surfaceContainerHigh text-light-onSurfaceVariant dark:bg-dark-surfaceContainerHigh dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest'}`}
+            >
+                <FunnelIcon className="h-5 w-5 mr-2" />
+                Filtre
+                {activeFilterCount > 0 && (
+                    <span className="ml-2 bg-light-onSecondaryContainer text-light-secondaryContainer dark:bg-dark-onSecondaryContainer dark:text-dark-secondaryContainer text-xs font-bold px-2 py-0.5 rounded-full">
+                        {activeFilterCount}
+                    </span>
+                )}
             </button>
-          </div>
         </div>
+
+        {/* Active Filters Chips */}
+        {activeFiltersList.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+                {activeFiltersList.map((filter) => (
+                    <div key={filter.key} className="flex items-center bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest text-light-onSurface dark:text-dark-onSurface px-3 py-1 rounded-full text-sm border border-light-outline/20 dark:border-dark-outline/20">
+                        <span>{filter.label}</span>
+                        <button 
+                            onClick={() => removeFilter(filter.key as keyof typeof filters)}
+                            className="ml-2 p-0.5 hover:bg-light-surfaceContainerLow dark:hover:bg-dark-surfaceContainerLow rounded-full"
+                        >
+                            <XIcon className="h-4 w-4" />
+                        </button>
+                    </div>
+                ))}
+                <button 
+                    onClick={resetFilters} 
+                    className="text-sm text-light-primary dark:text-dark-primary hover:underline px-2"
+                >
+                    Vymazať všetko
+                </button>
+            </div>
+        )}
+
+        {/* Collapsible Filter Panel */}
+        {showFilters && (
+            <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-5 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 animate-fadeIn">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                
+                {/* Dátum od */}
+                <div 
+                    className="relative group cursor-pointer" 
+                    onClick={(e) => {
+                        // Open picker only if NOT clicking the input itself (allows text editing)
+                        if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                            startDateRef.current?.showPicker();
+                        }
+                    }}
+                >
+                    <label htmlFor="startDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1 cursor-pointer">Dátum od</label>
+                    <div className="relative">
+                        <input 
+                            ref={startDateRef}
+                            type="date" 
+                            name="startDate" 
+                            id="startDate" 
+                            value={filters.startDate} 
+                            onChange={handleFilterChange} 
+                            className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary pl-3 pr-10 py-2.5" 
+                        />
+                        <CalendarDaysIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pointer-events-none" />
+                    </div>
+                </div>
+
+                {/* Dátum do */}
+                <div 
+                    className="relative group cursor-pointer"
+                    onClick={(e) => {
+                         if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                            endDateRef.current?.showPicker();
+                        }
+                    }}
+                >
+                    <label htmlFor="endDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1 cursor-pointer">Dátum do</label>
+                    <div className="relative">
+                        <input 
+                            ref={endDateRef}
+                            type="date" 
+                            name="endDate" 
+                            id="endDate" 
+                            value={filters.endDate} 
+                            onChange={handleFilterChange} 
+                            className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary pl-3 pr-10 py-2.5" 
+                        />
+                        <CalendarDaysIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pointer-events-none" />
+                    </div>
+                </div>
+
+                {/* Kategória */}
+                <div className="relative">
+                    <label htmlFor="category-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Kategória</label>
+                    <select id="category-filter" name="categoryId" value={filters.categoryId} onChange={handleFilterChange} className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5 appearance-none">
+                        {renderCategoryOptions(groupedCategories)}
+                    </select>
+                </div>
+                
+                {/* Typ */}
+                <div className="relative">
+                    <label htmlFor="type-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Typ</label>
+                    <select id="type-filter" name="type" value={filters.type} onChange={handleFilterChange} className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5 appearance-none">
+                        <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky typy</option>
+                        <option value="income" className="dark:bg-dark-surfaceContainerHigh">Príjem</option>
+                        <option value="expense" className="dark:bg-dark-surfaceContainerHigh">Výdavok</option>
+                        <option value="transfer" className="dark:bg-dark-surfaceContainerHigh">Prevod</option>
+                    </select>
+                </div>
+
+                {/* Suma od */}
+                <div className="relative">
+                    <label htmlFor="minAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Suma od</label>
+                    <input type="number" name="minAmount" id="minAmount" value={filters.minAmount} onChange={handleFilterChange} placeholder="0,00" className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5" />
+                </div>
+
+                {/* Suma do */}
+                <div className="relative">
+                    <label htmlFor="maxAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Suma do</label>
+                    <input type="number" name="maxAmount" id="maxAmount" value={filters.maxAmount} onChange={handleFilterChange} placeholder="100,00" className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5" />
+                </div>
+                </div>
+                
+                <div className="mt-4 flex justify-end">
+                    <button onClick={() => setShowFilters(false)} className="text-sm font-medium text-light-primary dark:text-dark-primary hover:underline">
+                        Schovať filtre
+                    </button>
+                </div>
+            </div>
+        )}
       </div>
 
       <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 sm:p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant">
