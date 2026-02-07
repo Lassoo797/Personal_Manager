@@ -15,7 +15,11 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, collapsed = false, onToggleCollapse }) => {
-  const linkClasses = `flex items-center rounded-xl font-medium transition-all duration-300 ${collapsed ? 'justify-center p-3' : 'px-4 py-3 text-base'}`;
+  // Ak sme na mobile (šírka < 768px), "collapsed" stav ignorujeme a vždy zobrazujeme plné menu
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const effectiveCollapsed = isMobile ? false : collapsed;
+
+  const linkClasses = `flex items-center rounded-xl font-medium transition-all duration-300 ${effectiveCollapsed ? 'justify-center p-3' : 'px-4 py-3 text-base'}`;
   const activeLinkClasses = "bg-light-primaryContainer text-light-onPrimaryContainer dark:bg-dark-primaryContainer dark:text-dark-onPrimaryContainer shadow-sm";
   const inactiveLinkClasses = "text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest hover:text-light-onSurface dark:hover:text-dark-onSurface";
 
@@ -57,14 +61,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, collapsed = false, o
       <div
         className={`fixed top-0 left-0 h-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow shadow-xl z-50 transform transition-all duration-300 ease-in-out border-r border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 flex flex-col
           ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          ${collapsed ? 'w-20' : 'w-72'}
+          ${effectiveCollapsed ? 'w-20' : 'w-72'}
         `}
       >
         {/* Header / Logo Area */}
-        <div className={`flex items-center h-16 border-b border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 ${collapsed ? 'justify-center' : 'justify-between px-6'}`}>
+        <div className={`flex items-center h-16 border-b border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 ${effectiveCollapsed ? 'justify-center' : 'justify-between px-6'}`}>
           <div 
-            onClick={() => window.innerWidth >= 768 && onToggleCollapse?.()}
-            className={`cursor-pointer font-bold text-xl text-light-primary dark:text-dark-primary flex items-center gap-2 overflow-hidden whitespace-nowrap transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}
+            onClick={() => {
+                if (window.innerWidth >= 768) {
+                    onToggleCollapse?.();
+                } else {
+                    onClose();
+                }
+            }}
+            className={`cursor-pointer font-bold text-xl text-light-primary dark:text-dark-primary flex items-center gap-2 overflow-hidden whitespace-nowrap transition-all duration-300 ${effectiveCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}
           >
              <div className="bg-light-primaryContainer dark:bg-dark-primaryContainer p-2 rounded-lg">
                 <MenuIcon className="w-6 h-6 text-light-onPrimaryContainer dark:text-dark-onPrimaryContainer" />
@@ -73,21 +83,23 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, collapsed = false, o
           </div>
           {/* Logo icon visible when collapsed */}
           <div 
-            onClick={() => window.innerWidth >= 768 && onToggleCollapse?.()}
-            className={`absolute cursor-pointer transition-all duration-300 ${collapsed ? 'opacity-100 scale-100' : 'opacity-0 scale-0 pointer-events-none'}`}
+            onClick={() => {
+                if (window.innerWidth >= 768) {
+                    onToggleCollapse?.();
+                } else {
+                    onClose();
+                }
+            }}
+            className={`absolute cursor-pointer transition-all duration-300 ${effectiveCollapsed ? 'opacity-100 scale-100' : 'opacity-0 scale-0 pointer-events-none'}`}
           >
              <div className="bg-light-primaryContainer dark:bg-dark-primaryContainer p-2 rounded-lg">
                 <MenuIcon className="w-6 h-6 text-light-onPrimaryContainer dark:text-dark-onPrimaryContainer" />
              </div>
           </div>
-
-          <button onClick={onClose} className="md:hidden p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
-            <XIcon />
-          </button>
         </div>
 
         {/* Workspace Selector (Moved from Header) */}
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div className="px-4 pt-4 pb-2">
             <div className="relative" ref={dropdownRef}>
                 <button 
@@ -140,42 +152,42 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, collapsed = false, o
         )}
         
         {/* Separator if collapsed to keep spacing consistent */}
-        {collapsed && <div className="h-4"></div>}
+        {effectiveCollapsed && <div className="h-4"></div>}
 
         {/* Navigation Links */}
         <nav className="p-3 space-y-2 flex-1 overflow-y-auto">
-          <NavLink to="/" className={getNavLinkClass} onClick={onClose} title={collapsed ? "Nástenka" : ""}>
-            <HomeIcon className={`flex-shrink-0 ${collapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
-            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Nástenka</span>
+          <NavLink to="/" className={getNavLinkClass} onClick={() => window.innerWidth < 768 && onClose()} title={effectiveCollapsed ? "Nástenka" : ""}>
+            <HomeIcon className={`flex-shrink-0 ${effectiveCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
+            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${effectiveCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Nástenka</span>
           </NavLink>
           
-          <NavLink to="/transactions" className={getNavLinkClass} onClick={onClose} title={collapsed ? "Transakcie" : ""}>
-            <CreditCardIcon className={`flex-shrink-0 ${collapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
-            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Transakcie</span>
+          <NavLink to="/transactions" className={getNavLinkClass} onClick={() => window.innerWidth < 768 && onClose()} title={effectiveCollapsed ? "Transakcie" : ""}>
+            <CreditCardIcon className={`flex-shrink-0 ${effectiveCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
+            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${effectiveCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Transakcie</span>
           </NavLink>
           
-          <NavLink to="/budgets" className={getNavLinkClass} onClick={onClose} title={collapsed ? "Rozpočty" : ""}>
-            <BanknotesIcon className={`flex-shrink-0 ${collapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
-            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Rozpočty</span>
+          <NavLink to="/budgets" className={getNavLinkClass} onClick={() => window.innerWidth < 768 && onClose()} title={effectiveCollapsed ? "Rozpočty" : ""}>
+            <BanknotesIcon className={`flex-shrink-0 ${effectiveCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
+            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${effectiveCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Rozpočty</span>
           </NavLink>
           
-          <NavLink to="/accounts" className={getNavLinkClass} onClick={onClose} title={collapsed ? "Účty" : ""}>
-            <WalletIcon className={`flex-shrink-0 ${collapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
-            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Účty</span>
+          <NavLink to="/accounts" className={getNavLinkClass} onClick={() => window.innerWidth < 768 && onClose()} title={effectiveCollapsed ? "Účty" : ""}>
+            <WalletIcon className={`flex-shrink-0 ${effectiveCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
+            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${effectiveCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Účty</span>
           </NavLink>
           
           <div className="my-4 border-t border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 mx-2"></div>
 
-          <NavLink to="/system-events" className={getNavLinkClass} onClick={onClose} title={collapsed ? "Systémové Udalosti" : ""}>
-            <CalendarDaysIcon className={`flex-shrink-0 ${collapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
-            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Systémové Udalosti</span>
+          <NavLink to="/system-events" className={getNavLinkClass} onClick={() => window.innerWidth < 768 && onClose()} title={effectiveCollapsed ? "Systémové Udalosti" : ""}>
+            <CalendarDaysIcon className={`flex-shrink-0 ${effectiveCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
+            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${effectiveCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Systémové Udalosti</span>
           </NavLink>
         </nav>
 
         {/* Bottom Actions */}
         <div className="p-4 border-t border-light-outlineVariant/50 dark:border-dark-outlineVariant/50">
-             <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
-                <div className={`${collapsed ? 'hidden' : 'block'} text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant`}>
+             <div className={`flex items-center ${effectiveCollapsed ? 'justify-center' : 'justify-between'}`}>
+                <div className={`${effectiveCollapsed ? 'hidden' : 'block'} text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant`}>
                     Režim
                 </div>
                 <ThemeSwitcher />

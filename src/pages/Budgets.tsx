@@ -208,6 +208,10 @@ const Budgets: React.FC = () => {
     const [archiveModalState, setArchiveModalState] = useState<{ isOpen: boolean, category: Category | null }>({ isOpen: false, category: null });
     const [noteModalState, setNoteModalState] = useState<{ isOpen: boolean, budget: Budget | null, categoryId: string | null, month: string | null }>({ isOpen: false, budget: null, categoryId: null, month: null });
     
+    // Page Action Menu State
+    const [isPageMenuOpen, setIsPageMenuOpen] = useState(false);
+    const pageMenuTriggerRef = useRef<HTMLButtonElement>(null);
+    
     
     const handleSaveSuccess = (newCategory: Category) => {
         // Ak bola pridaná nová skupina (nemá parentId), rozbaľ ju
@@ -456,23 +460,31 @@ const Budgets: React.FC = () => {
                         <ArrowsPointingInIcon className="h-5 w-5" />
                     </button>
 
-                    <button
-                        onClick={() => {
-                            setConfirmModalState({
-                                isOpen: true,
-                                message: `Naozaj chcete nastaviť aktuálny plán pre všetky kategórie a podkategórie na všetky nasledujúce mesiace do konca roka?`,
-                                onConfirm: () => {
-                                    publishFullBudgetForYear(currentMonth);
-                                    setConfirmModalState(prev => ({ ...prev, isOpen: false }));
-                                },
-                                confirmText: 'Nastaviť'
-                            });
-                        }}
-                        className="flex-shrink-0 flex items-center justify-center p-2 rounded-lg text-light-primary dark:text-dark-primary hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest transition-all"
-                        title="Plán do konca roka"
-                    >
-                        <CalendarClockIcon className="h-5 w-5" />
+                    <button ref={pageMenuTriggerRef} onClick={() => setIsPageMenuOpen(true)} className="p-2 rounded-lg text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest">
+                        <DotsVerticalIcon className="h-5 w-5" />
                     </button>
+                    
+                    <ActionMenu isOpen={isPageMenuOpen} onClose={() => setIsPageMenuOpen(false)} triggerRef={pageMenuTriggerRef}>
+                        <div className="py-2">
+                             <button
+                                onClick={() => {
+                                    setIsPageMenuOpen(false);
+                                    setConfirmModalState({
+                                        isOpen: true,
+                                        message: `Naozaj chcete nastaviť aktuálny plán pre všetky kategórie a podkategórie na všetky nasledujúce mesiace do konca roka?`,
+                                        onConfirm: () => {
+                                            publishFullBudgetForYear(currentMonth);
+                                            setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                        },
+                                        confirmText: 'Nastaviť'
+                                    });
+                                }}
+                                className="w-full flex items-center px-4 py-2 text-sm text-left text-light-onSurface dark:text-dark-onSurface hover:bg-black/5 dark:hover:bg-white/5"
+                            >
+                                <CalendarClockIcon className="h-5 w-5 mr-3"/> Nastaviť do konca roka
+                            </button>
+                        </div>
+                    </ActionMenu>
                 </div>
             </PageHeader>
 
