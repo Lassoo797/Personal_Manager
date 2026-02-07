@@ -1,10 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
-import { MenuIcon, ChevronDownIcon, UserCircleIcon, ArrowRightOnRectangleIcon } from './icons';
-import ThemeSwitcher from './ThemeSwitcher';
+import { MenuIcon, UserCircleIcon, ArrowRightOnRectangleIcon } from './icons';
 import { useAppContext } from '../context/AppContext';
-import Modal from './Modal';
-import WorkspaceManager from './WorkspaceManager';
 import { useAuth } from '../context/AuthContext';
 import { Workspace } from '../types';
 
@@ -40,9 +37,9 @@ const UserMenu: React.FC<{
       setPositionStyle({
         position: 'fixed',
         top: `${rect.bottom + 8}px`,
-        right: `calc(100% - ${rect.right}px)`,
+        right: `24px`, // Fixed right margin for safety
         minWidth: '224px',
-        zIndex: 50,
+        zIndex: 60, // Higher than header
       });
     }
   }, [isOpen, triggerRef]);
@@ -53,7 +50,7 @@ const UserMenu: React.FC<{
     <div
       ref={menuRef}
       style={positionStyle}
-      className="origin-top-right absolute mt-2 rounded-xl shadow-lg bg-light-surfaceContainer dark:bg-dark-surfaceContainer ring-1 ring-black ring-opacity-5 focus:outline-none"
+      className="absolute mt-2 rounded-xl shadow-lg bg-light-surfaceContainer dark:bg-dark-surfaceContainer ring-1 ring-black ring-opacity-5 focus:outline-none"
     >
       <div className="py-1">
         <div className="px-4 py-3">
@@ -81,13 +78,10 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
-  const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false);
-  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { logout, user } = useAuth();
   
-  const { workspaces, currentWorkspaceId, setCurrentWorkspaceId } = useAppContext();
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const { workspaces, currentWorkspaceId } = useAppContext();
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const appVersion = useMemo(() => {
@@ -95,110 +89,55 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
     const versionNumber = version.replace('-test', '');
     return `${isTest ? 'TEST' : ''} v${versionNumber}`;
   }, []);
-
-
-  const currentWorkspace = useMemo(() => 
-    workspaces.find((p: Workspace) => p.id === currentWorkspaceId),
-    [workspaces, currentWorkspaceId]
-  );
   
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsWorkspaceDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [dropdownRef]);
-
   return (
-    <>
-      <header className="bg-light-surface dark:bg-dark-surface sticky top-0 z-30 border-b border-light-outlineVariant dark:border-dark-outlineVariant">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-                <button
-                    onClick={onMenuClick}
-                    className="p-2 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh focus:outline-none md:hidden"
-                    aria-label="Open sidebar"
-                >
-                    <MenuIcon />
-                </button>
-              <div className="flex-shrink-0 ml-4 md:ml-0">
-                <div className="relative" ref={dropdownRef}>
-                  <button 
-                    onClick={() => setIsWorkspaceDropdownOpen((prev: boolean) => !prev)}
-                    className="flex items-center text-light-onSurface dark:text-dark-onSurface text-lg font-medium p-2 rounded-lg hover:bg-light-surfaceContainer dark:hover:bg-dark-surfaceContainer transition-colors"
-                  >
-                    <span className="font-bold">{currentWorkspace?.name || 'Vyberte priestor'}</span>
-                    <ChevronDownIcon className={`h-5 w-5 ml-1 transition-transform ${isWorkspaceDropdownOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {isWorkspaceDropdownOpen && (
-                    <div className="origin-top-left absolute left-0 mt-2 w-56 rounded-xl shadow-lg bg-light-surfaceContainer dark:bg-dark-surfaceContainer ring-1 ring-black ring-opacity-5 focus:outline-none z-20">
-                      <div className="py-1" role="menu" aria-orientation="vertical" aria-labelledby="options-menu">
-                        {workspaces.filter((p: Workspace) => p.id !== currentWorkspaceId).map((workspace: Workspace) => (
-                          <a
-                            key={workspace.id}
-                            href="#"
-                            onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
-                              e.preventDefault();
-                              setCurrentWorkspaceId(workspace.id);
-                              setIsWorkspaceDropdownOpen(false);
-                            }}
-                            className="block px-4 py-2 text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"
-                            role="menuitem"
-                          >
-                            {workspace.name}
-                          </a>
-                        ))}
-                         <div className="border-t border-light-outlineVariant dark:border-dark-outlineVariant my-1"></div>
-                        <a
-                          href="#"
-                          onClick={(e: React.MouseEvent<HTMLAnchorElement>) => {
-                            e.preventDefault();
-                            setIsWorkspaceModalOpen(true);
-                            setIsWorkspaceDropdownOpen(false);
-                          }}
-                          className="block px-4 py-2 text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"
-                          role="menuitem"
-                        >
-                          Spravovať pracovné priestory...
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-green-500">
-                {appVersion}
-              </span>
-              <ThemeSwitcher />
-              
-              {user && (
-                <div className="relative" ref={userMenuRef}>
-                   <button onClick={() => setIsUserMenuOpen(prev => !prev)} className="p-2 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh transition-colors">
-                      <UserCircleIcon className="h-6 w-6" />
-                   </button>
-                   <UserMenu
-                      isOpen={isUserMenuOpen}
-                      onClose={() => setIsUserMenuOpen(false)}
-                      triggerRef={userMenuRef}
-                      onLogout={logout}
-                      userName={user.name || user.email}
-                   />
-                </div>
-              )}
-            </div>
-          </div>
+    <header className="bg-light-surface dark:bg-dark-surface sticky top-0 z-40 border-b border-light-outlineVariant dark:border-dark-outlineVariant h-16 md:h-20 transition-all">
+      <div className="w-full h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+        
+        {/* Left Section: Mobile Menu & Page Title */}
+        <div className="flex items-center gap-3 min-w-[200px] flex-shrink-0">
+            <button
+                onClick={onMenuClick}
+                className="p-2 -ml-2 mr-1 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh focus:outline-none md:hidden"
+                aria-label="Open sidebar"
+            >
+                <MenuIcon />
+            </button>
+            
+            {/* Page Title Portal Target */}
+            <div id="header-title-portal" />
         </div>
-      </header>
-      <Modal isOpen={isWorkspaceModalOpen} onClose={() => setIsWorkspaceModalOpen(false)} title="Správa pracovných priestorov">
-          <WorkspaceManager onClose={() => setIsWorkspaceModalOpen(false)} />
-      </Modal>
-    </>
+
+        {/* Center/Right Section: Page Actions Portal Target */}
+        <div id="header-actions-portal" className="flex-1 flex justify-end items-center min-w-0" />
+
+        {/* Far Right Section: User & System Info */}
+        <div className="flex items-center gap-3 flex-shrink-0 border-l border-light-outlineVariant dark:border-dark-outlineVariant pl-3 ml-2">
+            <span className="text-xs text-green-500 hidden sm:block font-mono">
+              {appVersion}
+            </span>
+            
+            {user && (
+              <div className="relative" ref={userMenuRef}>
+                 <button 
+                    onClick={() => setIsUserMenuOpen(prev => !prev)} 
+                    className="p-1.5 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh transition-colors"
+                    title={user.name || user.email}
+                 >
+                    <UserCircleIcon className="h-8 w-8" />
+                 </button>
+                 <UserMenu
+                    isOpen={isUserMenuOpen}
+                    onClose={() => setIsUserMenuOpen(false)}
+                    triggerRef={userMenuRef}
+                    onLogout={logout}
+                    userName={user.name || user.email}
+                 />
+              </div>
+            )}
+        </div>
+      </div>
+    </header>
   );
 };
 

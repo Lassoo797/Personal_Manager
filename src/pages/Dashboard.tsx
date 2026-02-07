@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import PageHeader from '../components/PageHeader';
 import { LandmarkIcon, PiggyBankIcon, BanknotesIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, WalletIcon } from '../components/icons';
 
 const COLORS = ['#0061A4', '#535F70', '#6B5778', '#00C49F', '#FFBB28', '#FF8042'];
@@ -568,9 +569,11 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative h-full flex flex-col">
+      <PageHeader title="Nástenka">
+      </PageHeader>
+      
       <div className="flex flex-col space-y-2">
-        <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Nástenka</h1>
         <p className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Prehľad vašich financií</p>
       </div>
       

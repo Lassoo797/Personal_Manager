@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
-import { PlusIcon, PencilIcon, TrashIcon, FunnelIcon, MagnifyingGlassIcon, XIcon, CalendarDaysIcon, ArrowUpCircleIcon, ArrowDownCircleIcon } from '../components/icons';
+import PageHeader from '../components/PageHeader';
+import { PlusIcon, PencilIcon, TrashIcon, FunnelIcon, MagnifyingGlassIcon, XIcon, CalendarDaysIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, ChevronUpIcon } from '../components/icons';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { roundToTwoDecimals } from '../lib/utils';
 import type { Transaction, TransactionType, Account, Category } from '../types';
@@ -351,6 +352,19 @@ const Transactions: React.FC = () => {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 20);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -513,49 +527,102 @@ const Transactions: React.FC = () => {
     };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Transakcie</h1>
-        <button onClick={openAddModal} className="flex items-center px-6 py-3 bg-light-tertiaryContainer text-light-onTertiaryContainer dark:bg-dark-tertiaryContainer dark:text-dark-onTertiaryContainer rounded-2xl hover:shadow-md font-medium transition-shadow w-full sm:w-auto justify-center">
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Pridať transakciu
-        </button>
-      </div>
-
-      <div className="space-y-4">
-        {/* Search and Filter Toggle Bar */}
-        <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-grow">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <MagnifyingGlassIcon className="h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant" />
+    <div className="space-y-6 relative h-full flex flex-col">
+       <PageHeader title="Transakcie">
+            <div className="flex items-center gap-3 w-full md:w-auto">
+                 {/* Search Bar - Compact on scroll */}
+                <div className="relative flex-1 max-w-sm transition-all duration-300">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <MagnifyingGlassIcon className="h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Hľadať..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="block w-full pl-10 pr-3 border-none rounded-full bg-light-surfaceContainerHigh dark:bg-dark-surfaceContainerHigh text-light-onSurface dark:text-dark-onSurface placeholder-light-onSurfaceVariant dark:placeholder-dark-onSurfaceVariant focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary transition-all py-2 text-sm"
+                    />
                 </div>
-                <input
-                    type="text"
-                    placeholder="Hľadať v poznámkach..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border-none rounded-2xl bg-light-surfaceContainerHigh dark:bg-dark-surfaceContainerHigh text-light-onSurface dark:text-dark-onSurface placeholder-light-onSurfaceVariant dark:placeholder-dark-onSurfaceVariant focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary transition-all"
-                />
-            </div>
-            <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center justify-center px-5 py-3 rounded-2xl font-medium transition-all ${showFilters || activeFilterCount > 0 
-                    ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' 
-                    : 'bg-light-surfaceContainerHigh text-light-onSurfaceVariant dark:bg-dark-surfaceContainerHigh dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest'}`}
-            >
-                <FunnelIcon className="h-5 w-5 mr-2" />
-                Filtre
-                {activeFilterCount > 0 && (
-                    <span className="ml-2 bg-light-onSecondaryContainer text-light-secondaryContainer dark:bg-dark-onSecondaryContainer dark:text-dark-secondaryContainer text-xs font-bold px-2 py-0.5 rounded-full">
-                        {activeFilterCount}
-                    </span>
-                )}
-            </button>
-        </div>
 
+                <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`flex items-center justify-center rounded-full font-medium transition-all px-3 py-2 text-sm ${showFilters || activeFilterCount > 0 
+                        ? 'bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer' 
+                        : 'bg-light-surfaceContainerHigh text-light-onSurfaceVariant dark:bg-dark-surfaceContainerHigh dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest'}`}
+                    title="Filtre"
+                >
+                    <FunnelIcon className="h-4 w-4 mr-2" />
+                    <span className="hidden sm:inline">Filtre</span>
+                    {activeFilterCount > 0 && (
+                        <span className="bg-light-onSecondaryContainer text-light-secondaryContainer dark:bg-dark-onSecondaryContainer dark:text-dark-secondaryContainer text-xs font-bold px-1.5 py-0.5 rounded-full ml-2">
+                            {activeFilterCount}
+                        </span>
+                    )}
+                </button>
+
+                <button 
+                    onClick={openAddModal} 
+                    className="flex items-center justify-center p-2 rounded-full bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary hover:shadow-md transition-all"
+                    title="Pridať transakciu"
+                >
+                    <PlusIcon className="h-5 w-5" />
+                </button>
+            </div>
+       </PageHeader>
+
+        {/* Collapsible Filter Panel - positioned absolutely or relatively depending on needs, kept simple here */}
+        {showFilters && (
+            <div className="mt-4 bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-5 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 animate-fadeIn shadow-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                     {/* ... Filter inputs (Keep existing filter inputs logic) ... */}
+                     <div className="relative group cursor-pointer" onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT') startDateRef.current?.showPicker(); }}>
+                        <label className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Dátum od</label>
+                        <div className="relative">
+                            <input ref={startDateRef} type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary pl-3 pr-10 py-2.5" />
+                            <CalendarDaysIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pointer-events-none" />
+                        </div>
+                    </div>
+                    <div className="relative group cursor-pointer" onClick={(e) => { if ((e.target as HTMLElement).tagName !== 'INPUT') endDateRef.current?.showPicker(); }}>
+                        <label className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Dátum do</label>
+                        <div className="relative">
+                            <input ref={endDateRef} type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary pl-3 pr-10 py-2.5" />
+                            <CalendarDaysIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pointer-events-none" />
+                        </div>
+                    </div>
+                     <div className="relative">
+                        <label className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Kategória</label>
+                        <select name="categoryId" value={filters.categoryId} onChange={handleFilterChange} className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5 appearance-none">
+                            {renderCategoryOptions(groupedCategories)}
+                        </select>
+                    </div>
+                    <div className="relative">
+                        <label className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Typ</label>
+                        <select name="type" value={filters.type} onChange={handleFilterChange} className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5 appearance-none">
+                            <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky typy</option>
+                            <option value="income" className="dark:bg-dark-surfaceContainerHigh">Príjem</option>
+                            <option value="expense" className="dark:bg-dark-surfaceContainerHigh">Výdavok</option>
+                            <option value="transfer" className="dark:bg-dark-surfaceContainerHigh">Prevod</option>
+                        </select>
+                    </div>
+                    <div className="relative">
+                        <label className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Suma od</label>
+                        <input type="number" name="minAmount" value={filters.minAmount} onChange={handleFilterChange} placeholder="0,00" className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5" />
+                    </div>
+                    <div className="relative">
+                        <label className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Suma do</label>
+                        <input type="number" name="maxAmount" value={filters.maxAmount} onChange={handleFilterChange} placeholder="100,00" className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5" />
+                    </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <button onClick={() => setShowFilters(false)} className="text-sm font-medium text-light-primary dark:text-dark-primary hover:underline">Schovať filtre</button>
+                </div>
+            </div>
+        )}
+
+      <div className="space-y-4 pt-2">
         {/* Active Filters Chips */}
         {activeFiltersList.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 px-1">
                 {activeFiltersList.map((filter) => (
                     <div key={filter.key} className="flex items-center bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest text-light-onSurface dark:text-dark-onSurface px-3 py-1 rounded-full text-sm border border-light-outline/20 dark:border-dark-outline/20">
                         <span>{filter.label}</span>
@@ -576,105 +643,12 @@ const Transactions: React.FC = () => {
             </div>
         )}
 
-        {/* Collapsible Filter Panel */}
-        {showFilters && (
-            <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-5 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 animate-fadeIn">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                
-                {/* Dátum od */}
-                <div 
-                    className="relative group cursor-pointer" 
-                    onClick={(e) => {
-                        // Open picker only if NOT clicking the input itself (allows text editing)
-                        if ((e.target as HTMLElement).tagName !== 'INPUT') {
-                            startDateRef.current?.showPicker();
-                        }
-                    }}
-                >
-                    <label htmlFor="startDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1 cursor-pointer">Dátum od</label>
-                    <div className="relative">
-                        <input 
-                            ref={startDateRef}
-                            type="date" 
-                            name="startDate" 
-                            id="startDate" 
-                            value={filters.startDate} 
-                            onChange={handleFilterChange} 
-                            className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary pl-3 pr-10 py-2.5" 
-                        />
-                        <CalendarDaysIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pointer-events-none" />
-                    </div>
-                </div>
-
-                {/* Dátum do */}
-                <div 
-                    className="relative group cursor-pointer"
-                    onClick={(e) => {
-                         if ((e.target as HTMLElement).tagName !== 'INPUT') {
-                            endDateRef.current?.showPicker();
-                        }
-                    }}
-                >
-                    <label htmlFor="endDate" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1 cursor-pointer">Dátum do</label>
-                    <div className="relative">
-                        <input 
-                            ref={endDateRef}
-                            type="date" 
-                            name="endDate" 
-                            id="endDate" 
-                            value={filters.endDate} 
-                            onChange={handleFilterChange} 
-                            className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary pl-3 pr-10 py-2.5" 
-                        />
-                        <CalendarDaysIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant pointer-events-none" />
-                    </div>
-                </div>
-
-                {/* Kategória */}
-                <div className="relative">
-                    <label htmlFor="category-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Kategória</label>
-                    <select id="category-filter" name="categoryId" value={filters.categoryId} onChange={handleFilterChange} className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5 appearance-none">
-                        {renderCategoryOptions(groupedCategories)}
-                    </select>
-                </div>
-                
-                {/* Typ */}
-                <div className="relative">
-                    <label htmlFor="type-filter" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Typ</label>
-                    <select id="type-filter" name="type" value={filters.type} onChange={handleFilterChange} className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5 appearance-none">
-                        <option value="" className="dark:bg-dark-surfaceContainerHigh">Všetky typy</option>
-                        <option value="income" className="dark:bg-dark-surfaceContainerHigh">Príjem</option>
-                        <option value="expense" className="dark:bg-dark-surfaceContainerHigh">Výdavok</option>
-                        <option value="transfer" className="dark:bg-dark-surfaceContainerHigh">Prevod</option>
-                    </select>
-                </div>
-
-                {/* Suma od */}
-                <div className="relative">
-                    <label htmlFor="minAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Suma od</label>
-                    <input type="number" name="minAmount" id="minAmount" value={filters.minAmount} onChange={handleFilterChange} placeholder="0,00" className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5" />
-                </div>
-
-                {/* Suma do */}
-                <div className="relative">
-                    <label htmlFor="maxAmount" className="block text-xs font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mb-1 ml-1">Suma do</label>
-                    <input type="number" name="maxAmount" id="maxAmount" value={filters.maxAmount} onChange={handleFilterChange} placeholder="100,00" className="w-full bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow text-light-onSurface dark:text-dark-onSurface rounded-xl border-none focus:ring-2 focus:ring-light-primary dark:focus:ring-dark-primary px-3 py-2.5" />
-                </div>
-                </div>
-                
-                <div className="mt-4 flex justify-end">
-                    <button onClick={() => setShowFilters(false)} className="text-sm font-medium text-light-primary dark:text-dark-primary hover:underline">
-                        Schovať filtre
-                    </button>
-                </div>
-            </div>
-        )}
       </div>
 
-      <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 sm:p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-        <div className="overflow-x-auto">
+      <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 sm:p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant flex-1 overflow-hidden flex flex-col">
+        <div className="overflow-x-auto overflow-y-auto h-full">
           <table className="w-full text-left">
-            <thead>
+            <thead className="sticky top-0 bg-light-surfaceContainer dark:bg-dark-surfaceContainer z-10">
               <tr className="border-b border-light-outlineVariant dark:border-dark-outlineVariant">
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dátum</th>
                 <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Kategória</th>
@@ -734,6 +708,15 @@ const Transactions: React.FC = () => {
         message={confirmModalState.message}
         onConfirm={confirmModalState.onConfirm}
       />
+      
+      {/* Scroll to top button */}
+      <button
+        onClick={scrollToTop}
+        className={`fixed bottom-6 right-6 p-3 rounded-full bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary shadow-lg transition-all duration-300 transform hover:-translate-y-1 ${isScrolled ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}
+        aria-label="Späť hore"
+      >
+        <ChevronUpIcon className="h-6 w-6" />
+      </button>
     </div>
   );
 };

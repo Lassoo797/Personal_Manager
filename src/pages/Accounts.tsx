@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import { ConfirmModal } from '../components/ConfirmModal';
+import PageHeader from '../components/PageHeader';
 import { PlusIcon, PencilIcon, ArchiveBoxIcon, LandmarkIcon, WalletIcon, DotsVerticalIcon, ChevronUpIcon, ChevronDownIcon, BanknotesIcon, PiggyBankIcon } from '../components/icons';
 import type { Account, AccountType, AccountSubtype } from '../types';
 
@@ -236,17 +237,14 @@ const Accounts = () => {
   };
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-end">
-        <div>
-          <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Účty</h1>
-          <p className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mt-2">Spravujte svoje bankové účty a hotovosť</p>
-        </div>
-        <button onClick={openAddModal} className="flex items-center px-4 py-2 bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary rounded-full hover:shadow-lg font-medium transition-all">
+    <div className="space-y-8 relative h-full flex flex-col">
+      <PageHeader title="Účty">
+        <button onClick={openAddModal} className="flex items-center justify-center px-4 py-2 bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary rounded-full hover:shadow-lg font-medium transition-all text-sm">
           <PlusIcon className="h-5 w-5 mr-2" />
-          Pridať účet
+          <span className="hidden sm:inline">Pridať účet</span>
+          <span className="sm:hidden">Pridať</span>
         </button>
-      </div>
+      </PageHeader>
       
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

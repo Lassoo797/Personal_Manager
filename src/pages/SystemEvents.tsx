@@ -3,6 +3,7 @@ import { useAppContext } from '../context/AppContext';
 import pb from '../lib/pocketbase';
 import type { SystemEvent } from '../types';
 import EventDetails from '../components/EventDetails'; // Import the new component
+import PageHeader from '../components/PageHeader';
 
 const SystemEvents: React.FC = () => {
   const { currentWorkspaceId } = useAppContext();
@@ -53,9 +54,7 @@ const SystemEvents: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl md:text-2xl font-bold text-light-onSurface dark:text-dark-onSurface">
-        Systémové Udalosti
-      </h1>
+      <PageHeader title="Systémové Udalosti" />
 
       {events.length === 0 ? (
         <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-6 rounded-xl text-center">

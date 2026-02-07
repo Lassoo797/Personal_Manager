@@ -4,6 +4,7 @@ import { useAppContext } from '../context/AppContext';
 import type { TransactionType, Category, Budget } from '../types';
 import { PlusIcon, ArchiveBoxIcon, XIcon, ChevronDownIcon, ChevronUpIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, PencilIcon, DotsVerticalIcon, CalendarClockIcon, CalendarDaysIcon, ChatBubbleLeftIcon, ArrowsPointingOutIcon, ArrowsPointingInIcon, BanknotesIcon } from '../components/icons';
 import Modal from '../components/Modal';
+import PageHeader from '../components/PageHeader';
 import { roundToTwoDecimals } from '../lib/utils';
 
 import ReactDOM from 'react-dom';
@@ -216,6 +217,20 @@ const Budgets: React.FC = () => {
     };
 
 
+    const [isScrolled, setIsScrolled] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsScrolled(window.scrollY > 20);
+        };
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
+
+    const scrollToTop = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const currentMonth = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = String(currentDate.getMonth() + 1).padStart(2, '0');
@@ -391,74 +406,77 @@ const Budgets: React.FC = () => {
     }
 
     return (
-        <>
-            <div className="sticky top-16 z-30 bg-light-surface dark:bg-dark-surface border-b border-light-outlineVariant dark:border-dark-outlineVariant">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="py-4 sm:py-6">
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-                            <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Rozpočty</h1>
-                            <div className="flex items-center space-x-2 bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-1 rounded-full">
-                                <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh" aria-label="Predchádzajúci mesiac">
-                                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                                </button>
-                                <span className="font-semibold text-center w-40 select-none">{formatMonth(currentMonth)}</span>
-                                <button onClick={handleNextMonth} className="p-2 rounded-full hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh" aria-label="Nasledujúci mesiac">
-                                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                                </button>
-                            </div>
-                        </div>
-                        <div className="mt-4 bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-3 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50">
-                            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                                <div className="flex-1 min-w-max">
-                                    <p className="text-sm font-medium text-light-onSurface dark:text-dark-onSurface">Nástroje pre plánovanie</p>
-                                </div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <button
-                                        onClick={() => setCurrentDate(new Date())}
-                                        className="flex items-center gap-2 px-4 py-2 bg-light-tertiaryContainer text-light-onTertiaryContainer dark:bg-dark-tertiaryContainer dark:text-dark-onTertiaryContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
-                                    >
-                                        <CalendarDaysIcon className="h-5 w-5" />
-                                        Aktuálny mesiac
-                                    </button>
-                                    <button
-                                        onClick={handleExpandAll}
-                                        className="flex items-center gap-2 px-4 py-2 bg-light-surfaceContainer text-light-onSurfaceContainer dark:bg-dark-surfaceContainer dark:text-dark-onSurfaceContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
-                                    >
-                                        <ArrowsPointingOutIcon className="h-5 w-5" />
-                                        Rozbaliť všetko
-                                    </button>
-                                    <button
-                                        onClick={handleCollapseAll}
-                                        className="flex items-center gap-2 px-4 py-2 bg-light-surfaceContainer text-light-onSurfaceContainer dark:bg-dark-surfaceContainer dark:text-dark-onSurfaceContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
-                                    >
-                                        <ArrowsPointingInIcon className="h-5 w-5" />
-                                        Zbaliť všetko
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setConfirmModalState({
-                                                isOpen: true,
-                                                message: `Naozaj chcete nastaviť aktuálny plán pre všetky kategórie a podkategórie na všetky nasledujúce mesiace do konca roka?`,
-                                                onConfirm: () => {
-                                                    publishFullBudgetForYear(currentMonth);
-                                                    setConfirmModalState({ ...confirmModalState, isOpen: false });
-                                                },
-                                                confirmText: 'Nastaviť'
-                                            });
-                                        }}
-                                        className="flex items-center gap-2 px-4 py-2 bg-light-secondaryContainer text-light-onSecondaryContainer dark:bg-dark-secondaryContainer dark:text-dark-onSecondaryContainer rounded-full font-medium text-sm hover:shadow-md transition-shadow"
-                                    >
-                                        <CalendarClockIcon className="h-5 w-5" />
-                                        Nastaviť plán do konca roka
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+        <div className="relative h-full flex flex-col">
+            <PageHeader title="Rozpočty">
+                <div className="flex items-center gap-2">
+                     <div className="flex items-center bg-light-surfaceContainerHigh dark:bg-dark-surfaceContainerHigh rounded-full border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 shadow-sm transition-all duration-300 p-0.5">
+                        <button 
+                            onClick={handlePrevMonth} 
+                            className="p-1.5 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest hover:text-light-primary dark:hover:text-dark-primary transition-colors"
+                            aria-label="Predchádzajúci mesiac"
+                        >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                        </button>
+                        
+                        <span className="font-semibold text-light-onSurface dark:text-dark-onSurface text-center select-none capitalize text-sm w-28 truncate px-1">
+                            {formatMonth(currentMonth)}
+                        </span>
+                        
+                        <button 
+                            onClick={handleNextMonth} 
+                            className="p-1.5 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest hover:text-light-primary dark:hover:text-dark-primary transition-colors"
+                            aria-label="Nasledujúci mesiac"
+                        >
+                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </button>
                     </div>
-                </div>
-            </div>
 
-            <div className="space-y-6 pt-6">
+                    <div className="h-6 w-px bg-light-outlineVariant dark:bg-dark-outlineVariant mx-1 hidden sm:block"></div>
+
+                     <button
+                        onClick={() => setCurrentDate(new Date())}
+                        className="flex-shrink-0 flex items-center justify-center p-2 rounded-lg text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest transition-all"
+                        title="Prejsť na aktuálny mesiac"
+                    >
+                        <CalendarDaysIcon className="h-5 w-5" />
+                    </button>
+                    
+                    <button
+                        onClick={handleExpandAll}
+                        className="flex-shrink-0 flex items-center justify-center p-2 rounded-lg text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest transition-all"
+                        title="Rozbaliť všetko"
+                    >
+                        <ArrowsPointingOutIcon className="h-5 w-5" />
+                    </button>
+                    <button
+                        onClick={handleCollapseAll}
+                        className="flex-shrink-0 flex items-center justify-center p-2 rounded-lg text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest transition-all"
+                        title="Zbaliť všetko"
+                    >
+                        <ArrowsPointingInIcon className="h-5 w-5" />
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            setConfirmModalState({
+                                isOpen: true,
+                                message: `Naozaj chcete nastaviť aktuálny plán pre všetky kategórie a podkategórie na všetky nasledujúce mesiace do konca roka?`,
+                                onConfirm: () => {
+                                    publishFullBudgetForYear(currentMonth);
+                                    setConfirmModalState(prev => ({ ...prev, isOpen: false }));
+                                },
+                                confirmText: 'Nastaviť'
+                            });
+                        }}
+                        className="flex-shrink-0 flex items-center justify-center p-2 rounded-lg text-light-primary dark:text-dark-primary hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest transition-all"
+                        title="Plán do konca roka"
+                    >
+                        <CalendarClockIcon className="h-5 w-5" />
+                    </button>
+                </div>
+            </PageHeader>
+
+            <div className="space-y-6 pt-2">
                 <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant">
                     <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface">Súhrn za mesiac</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
@@ -621,7 +639,16 @@ const Budgets: React.FC = () => {
                     month={noteModalState.month}
                 />
             </div>
-        </>
+            
+            {/* Scroll to top button */}
+            <button
+                onClick={scrollToTop}
+                className={`fixed bottom-6 right-6 p-3 rounded-full bg-light-primary text-light-onPrimary dark:bg-dark-primary dark:text-dark-onPrimary shadow-lg transition-all duration-300 transform hover:-translate-y-1 ${isScrolled ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10 pointer-events-none'}`}
+                aria-label="Späť hore"
+            >
+                <ChevronUpIcon className="h-6 w-6" />
+            </button>
+        </div>
     );
 };
 
