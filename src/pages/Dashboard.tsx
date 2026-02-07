@@ -322,8 +322,8 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
     
     // Výpočet ACTUAL a SAVINGS pre minulosť a prítomnosť
     // Zadefinovanie množín ID účtov pre rýchlejšie vyhľadávanie
-    const budgetAccountIds = useMemo(() => new Set(accounts.filter(a => !a.isSavings).map(a => a.id)), [accounts]);
-    const savingsAccountIds = useMemo(() => new Set(accounts.filter(a => a.isSavings).map(a => a.id)), [accounts]);
+    const budgetAccountIds = new Set(accounts.filter(a => !a.isSavings).map(a => a.id));
+    const savingsAccountIds = new Set(accounts.filter(a => a.isSavings).map(a => a.id));
 
     if (displayedYear <= currentYear) {
         let runningActualBalance = yearStartBalance;
