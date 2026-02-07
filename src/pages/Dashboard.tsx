@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { useAppContext } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
+import { LandmarkIcon, PiggyBankIcon, BanknotesIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, WalletIcon } from '../components/icons';
 
 const COLORS = ['#0061A4', '#535F70', '#6B5778', '#00C49F', '#FFBB28', '#FF8042'];
 
@@ -13,14 +14,13 @@ const Dashboard: React.FC = () => {
   const { theme } = useTheme();
   const [displayedYear, setDisplayedYear] = useState(new Date().getFullYear());
 
-  const maxBudgetYear = useMemo(() => {
+  const { minBudgetYear, maxBudgetYear } = useMemo(() => {
     const budgetYears = budgets.map(b => parseInt(b.month.split('-')[0], 10));
-    return budgetYears.length > 0 ? Math.max(...budgetYears) : new Date().getFullYear();
-  }, [budgets]);
-
-  const minBudgetYear = useMemo(() => {
-    const budgetYears = budgets.map(b => parseInt(b.month.split('-')[0], 10));
-    return budgetYears.length > 0 ? Math.min(...budgetYears) : new Date().getFullYear();
+    const currentYear = new Date().getFullYear();
+    return {
+      minBudgetYear: budgetYears.length > 0 ? Math.min(...budgetYears) : currentYear,
+      maxBudgetYear: budgetYears.length > 0 ? Math.max(...budgetYears) : currentYear
+    };
   }, [budgets]);
 
   const { currentMonthName, previousMonthLabel } = useMemo(() => {
@@ -50,6 +50,8 @@ const Dashboard: React.FC = () => {
         .filter(a => a.isSavings)
         .reduce((sum, account) => sum + getAccountBalance(account.id), 0);
   }, [accounts, getAccountBalance]);
+
+  const budgetBalance = useMemo(() => totalBalance - totalSavings, [totalBalance, totalSavings]);
   
   const accountIds = useMemo(() => new Set(accounts.map(a => a.id)), [accounts]);
 
@@ -65,6 +67,7 @@ const Dashboard: React.FC = () => {
     averageMonthlyIncome,
     averageMonthlyExpense,
     pieChartData,
+    monthlyNet
   } = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -100,6 +103,7 @@ const Dashboard: React.FC = () => {
     });
 
     const { actualIncome: monthlyIncome, actualExpense: monthlyExpenses } = getFinancialSummary(currentMonthTransactions);
+    const monthlyNet = monthlyIncome - monthlyExpenses;
 
     currentMonthTransactions.forEach(t => {
       if (t.type === 'expense') {
@@ -129,6 +133,7 @@ const Dashboard: React.FC = () => {
         monthlyChartData: chartData,
         averageMonthlyIncome: avgIncome,
         averageMonthlyExpense: avgExpense,
+        monthlyNet
     };
   }, [budgetTransactions, categories, getFinancialSummary]);
 
@@ -563,38 +568,113 @@ const { chartData, months, currentMonthIndex, yAxisDomain, yAxisTicks } = useMem
   };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Nástenka</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Celkový majetok</h2>
-          <p className="text-3xl font-bold text-light-tertiary dark:text-dark-tertiary mt-1">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-          <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mt-1">z toho sporenie: {totalSavings.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-        </div>
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Príjmy tento mesiac</h2>
-          <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">{monthlyIncome.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-        </div>
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Výdavky tento mesiac</h2>
-          <p className="text-3xl font-bold text-light-error dark:text-dark-error mt-1">{monthlyExpenses.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-        </div>
+    <div className="space-y-8">
+      <div className="flex flex-col space-y-2">
+        <h1 className="text-4xl font-normal text-light-onSurface dark:text-dark-onSurface">Nástenka</h1>
+        <p className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Prehľad vašich financií</p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Priemerný mesačný príjem</h2>
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">{averageMonthlyIncome.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-          <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">(od začiatku roka)</p>
-        </div>
-        <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-          <h2 className="text-base font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Priemerný mesačný výdaj</h2>
-          <p className="text-2xl font-bold text-light-error dark:text-dark-error mt-1">{averageMonthlyExpense.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
-          <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">(od začiatku roka)</p>
-        </div>
-      </div>
+      {/* Sekcia 1: Stav Majetku (Snapshot) */}
+      <section>
+          <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface flex items-center gap-2">
+              <LandmarkIcon className="w-5 h-5" />
+              Stav účtov
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Celkový majetok */}
+            <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <LandmarkIcon className="w-24 h-24 text-light-primary dark:text-dark-primary" />
+                </div>
+                <div className="relative z-10">
+                    <p className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant uppercase tracking-wider">Celkový majetok</p>
+                    <p className="text-3xl font-bold text-light-primary dark:text-dark-primary mt-2">{totalBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+                    <div className="mt-4 flex items-center text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                        <span className="inline-block w-2 h-2 rounded-full bg-light-primary dark:bg-dark-primary mr-2"></span>
+                        Všetky účty spolu
+                    </div>
+                </div>
+            </div>
 
+            {/* Sporenia */}
+            <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <PiggyBankIcon className="w-24 h-24 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="relative z-10">
+                    <p className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant uppercase tracking-wider">Sporenia</p>
+                    <p className="text-3xl font-bold text-purple-600 dark:text-purple-400 mt-2">{totalSavings.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+                    <div className="mt-4 flex items-center text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                        <span className="inline-block w-2 h-2 rounded-full bg-purple-600 dark:bg-purple-400 mr-2"></span>
+                        {totalBalance > 0 ? ((totalSavings / totalBalance) * 100).toFixed(1) : 0}% z celkového majetku
+                    </div>
+                </div>
+            </div>
+
+            {/* V rozpočte (Bežné peniaze) */}
+            <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <BanknotesIcon className="w-24 h-24 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="relative z-10">
+                    <p className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant uppercase tracking-wider">Disponibilné pre rozpočet</p>
+                    <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">{budgetBalance.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+                    <div className="mt-4 flex items-center text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                         <span className="inline-block w-2 h-2 rounded-full bg-green-600 dark:bg-green-400 mr-2"></span>
+                        Peniaze na bežné použitie
+                    </div>
+                </div>
+            </div>
+          </div>
+      </section>
+
+      {/* Sekcia 2: Mesačný prehľad (Performance) */}
+      <section>
+        <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface flex items-center gap-2">
+            <WalletIcon className="w-5 h-5" />
+            Prehľad za {currentMonthName}
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-5 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex items-center justify-between">
+                <div>
+                    <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Príjmy</p>
+                    <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">{monthlyIncome.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+                    <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mt-1">Priemer: {averageMonthlyIncome.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+                </div>
+                <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-full">
+                    <ArrowUpCircleIcon className="w-8 h-8 text-green-600 dark:text-green-400" />
+                </div>
+            </div>
+
+            <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-5 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex items-center justify-between">
+                <div>
+                    <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Výdavky</p>
+                    <p className="text-2xl font-bold text-light-error dark:text-dark-error mt-1">{monthlyExpenses.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+                     <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mt-1">Priemer: {averageMonthlyExpense.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}</p>
+                </div>
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full">
+                    <ArrowDownCircleIcon className="w-8 h-8 text-light-error dark:text-dark-error" />
+                </div>
+            </div>
+
+            <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-5 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant flex items-center justify-between">
+                <div>
+                    <p className="text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Mesačná bilancia</p>
+                    <p className={`text-2xl font-bold mt-1 ${monthlyNet >= 0 ? 'text-light-primary dark:text-dark-primary' : 'text-light-error dark:text-dark-error'}`}>
+                        {monthlyNet > 0 ? '+' : ''}{monthlyNet.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
+                    </p>
+                     <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mt-1">
+                        {monthlyNet >= 0 ? 'Ušetrili ste' : 'Minuli ste viac ako prijali'}
+                     </p>
+                </div>
+                <div className={`p-3 rounded-full ${monthlyNet >= 0 ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-red-100 dark:bg-red-900/30'}`}>
+                    <WalletIcon className={`w-8 h-8 ${monthlyNet >= 0 ? 'text-light-primary dark:text-dark-primary' : 'text-light-error dark:text-dark-error'}`} />
+                </div>
+            </div>
+        </div>
+      </section>
+
+      {/* Sekcia 3: Analytika (Charts) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-xl border border-light-outlineVariant dark:border-dark-outlineVariant">
           <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface">Príjmy vs. Výdavky (Posledných 6 mesiacov)</h2>
