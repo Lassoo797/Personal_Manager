@@ -91,51 +91,55 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   }, []);
   
   return (
-    <header className="bg-light-surface dark:bg-dark-surface sticky top-0 z-40 border-b border-light-outlineVariant dark:border-dark-outlineVariant h-16 md:h-20 transition-all">
-      <div className="w-full h-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+    <header className="bg-light-surface dark:bg-dark-surface sticky top-0 z-40 border-b border-light-outlineVariant dark:border-dark-outlineVariant transition-all">
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-3 flex flex-col gap-2">
         
-        {/* Left Section: Mobile Menu & Page Title */}
-        <div className="flex items-center gap-3 min-w-[200px] flex-shrink-0">
-            <button
-                onClick={onMenuClick}
-                className="p-2 -ml-2 mr-1 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh focus:outline-none md:hidden"
-                aria-label="Open sidebar"
-            >
-                <MenuIcon />
-            </button>
-            
-            {/* Page Title Portal Target */}
-            <div id="header-title-portal" />
+        {/* Top Row: Mobile Menu, Page Title, User Info */}
+        <div className="flex items-center justify-between gap-4 w-full">
+            {/* Left Section: Mobile Menu & Page Title */}
+            <div className="flex items-center gap-3 flex-shrink-0 z-20 relative bg-light-surface dark:bg-dark-surface">
+                <button
+                    onClick={onMenuClick}
+                    className="p-2 -ml-2 mr-1 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh focus:outline-none md:hidden"
+                    aria-label="Open sidebar"
+                >
+                    <MenuIcon />
+                </button>
+                
+                {/* Page Title Portal Target */}
+                <div id="header-title-portal" />
+            </div>
+
+             {/* Right Section: User & System Info */}
+            <div className="flex items-center gap-3 flex-shrink-0 border-l border-light-outlineVariant dark:border-dark-outlineVariant pl-3 ml-auto">
+                <span className="text-xs text-green-500 hidden sm:block font-mono">
+                {appVersion}
+                </span>
+                
+                {user && (
+                <div className="relative" ref={userMenuRef}>
+                    <button 
+                        onClick={() => setIsUserMenuOpen(prev => !prev)} 
+                        className="p-1.5 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh transition-colors"
+                        title={user.name || user.email}
+                    >
+                        <UserCircleIcon className="h-8 w-8" />
+                    </button>
+                    <UserMenu
+                        isOpen={isUserMenuOpen}
+                        onClose={() => setIsUserMenuOpen(false)}
+                        triggerRef={userMenuRef}
+                        onLogout={logout}
+                        userName={user.name || user.email}
+                    />
+                </div>
+                )}
+            </div>
         </div>
 
-        {/* Center/Right Section: Page Actions Portal Target */}
-        <div id="header-actions-portal" className="flex-1 flex justify-end items-center min-w-0" />
+        {/* Bottom Row: Page Actions Portal Target */}
+        <div id="header-actions-portal" className="w-full flex justify-end items-center min-w-0 pb-1" />
 
-        {/* Far Right Section: User & System Info */}
-        <div className="flex items-center gap-3 flex-shrink-0 border-l border-light-outlineVariant dark:border-dark-outlineVariant pl-3 ml-2">
-            <span className="text-xs text-green-500 hidden sm:block font-mono">
-              {appVersion}
-            </span>
-            
-            {user && (
-              <div className="relative" ref={userMenuRef}>
-                 <button 
-                    onClick={() => setIsUserMenuOpen(prev => !prev)} 
-                    className="p-1.5 rounded-full text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh transition-colors"
-                    title={user.name || user.email}
-                 >
-                    <UserCircleIcon className="h-8 w-8" />
-                 </button>
-                 <UserMenu
-                    isOpen={isUserMenuOpen}
-                    onClose={() => setIsUserMenuOpen(false)}
-                    triggerRef={userMenuRef}
-                    onLogout={logout}
-                    userName={user.name || user.email}
-                 />
-              </div>
-            )}
-        </div>
       </div>
     </header>
   );

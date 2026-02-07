@@ -48,7 +48,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, children }) => {
                     <span className="text-light-primary dark:text-dark-primary p-2 bg-light-primary/10 dark:bg-dark-primary/10 rounded-lg">
                         {icon}
                     </span>
-                    <h1 className="text-xl md:text-2xl font-semibold text-light-onSurface dark:text-dark-onSurface truncate hidden md:block">
+                    <h1 className="text-xl md:text-2xl font-semibold text-light-onSurface dark:text-dark-onSurface truncate">
                         {title}
                     </h1>
                 </div>,
