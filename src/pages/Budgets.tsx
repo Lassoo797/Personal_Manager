@@ -489,133 +489,101 @@ const Budgets: React.FC = () => {
             </PageHeader>
 
             <div className="space-y-6 pt-2">
-                <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant">
-                    <h2 className="text-xl font-medium mb-4 text-light-onSurface dark:text-dark-onSurface">Súhrn za mesiac</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-6">
-                        {(() => {
-                            // --- PRÍPRAVA HODNÔT PRE ZOBRAZENIE ---
-                            const { plannedIncome, actualIncome, plannedExpense, actualExpense, plannedBalance, actualBalance } = summary;
+                {/* --- MODERN SUMMARY SECTION --- */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-6">
+                    {(() => {
+                        const { plannedIncome, actualIncome, plannedExpense, actualExpense, plannedBalance, actualBalance } = summary;
 
-                            // --- Logika pre Príjmy ---
-                            const incomeDiff = actualIncome - plannedIncome;
-                            // Pomer plnenia: ak je plán 0, akýkoľvek príjem je 100% úspech. Inak štandardný pomer.
-                            const incomeRatio = plannedIncome > 0 ? actualIncome / plannedIncome : (actualIncome > 0 ? 1 : 0);
-                            const incomeProgressWidth = `${Math.min(incomeRatio * 100, 100)}%`;
-                            const incomeDiffColor = incomeDiff >= 0 ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
-                            
-                            // --- Logika pre Výdavky ---
-                            const remainingExpense = plannedExpense - actualExpense;
-                             // Pomer čerpania: ak je plán 0, akýkoľvek výdavok je 100% prekročenie.
-                            const expenseRatio = plannedExpense > 0 ? actualExpense / plannedExpense : (actualExpense > 0 ? 1 : 0);
-                            const expenseProgressWidth = `${Math.min(expenseRatio * 100, 100)}%`;
-                            const remainingExpenseColor = remainingExpense >= 0 ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
-                            // Farba progress baru pre výdavky sa mení podľa miery čerpania
-                            let expenseBarColor = 'bg-green-500';
-                            if (expenseRatio > 1) expenseBarColor = 'bg-light-error dark:bg-dark-error';
-                            else if (expenseRatio > 0.8) expenseBarColor = 'bg-yellow-500';
+                        // Income Logic
+                        const incomeDiff = actualIncome - plannedIncome;
+                        const incomeRatio = plannedIncome > 0 ? actualIncome / plannedIncome : (actualIncome > 0 ? 1 : 0);
+                        const incomeProgressWidth = `${Math.min(incomeRatio * 100, 100)}%`;
+                        const incomeColor = 'text-green-600 dark:text-green-400';
+                        const incomeDiffColor = incomeDiff >= 0 ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
 
-                            // --- Logika pre Bilanciu ---
-                            const balanceDiff = actualBalance - plannedBalance;
-                            
-                            // ÚSPECH sa definuje ako dosiahnutie alebo prekročenie plánovanej bilancie.
-                            const isSuccess = actualBalance >= plannedBalance;
-                            
-                            // Definovanie farieb na základe stavu
-                            const balanceDiffColor = isSuccess ? 'text-green-600 dark:text-green-400' : 'text-yellow-500';
-                            let actualBalanceColor = isSuccess ? 'text-green-600 dark:text-green-400' : 'text-yellow-500';
-                            if (actualBalance < 0) {
-                                actualBalanceColor = 'text-light-error dark:text-dark-error';
-                            }
-                            
-                            // Pomer pre progress bar: jednoduchý pomer aktuálnej hodnoty k plánu.
-                            // Ak je plán 0, akýkoľvek výsledok nad 0 je 100%.
-                            let balanceRatio = 0;
-                            if (plannedBalance !== 0) {
-                                balanceRatio = actualBalance / plannedBalance;
-                            } else {
-                                balanceRatio = actualBalance > 0 ? 1 : 0;
-                            }
-                            
-                            const balanceProgressWidth = `${Math.max(0, Math.min(balanceRatio * 100, 100))}%`;
-                            const balanceBarColor = isSuccess ? 'bg-green-500' : (actualBalance < 0 ? 'bg-light-error' : 'bg-yellow-500');
+                        // Expense Logic
+                        const remainingExpense = plannedExpense - actualExpense;
+                        const expenseRatio = plannedExpense > 0 ? actualExpense / plannedExpense : (actualExpense > 0 ? 1 : 0);
+                        const expenseProgressWidth = `${Math.min(expenseRatio * 100, 100)}%`;
+                        const expenseColor = 'text-light-error dark:text-dark-error';
+                        const remainingExpenseColor = remainingExpense >= 0 ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+                        let expenseBarColor = 'bg-green-500';
+                        if (expenseRatio > 1) expenseBarColor = 'bg-light-error dark:bg-dark-error';
+                        else if (expenseRatio > 0.8) expenseBarColor = 'bg-yellow-500';
 
-                            return (
-                                <>
-                                    {/* Príjmy */}
-                                    <div className="md:border-r md:border-light-outlineVariant md:dark:border-dark-outlineVariant md:pr-8 flex flex-col">
-                                        <h3 className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant text-center">Príjmy</h3>
-                                        <div className="flex-grow mt-1 text-center mb-3">
-                                            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                                                {actualIncome.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
-                                            </p>
-                                        </div>
-                                        <div className="flex justify-between items-baseline text-xs">
-                                            <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">
-                                                Plán: {plannedIncome.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
-                                            </span>
-                                            <span>
-                                                <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">Rozdiel: </span>
-                                                <span className={`font-medium ${incomeDiffColor}`}>
-                                                    {incomeDiff.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay:'always'})}
-                                                </span>
-                                            </span>
-                                        </div>
-                                        <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-2 mt-1">
-                                            <div className="bg-green-500 h-2 rounded-full" style={{ width: incomeProgressWidth }}></div>
-                                        </div>
+                        // Balance Logic
+                        const balanceDiff = actualBalance - plannedBalance;
+                        const isSuccess = actualBalance >= plannedBalance;
+                        const balanceColor = actualBalance >= 0 ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+                        const balanceDiffColor = isSuccess ? 'text-green-600 dark:text-green-400' : 'text-yellow-500';
+                        let balanceRatio = 0;
+                        if (plannedBalance !== 0) {
+                            balanceRatio = actualBalance / plannedBalance;
+                        } else {
+                            balanceRatio = actualBalance > 0 ? 1 : 0;
+                        }
+                        const balanceProgressWidth = `${Math.max(0, Math.min(balanceRatio * 100, 100))}%`;
+                        const balanceBarColor = isSuccess ? 'bg-green-500' : (actualBalance < 0 ? 'bg-light-error' : 'bg-yellow-500');
+
+                        const Card = ({ title, value, planned, diff, diffLabel, colorClass, barColor, progress, diffColorClass }: any) => (
+                            <div className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-4 rounded-2xl border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 flex flex-col justify-between h-full shadow-sm">
+                                <div className="flex justify-between items-start mb-2">
+                                    <h3 className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">{title}</h3>
+                                    <div className={`px-2 py-0.5 rounded text-[10px] font-bold bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest ${diffColorClass}`}>
+                                        {diff > 0 ? '+' : ''}{diff.toLocaleString('sk-SK', {style:'currency', currency:'EUR', maximumFractionDigits: 0})}
                                     </div>
-
-                                    {/* Výdavky */}
-                                    <div className="md:border-r md:border-light-outlineVariant md:dark:border-dark-outlineVariant md:pr-8 flex flex-col">
-                                        <h3 className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant text-center">Výdavky</h3>
-                                        <div className="flex-grow mt-1 text-center mb-3">
-                                            <p className="text-2xl font-bold text-light-error dark:text-dark-error">
-                                                {actualExpense.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
-                                            </p>
-                                        </div>
-                                        <div className="flex justify-between items-baseline text-xs">
-                                            <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">
-                                                Plán: {plannedExpense.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
-                                            </span>
-                                            <span>
-                                                <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">Rozdiel: </span>
-                                                <span className={`font-medium ${remainingExpenseColor}`}>
-                                                    {remainingExpense.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay:'always'})}
-                                                </span>
-                                            </span>
-                                        </div>
-                                        <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-2 mt-1">
-                                            <div className={`${expenseBarColor} h-2 rounded-full`} style={{ width: expenseProgressWidth }}></div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Bilancia */}
-                                    <div className="flex flex-col">
-                                        <h3 className="text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant text-center">Bilancia</h3>
-                                        <div className="flex-grow mt-1 text-center mb-3">
-                                            <p className={`text-2xl font-bold ${actualBalanceColor}`}>
-                                                {actualBalance.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
-                                            </p>
-                                        </div>
-                                        <div className="flex justify-between items-baseline text-xs">
-                                            <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">
-                                                Plán: {plannedBalance.toLocaleString('sk-SK', {style:'currency', currency:'EUR'})}
-                                            </span>
-                                            <span>
-                                                <span className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant opacity-80">Rozdiel: </span>
-                                                <span className={`font-medium ${balanceDiffColor}`}>
-                                                    {balanceDiff.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR', signDisplay: 'always' })}
-                                                </span>
-                                            </span>
-                                        </div>
-                                        <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-2 mt-1">
-                                            <div className={`${balanceBarColor} h-2 rounded-full`} style={{ width: balanceProgressWidth }}></div>
-                                        </div>
-                                    </div>
-                                </>
-                            );
-                        })()}
                     </div>
+                                
+                                <div className="mb-3">
+                                    <p className={`text-2xl md:text-3xl font-bold ${colorClass} tracking-tight`}>
+                                        {value.toLocaleString('sk-SK', {style:'currency', currency:'EUR', maximumFractionDigits: 0})}
+                                    </p>
+                                    <p className="text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant mt-1 opacity-70">
+                                        Plán: {planned.toLocaleString('sk-SK', {style:'currency', currency:'EUR', maximumFractionDigits: 0})}
+                                    </p>
+                                </div>
+
+                                <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-1.5 overflow-hidden">
+                                    <div className={`${barColor} h-1.5 rounded-full transition-all duration-500`} style={{ width: progress }}></div>
+                                </div>
+                            </div>
+                        );
+
+                        return (
+                            <>
+                                <Card 
+                                    title="Príjmy" 
+                                    value={actualIncome} 
+                                    planned={plannedIncome} 
+                                    diff={incomeDiff} 
+                                    colorClass={incomeColor}
+                                    barColor="bg-green-500"
+                                    progress={incomeProgressWidth}
+                                    diffColorClass={incomeDiffColor}
+                                />
+                                <Card 
+                                    title="Výdavky" 
+                                    value={actualExpense} 
+                                    planned={plannedExpense} 
+                                    diff={remainingExpense} // Note: This is "Remaining", logic might differ visually but consistent with old UI
+                                    colorClass={expenseColor}
+                                    barColor={expenseBarColor}
+                                    progress={expenseProgressWidth}
+                                    diffColorClass={remainingExpenseColor}
+                                />
+                                <Card 
+                                    title="Bilancia" 
+                                    value={actualBalance} 
+                                    planned={plannedBalance} 
+                                    diff={balanceDiff}
+                                    colorClass={balanceColor}
+                                    barColor={balanceBarColor}
+                                    progress={balanceProgressWidth}
+                                    diffColorClass={balanceDiffColor}
+                                />
+                            </>
+                        );
+                    })()}
                 </div>
 
                 <div className="space-y-8">
@@ -709,70 +677,85 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
 
     const isIncome = parent.type === 'income';
     const difference = isIncome ? parentTotalActual - parentTotalBudget : parentTotalBudget - parentTotalActual;
-    const isPositive = difference >= 0;
+    
+    // --- COLOR LOGIC (Clean & Intuitive) ---
+    // 1. Realita (Actual): Neutrálna, je to len fakt.
+    const actualColor = 'text-light-onSurface dark:text-dark-onSurface';
 
-    let summaryLabel = '';
-    let summaryColor = '';
-    const actualColor = isIncome ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+    // 2. Rozdiel (Difference) & Bar: Nesie informáciu o stave.
+    let diffColor = '';
+    let barColorClass = '';
 
     if (isIncome) {
-        summaryLabel = 'Rozdiel';
-        summaryColor = isPositive ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+        if (parentTotalActual >= parentTotalBudget) {
+            // Income Met -> Success (Green)
+            diffColor = 'text-green-600 dark:text-green-400';
+            barColorClass = 'bg-green-500';
+        } else {
+            // Income Pending -> Warning/Pending (Amber)
+            diffColor = 'text-amber-600 dark:text-amber-400';
+            barColorClass = 'bg-amber-500';
+        }
     } else { // Expense
-        summaryLabel = isPositive ? 'Zostáva' : 'Prekročené';
-        summaryColor = isPositive ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+        if (parentTotalActual > parentTotalBudget) {
+            // Expense Exceeded -> Danger (Red)
+            diffColor = 'text-light-error dark:text-dark-error';
+            barColorClass = 'bg-light-error dark:bg-dark-error';
+        } else {
+            // Expense Within Limit -> Safe (Green)
+            diffColor = 'text-green-600 dark:text-green-400';
+            barColorClass = 'bg-green-500';
+        }
+    }
+
+    let summaryLabel = '';
+    if (isIncome) {
+        summaryLabel = 'Rozdiel';
+    } else { // Expense
+        summaryLabel = difference >= 0 ? 'Zostáva' : 'Prekročené';
     }
 
     const ratio = parentTotalBudget > 0 ? parentTotalActual / parentTotalBudget : (parentTotalActual > 0 ? 1 : 0);
     const progressWidth = `${Math.min(ratio * 100, 100)}%`;
 
-    const getBarColor = (r: number, type: TransactionType) => {
-        if (type === 'income') {
-            return r >= 1 ? 'bg-green-500' : 'bg-light-primary dark:bg-dark-primary';
-        }
-        if (r > 1) return 'bg-light-error dark:bg-dark-error';
-        if (r > 0.8) return 'bg-yellow-500';
-        return 'bg-light-primary dark:bg-dark-primary';
-    };
-
     const headerBgClass = isIncome ? 'bg-green-500/10' : 'bg-light-error/10 dark:bg-dark-error/10';
     const headerTextClass = isIncome ? 'text-green-800 dark:text-green-300' : 'text-light-error dark:text-dark-error';
-    const containerClasses = `bg-light-surfaceContainer dark:bg-dark-surfaceContainer rounded-2xl overflow-hidden border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 transition-shadow ${isDragging ? 'shadow-2xl' : ''}`;
+    const containerClasses = `bg-light-surfaceContainer dark:bg-dark-surfaceContainer rounded-xl overflow-hidden border border-light-outlineVariant/50 dark:border-dark-outlineVariant/50 transition-shadow ${isDragging ? 'shadow-2xl' : ''}`;
 
     return (
         <div className={containerClasses}>
             <div 
-                className={`relative ${headerBgClass} ${headerTextClass} p-4 cursor-pointer`}
+                className={`relative ${headerBgClass} ${headerTextClass} p-3 cursor-pointer`}
                 onClick={() => !isEditingName && toggleExpansion()}
             >
-                <div className="flex items-center gap-4 w-full">
-                    {/* Left Side: Icon and Name (fixed width) */}
-                    <div className="w-1/3 flex-shrink-0 flex items-center space-x-3 overflow-hidden">
-                        {isIncome ? <ArrowUpCircleIcon className="h-6 w-6 flex-shrink-0" /> : <ArrowDownCircleIcon className="h-6 w-6 flex-shrink-0" />}
+                <div className="flex items-center gap-3 w-full">
+                    {/* 1. Left Side: Icon and Name (Flexible width) */}
+                    <div className="flex-grow flex items-center space-x-2 overflow-hidden min-w-0">
+                        {isIncome ? <ArrowUpCircleIcon className="h-5 w-5 flex-shrink-0" /> : <ArrowDownCircleIcon className="h-5 w-5 flex-shrink-0" />}
                         <EditableCategoryName category={parent} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                     </div>
                     
-                    {/* Middle: Financial Summary (takes remaining space) */}
-                    <div className="flex-grow">
-                        <div className="flex flex-wrap justify-around items-baseline gap-x-4 gap-y-1 text-center w-full">
+                    {/* 2. Middle: Financial Summary (Desktop Fixed Width for Alignment) */}
+                    <div className="hidden md:flex flex-col w-[360px] flex-shrink-0 mr-4">
+                        <div className="flex items-baseline text-right">
                             {/* Plán */}
-                            <div>
-                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">Plán</p>
-                                <span className="text-base font-medium text-light-onSurface dark:text-dark-onSurface">
+                            <div className="flex-1 px-2">
+                                <p className="text-[10px] uppercase tracking-wider opacity-70 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">Plán</p>
+                                <span className="text-sm font-medium text-light-onSurface dark:text-dark-onSurface block truncate">
                                     {parentTotalBudget.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
                                 </span>
                             </div>
                             {/* Skutočnosť */}
-                            <div>
-                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">Skutočnosť</p>
-                                <span className={`text-base font-medium ${actualColor}`}>
+                            <div className="flex-1 px-2 border-l border-light-outlineVariant/20 dark:border-dark-outlineVariant/20">
+                                <p className="text-[10px] uppercase tracking-wider opacity-70 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">Realita</p>
+                                <span className={`text-sm font-medium ${actualColor} block truncate`}>
                                     {parentTotalActual.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
                                 </span>
                             </div>
                             {/* Rozdiel */}
-                            <div>
-                                <p className="text-xs opacity-80 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">{summaryLabel}</p>
-                                <span className={`text-base font-medium ${summaryColor}`}>
+                            <div className="flex-1 px-2 border-l border-light-outlineVariant/20 dark:border-dark-outlineVariant/20">
+                                <p className="text-[10px] uppercase tracking-wider opacity-70 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant truncate">{summaryLabel}</p>
+                                <span className={`text-sm font-bold ${diffColor} block truncate`}>
                                     {isIncome 
                                         ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always'})
                                         : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR'})
@@ -781,17 +764,42 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                             </div>
                         </div>
 
-                        {/* Progress Bar */}
-                        {subcategories.length > 0 && parentTotalBudget > 0 && (
-                            <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-1.5 mt-2">
-                                <div className={`h-1.5 rounded-full ${getBarColor(ratio, parent.type)}`} style={{ width: progressWidth }}></div>
+                         {/* Progress Bar (Desktop: Aligned with financial block) */}
+                         {subcategories.length > 0 && parentTotalBudget > 0 && (
+                            <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-1 mt-2">
+                                <div className={`h-1 rounded-full ${barColorClass}`} style={{ width: progressWidth }}></div>
                             </div>
                         )}
                     </div>
 
-                    {/* Right Side: Controls (fixed width) */}
+                    {/* Mobile Summary: Full Stats */}
+                    <div className="md:hidden flex flex-col items-end gap-0.5 text-right mr-1">
+                        <div className="flex items-center justify-end gap-1.5">
+                            <span className="text-[10px] opacity-60">Plán</span>
+                            <span className="text-xs font-medium text-light-onSurface dark:text-dark-onSurface">
+                                {parentTotalBudget.toLocaleString('sk-SK', {style:'currency',currency:'EUR', maximumFractionDigits: 0})}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5">
+                            <span className="text-[10px] opacity-60">Realita</span>
+                            <span className={`text-xs font-medium ${actualColor}`}>
+                                {parentTotalActual.toLocaleString('sk-SK', {style:'currency',currency:'EUR', maximumFractionDigits: 0})}
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5">
+                            <span className="text-[10px] opacity-60">{summaryLabel}</span>
+                            <span className={`text-xs font-bold ${diffColor}`}>
+                                {isIncome 
+                                    ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always', maximumFractionDigits: 0})
+                                    : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR', maximumFractionDigits: 0})
+                                }
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* 3. Right Side: Controls (fixed width) */}
                     <div className="flex-shrink-0 flex items-center space-x-1">
-                        <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10">
+                        <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-current">
                             <DotsVerticalIcon className="h-5 w-5" />
                         </button>
                         
@@ -834,11 +842,17 @@ const CategoryGroup: React.FC<CategoryGroupProps> = ({
                         </button>
                     </div>
                 </div>
+                 {/* Mobile Progress Bar (Visible ONLY on mobile, full width) */}
+                 {subcategories.length > 0 && parentTotalBudget > 0 && (
+                    <div className="md:hidden w-full h-1 bg-black/5 dark:bg-white/5 mt-2">
+                         <div className={`h-1 ${barColorClass}`} style={{ width: progressWidth }}></div>
+                    </div>
+                )}
             </div>
             
             {isExpanded && (
                 <div className="divide-y divide-light-outlineVariant/50 dark:divide-dark-outlineVariant/50">
-                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onArchiveRequest={onArchiveRequest} getBarColor={getBarColor} setConfirmModalState={setConfirmModalState} setNoteModalState={setNoteModalState} />)}
+                    {subcategories.map((sub, index) => <SubcategoryItem key={sub.id} category={sub} subcategoryIndex={index} siblingsCount={subcategories.length} currentMonth={currentMonth} getActualAmount={getActualAmount} onArchiveRequest={onArchiveRequest} getBarColor={() => '' /* Not used anymore */} setConfirmModalState={setConfirmModalState} setNoteModalState={setNoteModalState} />)}
                     
                     {isAddingSubcategory ? (
                         <div className="p-2">
@@ -888,14 +902,45 @@ const SubcategoryItem: React.FC<{
     const difference = category.type === 'income' ? actualAmount - budgetAmount : budgetAmount - actualAmount;
     const ratio = budgetAmount > 0 ? actualAmount / budgetAmount : (actualAmount > 0 ? 1 : 0);
     const progressWidth = `${Math.min(ratio * 100, 100)}%`;
-    const isSuccess = category.type === 'income' ? actualAmount >= budgetAmount : actualAmount <= budgetAmount;
 
-    // Definovanie popisov a farieb
+    // --- COLOR LOGIC (Harmonized with Parent) ---
     const isIncome = category.type === 'income';
-    const summaryLabel = isIncome ? 'Rozdiel' : (difference >= 0 ? 'Zostáva' : 'Prekročené');
-    const differenceColor = isSuccess ? 'text-green-600 dark:text-green-400' : (isIncome ? 'text-light-error dark:text-dark-error' : 'text-yellow-500');
-    const actualColor = isIncome ? 'text-green-600 dark:text-green-400' : 'text-light-error dark:text-dark-error';
+    // 1. Realita: Neutrálna
+    const actualColor = 'text-light-onSurface dark:text-dark-onSurface';
     
+    // 2. Rozdiel: Farebná logika
+    let diffColor = '';
+    let barColorClass = '';
+
+    if (isIncome) {
+        if (actualAmount >= budgetAmount) {
+            // Met -> Green
+            diffColor = 'text-green-600 dark:text-green-400';
+            barColorClass = 'bg-green-500';
+        } else {
+            // Pending -> Amber
+            diffColor = 'text-amber-600 dark:text-amber-400';
+            barColorClass = 'bg-amber-500';
+        }
+    } else { // Expense
+        if (actualAmount > budgetAmount) {
+            // Exceeded -> Red
+            diffColor = 'text-light-error dark:text-dark-error';
+            barColorClass = 'bg-light-error dark:bg-dark-error';
+        } else {
+            // Safe -> Green
+            diffColor = 'text-green-600 dark:text-green-400';
+            barColorClass = 'bg-green-500';
+        }
+    }
+
+    let summaryLabel = '';
+    if (isIncome) {
+        summaryLabel = 'Rozdiel';
+    } else { // Expense
+        summaryLabel = difference >= 0 ? 'Zostáva' : 'Prekročené';
+    }
+
     // Inline editácia rozpočtu
     const [isEditingBudget, setIsEditingBudget] = useState(false);
     const [budgetValue, setBudgetValue] = useState(budgetAmount > 0 ? budgetAmount.toFixed(2) : '');
@@ -931,10 +976,10 @@ const SubcategoryItem: React.FC<{
     };
 
     return (
-        <div className="p-4 group">
-            <div className="flex items-center gap-4 w-full">
-                {/* Názov kategórie */}
-                <div className="w-1/3 flex-shrink-0 pl-[2.25rem] flex items-center gap-2">
+        <div className="px-3 py-2 group hover:bg-light-surfaceContainerHigh/30 dark:hover:bg-dark-surfaceContainerHigh/30 transition-colors">
+            <div className="flex items-center gap-3 w-full">
+                {/* 1. Názov kategórie (Left) */}
+                <div className="flex-1 min-w-0 flex items-center gap-2 pl-4 md:pl-8">
                     <EditableCategoryName category={category} isEditing={isEditingName} setIsEditing={setIsEditingName} />
                     {budget?.note && budget.note.trim() !== '' && (
                         <>
@@ -943,9 +988,9 @@ const SubcategoryItem: React.FC<{
                                 onClick={() => setNoteModalState({ isOpen: true, budget, categoryId: category.id, month: currentMonth })} 
                                 onMouseEnter={() => setIsTooltipOpen(true)}
                                 onMouseLeave={() => setIsTooltipOpen(false)}
-                                className="p-1 rounded-full hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh"
+                                className="p-0.5 rounded-full hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh flex-shrink-0"
                             >
-                                <ChatBubbleLeftIcon className="h-4 w-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant" />
+                                <ChatBubbleLeftIcon className="h-4 w-4 text-light-primary dark:text-dark-primary opacity-70" />
                             </button>
                             <NoteTooltip
                                 isOpen={isTooltipOpen}
@@ -956,53 +1001,96 @@ const SubcategoryItem: React.FC<{
                     )}
                 </div>
 
-                {/* Finančná časť */}
-                <div className="flex-grow">
-                                            <div className="flex flex-wrap justify-around items-baseline gap-x-4 gap-y-1 text-center w-full">
-                        {/* Plán */}
-                        <div onClick={() => !isEditingBudget && setIsEditingBudget(true)} className="cursor-pointer">
-                            <p className="text-xs opacity-80 truncate">Plán</p>
-                            {isEditingBudget ? (
+                {/* 2. Finančná časť (Right) */}
+                <div className="flex items-center gap-2 md:gap-4 shrink-0">
+                    
+                    {/* MOBILE View: Full Stats with Labels */}
+                    <div className="md:hidden flex flex-col items-end gap-0.5 mr-1">
+                        <div className="flex items-center justify-end gap-1.5" onClick={(e) => { e.stopPropagation(); !isEditingBudget && setIsEditingBudget(true); }}>
+                             <span className="text-[10px] opacity-50 tracking-wider">Plán</span>
+                             {isEditingBudget ? (
                                 <input ref={budgetInputRef} type="number" value={budgetValue} 
                                     onChange={(e) => setBudgetValue(e.target.value)} 
                                     onBlur={handleBudgetSave} 
                                     onKeyDown={(e) => { if(e.key === 'Enter') handleBudgetSave(); if(e.key === 'Escape') setIsEditingBudget(false); }}
                                     onClick={e => e.stopPropagation()}
-                                    className="w-full bg-black/10 dark:bg-white/10 text-current rounded-md border-light-primary dark:border-dark-primary border-2 px-1 py-0 text-sm font-medium text-center"
+                                    className="w-16 bg-light-surface dark:bg-dark-surface text-right rounded border-light-primary dark:border-dark-primary border px-1 py-0 text-xs font-bold"
                                 />
                             ) : (
-                                <span className="text-sm font-medium text-light-onSurface dark:text-dark-onSurface">
-                                    {budgetAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
+                                <span className={`text-xs font-medium border-b border-transparent hover:border-light-outlineVariant/50 ${budgetAmount === 0 ? 'text-light-onSurfaceVariant/50 dark:text-dark-onSurfaceVariant/50' : 'text-light-onSurface dark:text-dark-onSurface'}`}>
+                                    {budgetAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR', maximumFractionDigits: 0})}
                                 </span>
                             )}
                         </div>
-                        {/* Skutočnosť */}
-                        <div>
-                            <p className="text-xs opacity-80 truncate">Skutočnosť</p>
-                            <span className={`text-sm font-medium ${actualColor}`}>
-                                {actualAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
+                        
+                        <div className="flex items-center justify-end gap-1.5">
+                             <span className="text-[10px] opacity-50 tracking-wider">Realita</span>
+                             <span className={`text-xs font-medium ${actualColor}`}>
+                                {actualAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR', maximumFractionDigits: 0})}
                             </span>
                         </div>
-                        {/* Rozdiel */}
-                        <div>
-                            <p className="text-xs opacity-80 truncate">{summaryLabel}</p>
-                            <span className={`text-sm font-medium ${differenceColor}`}>
+
+                        <div className="flex items-center justify-end gap-1.5">
+                             <span className="text-[10px] opacity-50 tracking-wider">{summaryLabel}</span>
+                             <span className={`text-xs font-bold ${diffColor}`}>
                                 {isIncome 
-                                    ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always'})
-                                    : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR'})
+                                    ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always', maximumFractionDigits: 0})
+                                    : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR', maximumFractionDigits: 0})
                                 }
                             </span>
                         </div>
+                        
+                         {/* Mobile Progress Bar */}
+                         <div className="w-full h-0.5 bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full mt-1 overflow-hidden opacity-50">
+                            <div className={`h-0.5 rounded-full ${barColorClass}`} style={{ width: progressWidth }}></div>
+                        </div>
                     </div>
-                    {/* Progress Bar */}
-                    <div className="w-full bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full h-1.5 mt-1">
-                        <div className={`h-1.5 rounded-full ${getBarColor(ratio, category.type)}`} style={{ width: progressWidth }}></div>
+
+                    {/* DESKTOP View: Fixed Width Block */}
+                    <div className="hidden md:flex flex-col w-[360px] mr-4">
+                        <div className="flex items-center text-right">
+                             {/* Plán */}
+                            <div className="flex-1 px-2" onClick={(e) => { e.stopPropagation(); !isEditingBudget && setIsEditingBudget(true); }}>
+                                {isEditingBudget ? (
+                                    <input ref={budgetInputRef} type="number" value={budgetValue} 
+                                        onChange={(e) => setBudgetValue(e.target.value)} 
+                                        onBlur={handleBudgetSave} 
+                                        onKeyDown={(e) => { if(e.key === 'Enter') handleBudgetSave(); if(e.key === 'Escape') setIsEditingBudget(false); }}
+                                        onClick={e => e.stopPropagation()}
+                                        className="w-full bg-light-surface dark:bg-dark-surface text-right rounded border-light-primary dark:border-dark-primary border px-1 py-0.5 text-sm font-medium"
+                                    />
+                                ) : (
+                                    <span className="text-sm font-medium text-light-onSurface dark:text-dark-onSurface cursor-pointer hover:underline decoration-dashed decoration-light-outlineVariant block truncate">
+                                        {budgetAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
+                                    </span>
+                                )}
+                            </div>
+                            {/* Realita */}
+                            <div className="flex-1 px-2 border-l border-light-outlineVariant/20 dark:border-dark-outlineVariant/20">
+                                <span className={`text-sm font-medium ${actualColor} block truncate`}>
+                                    {actualAmount.toLocaleString('sk-SK', {style:'currency',currency:'EUR'})}
+                                </span>
+                            </div>
+                            {/* Rozdiel */}
+                            <div className="flex-1 px-2 border-l border-light-outlineVariant/20 dark:border-dark-outlineVariant/20">
+                                <span className={`text-sm font-bold ${diffColor} block truncate`}>
+                                    {isIncome 
+                                        ? difference.toLocaleString('sk-SK', {style:'currency', currency:'EUR', signDisplay: 'always'})
+                                        : Math.abs(difference).toLocaleString('sk-SK', {style:'currency', currency:'EUR'})
+                                    }
+                                </span>
+                            </div>
+                        </div>
+                         {/* Desktop Progress Bar (Inside fixed block) */}
+                         <div className="w-full h-1 bg-light-surfaceContainerHighest dark:bg-dark-surfaceContainerHighest rounded-full mt-2 overflow-hidden opacity-50">
+                            <div className={`h-1 rounded-full ${barColorClass}`} style={{ width: progressWidth }}></div>
+                        </div>
                     </div>
                 </div>
                 
-                {/* Ovládacie prvky */}
-                <div className="flex-shrink-0 flex items-center space-x-1">
-                    <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10">
+                {/* 3. Ovládacie prvky (Rightmost) */}
+                <div className="flex-shrink-0 flex items-center">
+                    <button ref={triggerRef} onClick={(e) => { e.stopPropagation(); setIsMenuOpen(true); }} className="p-1.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
                         <DotsVerticalIcon className="h-5 w-5" />
                     </button>
                     <ActionMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} triggerRef={triggerRef}>
@@ -1041,7 +1129,6 @@ const SubcategoryItem: React.FC<{
                             </button>
                         </div>
                     </ActionMenu>
-                    <div className="w-10 h-10"></div>
                 </div>
             </div>
         </div>
