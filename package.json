@@ -1,7 +1,7 @@
 {
   "name": "personal-manager",
   "private": true,
-  "version": "0.2.2 DEV-BUILD",
+  "version": "0.2.3 DEV-BUILD",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,10 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-
     "pocketbase": "^0.26.2",
     "react": "^19.2.0",
-
     "react-dom": "^19.2.0",
     "react-is": "^19.2.0",
     "react-router-dom": "^7.9.3",
@@ -21,6 +19,7 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "baseline-browser-mapping": "^2.9.19",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

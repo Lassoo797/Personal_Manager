@@ -200,10 +200,14 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
             categoryId: type !== 'transfer' ? categoryId : null,
             accountId,
             destinationAccountId: type === 'transfer' ? destinationAccountId : null,
+            created: new Date().toISOString(), // Ensure created date is set for new transactions
         };
 
         if (transaction) {
-            updateTransaction({ ...transaction, ...transactionData });
+            // For update, we don't overwrite 'created' unless necessary, but spread handles it.
+            // Actually, updateTransaction likely expects the full object or partial.
+            // Let's ensure we don't accidentally change 'created' if it exists in 'transaction'.
+             updateTransaction({ ...transaction, ...transactionData, created: transaction.created });
         } else {
             addTransaction(transactionData);
         }
@@ -646,56 +650,127 @@ const Transactions: React.FC = () => {
       </div>
 
       <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 sm:p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant flex-1 overflow-hidden flex flex-col">
-        <div className="overflow-x-auto overflow-y-auto h-full">
-          <table className="w-full text-left">
-            <thead className="sticky top-0 bg-light-surfaceContainer dark:bg-dark-surfaceContainer z-10">
-              <tr className="border-b border-light-outlineVariant dark:border-dark-outlineVariant">
-                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Dátum</th>
-                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Kategória</th>
-                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Poznámky</th>
-                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Účet</th>
-                <th className="py-3 px-4 text-sm font-medium text-right text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Suma</th>
-                <th className="py-3 px-4 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">Akcie</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTransactions.map(t => {
-                const isTransfer = t.type === 'transfer';
+        
+        {/* --- UNIFIED RESPONSIVE LIST VIEW --- */}
+        <div className="overflow-y-auto h-full pb-20 p-1">
+            <div className="flex flex-col space-y-3">
+                {filteredTransactions.map(t => {
+                    const isTransfer = t.type === 'transfer';
+                    const dateObj = new Date(t.transactionDate);
+                    const day = dateObj.getDate();
+                    const month = dateObj.toLocaleString('sk-SK', { month: 'short' }).toUpperCase().replace('.', '');
+                    const year = dateObj.getFullYear();
+                    const currentYear = new Date().getFullYear();
 
-                return (
-                  <tr key={t.id} className="border-b border-light-surfaceContainerHigh dark:border-dark-surfaceContainerHigh last:border-b-0">
-                    <td className="py-4 px-4">{new Date(t.transactionDate).toLocaleDateString('sk-SK')}</td>
-                    <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
-                      {isTransfer ? 'Prevod' : getCategoryDisplayName(t)}
-                    </td>
-                    <td className="py-4 px-4">{t.notes}</td>
-                    <td className="py-4 px-4 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
-                      {isTransfer 
-                        ? `${accountMap.get(t.accountId)} → ${accountMap.get(t.destinationAccountId || '')}` 
-                        : accountMap.get(t.accountId)}
-                    </td>
-                    <td className={`py-4 px-4 text-right font-semibold ${getAmountClass(t.type)}`}>
-                      {t.type === 'expense' && '- '}{t.amount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center space-x-1">
-                          <button aria-label="Upraviť transakciu" onClick={() => openEditModal(t)} className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHighest dark:hover:bg-dark-surfaceContainerHighest"><PencilIcon /></button>
-                          <button aria-label="Zmazať transakciu" onClick={() => setConfirmModalState({
-                            isOpen: true,
-                            message: `Naozaj chcete zmazať túto transakciu?`,
-                            onConfirm: () => {
-                              deleteTransaction(t.id);
-                              setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
-                            }
-                          })} className="text-light-error dark:text-dark-error rounded-full p-2 hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer"><TrashIcon /></button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+                    return (
+                        <div key={t.id} className="bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow p-3 sm:p-4 rounded-2xl border border-light-outlineVariant/40 dark:border-dark-outlineVariant/40 shadow-sm hover:shadow-md transition-all group">
+                            
+                            <div className="flex items-center gap-3 sm:gap-4">
+                                
+                                {/* 1. LEFT SECTION: Date & Identity */}
+                                <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                                    
+                                    {/* Desktop Date Block (Visible md+) */}
+                                    <div className="hidden md:flex flex-col items-center justify-center min-w-[50px] pr-4 border-r border-light-outlineVariant/30 dark:border-dark-outlineVariant/30 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                                        <span className="text-xl font-bold leading-none">{day}</span>
+                                        <span className="text-[10px] font-bold tracking-wider opacity-70">{month}</span>
+                                        {year !== currentYear && <span className="text-[9px] opacity-50">{year}</span>}
+                                    </div>
+
+                                    {/* Icon */}
+                                    <div className={`p-2 sm:p-3 rounded-full shrink-0 ${
+                                        t.type === 'income' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 
+                                        t.type === 'expense' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' : 
+                                        'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                    }`}>
+                                        {t.type === 'income' ? <ArrowUpCircleIcon className="h-5 w-5 sm:h-6 sm:w-6"/> : 
+                                         t.type === 'expense' ? <ArrowDownCircleIcon className="h-5 w-5 sm:h-6 sm:w-6"/> : 
+                                         <div className="h-5 w-5 sm:h-6 sm:w-6 flex items-center justify-center font-bold">⇄</div>}
+                                    </div>
+
+                                    {/* Text Info */}
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="font-bold text-light-onSurface dark:text-dark-onSurface text-sm sm:text-base truncate" title={isTransfer ? 'Prevod' : getCategoryDisplayName(t)}>
+                                            {isTransfer ? 'Prevod' : getCategoryDisplayName(t)}
+                                        </span>
+                                        
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-0.5 sm:gap-2 text-xs sm:text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                                             {/* Mobile Date */}
+                                            <span className="md:hidden opacity-90">
+                                                {dateObj.toLocaleDateString('sk-SK')}
+                                            </span>
+                                            {/* Desktop Notes */}
+                                            {t.notes && (
+                                                <span className="hidden md:block italic truncate opacity-70 border-l border-light-outlineVariant dark:border-dark-outlineVariant pl-2 ml-1 max-w-[200px] lg:max-w-[300px] xl:max-w-[400px] pr-2" title={t.notes}>
+                                                    {t.notes}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 2. RIGHT SECTION: Amount, Account & Actions */}
+                                <div className="flex items-center gap-3 sm:gap-5 shrink-0">
+                                    
+                                    {/* Amount & Account Column */}
+                                    <div className="flex flex-col items-end min-w-[70px] sm:min-w-[100px]">
+                                        <span className={`font-bold text-base sm:text-lg whitespace-nowrap ${getAmountClass(t.type)}`}>
+                                            {t.type === 'expense' && '- '}{t.amount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
+                                        </span>
+                                        <span className="text-[10px] sm:text-xs text-light-onSurfaceVariant/80 dark:text-dark-onSurfaceVariant/80 text-right truncate max-w-[100px] sm:max-w-[140px]" title={isTransfer ? `${accountMap.get(t.accountId)} -> ${accountMap.get(t.destinationAccountId || '')}` : accountMap.get(t.accountId)}>
+                                            {isTransfer 
+                                                ? <>{accountMap.get(t.accountId)} → {accountMap.get(t.destinationAccountId || '')}</>
+                                                : accountMap.get(t.accountId)
+                                            }
+                                        </span>
+                                    </div>
+
+                                    {/* Actions (Always Visible, Rightmost) */}
+                                    <div className="flex items-center gap-1 sm:gap-2 pl-2 border-l border-light-outlineVariant/20 dark:border-dark-outlineVariant/20">
+                                        <button 
+                                            onClick={() => openEditModal(t)} 
+                                            className="p-1.5 sm:p-2 rounded-lg text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:bg-light-primaryContainer hover:text-light-onPrimaryContainer dark:hover:bg-dark-primaryContainer dark:hover:text-dark-onPrimaryContainer transition-colors"
+                                            title="Upraviť"
+                                        >
+                                            <PencilIcon className="w-4 h-4 sm:w-5 sm:h-5"/>
+                                        </button>
+                                        <button 
+                                            onClick={() => setConfirmModalState({
+                                                isOpen: true,
+                                                message: `Naozaj chcete zmazať túto transakciu?`,
+                                                onConfirm: () => {
+                                                deleteTransaction(t.id);
+                                                setConfirmModalState({ isOpen: false, message: '', onConfirm: () => {} });
+                                                }
+                                            })} 
+                                            className="p-1.5 sm:p-2 rounded-lg text-light-error dark:text-dark-error hover:bg-light-errorContainer dark:hover:bg-dark-errorContainer transition-colors"
+                                            title="Zmazať"
+                                        >
+                                            <TrashIcon className="w-4 h-4 sm:w-5 sm:h-5"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Mobile Notes (Below content) */}
+                            {t.notes && (
+                                <div className="md:hidden mt-2 pt-2 text-xs sm:text-sm text-light-onSurfaceVariant/80 dark:text-dark-onSurfaceVariant/80 italic border-t border-light-outlineVariant/30 dark:border-dark-outlineVariant/30 truncate px-1">
+                                    {t.notes}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Empty State */}
+            {filteredTransactions.length === 0 && (
+                <div className="text-center py-10 text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant h-full flex items-center justify-center">
+                    <p>Žiadne transakcie nenájdené.</p>
+                </div>
+            )}
         </div>
+
       </div>
       
       <Modal isOpen={isModalOpen} onClose={closeModal} title={editingTransaction ? "Upraviť transakciu" : "Pridať transakciu"}>
