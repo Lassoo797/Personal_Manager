@@ -1,13 +1,16 @@
 import React, { createContext, useContext, useState, ReactNode, useMemo, useCallback, useEffect } from 'react';
 import pb from '../lib/pocketbase'; // Keep for pb.filter for now
-import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification } from '../types';
+import type { Account, Category, Transaction, Budget, Workspace, TransactionType, Notification, ScheduledPayment } from '../types';
+
 import { systemEventService } from '../services/systemEventService';
 import { workspaceService } from '../services/workspaceService';
 import { budgetService } from '../services/budgetService';
 import { categoryService } from '../services/categoryService';
 import { accountService } from '../services/accountService';
 import { transactionService } from '../services/transactionService';
+import { scheduledPaymentService } from '../services/scheduledPaymentService';
 import { useAuth } from './AuthContext';
+
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { roundToTwoDecimals } from '../lib/utils';
 
@@ -33,12 +36,15 @@ interface AppContextType {
   allCategories: Category[];
   categories: Category[];
   transactions: Transaction[];
+  scheduledPayments: ScheduledPayment[];
   budgets: Budget[];
 
   // Actions
   createAccount: (account: Omit<Account, 'id' | 'workspaceId' | 'status' | 'order'>) => Promise<void>;
+
   updateAccount: (account: Partial<Account> & Pick<Account, 'id'>) => Promise<void>;
   archiveAccount: (id: string) => Promise<string | void>;
+  setDefaultAccount: (accountId: string) => Promise<void>;
   getAccountBalance: (accountId: string) => number;
   moveAccountUp: (accountId: string) => Promise<void>;
   moveAccountDown: (accountId: string) => Promise<void>;
@@ -54,8 +60,15 @@ interface AppContextType {
   addTransaction: (transaction: Omit<Transaction, 'id' | 'workspaceId'>) => Promise<void>;
   updateTransaction: (transaction: Transaction) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
+  
+  addScheduledPayment: (payment: Omit<ScheduledPayment, 'id' | 'workspaceId' | 'nextPaymentDate'>) => Promise<void>;
+  updateScheduledPayment: (payment: ScheduledPayment) => Promise<void>;
+  deleteScheduledPayment: (id: string) => Promise<void>;
+  confirmScheduledPayment: (payment: ScheduledPayment, date: string, amount: number) => Promise<void>;
 
   addOrUpdateBudget: (budget: Partial<Budget> & Pick<Budget, 'categoryId' | 'month'>) => Promise<{ success: boolean; message?: string; }>;
+
+
   publishBudgetForYear: (categoryId: string, month: string, forAllSubcategories?: boolean) => Promise<void>;
   publishFullBudgetForYear: (month: string) => Promise<void>;
   deleteBudget: (id: string) => Promise<void>;
@@ -85,6 +98,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [allCategories, setAllCategories] = useState<Category[]>([]);
   const categories = useMemo(() => allCategories.filter(c => c.status === 'active'), [allCategories]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [scheduledPayments, setScheduledPayments] = useState<ScheduledPayment[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
@@ -137,15 +151,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setError(null);
         try {
           const filter = pb.filter('workspace = {:workspaceId}', { workspaceId: currentWorkspaceId });
-          const [accs, cats, trans, buds] = await Promise.all([
+          const [accs, cats, trans, sched, buds] = await Promise.all([
             accountService.getAll(filter), // Použitie servisu
             categoryService.getAll(filter), // Použitie servisu
             transactionService.getAll(filter), // Použitie servisu
+            scheduledPaymentService.getAll(filter), // Použitie servisu
             budgetService.getAll(filter), // Použitie servisu
           ]);
           setAllAccounts(accs); // Mapper je už v servise
           setAllCategories(cats); // Mapper je už v servise
           setTransactions(trans); // Mapper je už v servise
+          setScheduledPayments(sched); // Mapper je už v servise
           setBudgets(buds); // Mapper je už v servise
         } catch (e: any) {
           if (e.name !== 'AbortError' && !e.isAbort) {
@@ -160,6 +176,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setAllAccounts([]);
         setAllCategories([]);
         setTransactions([]);
+        setScheduledPayments([]);
         setBudgets([]);
       }
     };
@@ -284,6 +301,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setAllAccounts([]);
           setAllCategories([]);
           setTransactions([]);
+          setScheduledPayments([]);
           setBudgets([]);
         }
       }
@@ -745,7 +763,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [accounts, allCategories, addNotification, updateCategory, currentWorkspaceId]);
 
 
-  // TRANSACTION MANAGEMENT
+    // TRANSACTION MANAGEMENT
 
   const addTransaction = useCallback(async (transaction: Omit<Transaction, 'id' | 'workspaceId'>) => {
     if (!currentWorkspaceId) return;
@@ -830,6 +848,116 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addNotification(`Nepodarilo sa zmazať transakciu: ${e.message}`, 'error');
     }
   }, [addNotification, transactions, currentWorkspaceId]);
+
+
+  // SCHEDULED PAYMENT MANAGEMENT
+
+  const addScheduledPayment = useCallback(async (payment: Omit<ScheduledPayment, 'id' | 'workspaceId' | 'nextPaymentDate'>) => {
+    if (!currentWorkspaceId) return;
+
+    try {
+        const data = {
+            ...payment,
+            amount: Math.round((payment.amount + Number.EPSILON) * 100) / 100,
+            workspace: currentWorkspaceId,
+            account: payment.accountId,
+            destinationAccount: payment.type === 'transfer' ? payment.destinationAccountId : null,
+            category: payment.type !== 'transfer' ? payment.categoryId : null,
+            nextPaymentDate: payment.startDate, // Initial next payment date is the start date
+            active: true
+        };
+
+        const newPayment = await scheduledPaymentService.create(data);
+        setScheduledPayments(prev => [...prev, newPayment]);
+        addNotification('Plánovaná platba bola vytvorená.', 'success');
+    } catch (e: any) {
+      console.error("Chyba pri vytváraní plánovanej platby:", e);
+      addNotification(`Nepodarilo sa vytvoriť plánovanú platbu: ${e.message}`, 'error');
+    }
+  }, [currentWorkspaceId, addNotification]);
+
+  const updateScheduledPayment = useCallback(async (payment: ScheduledPayment) => {
+    const { id, workspaceId, ...data } = payment;
+    try {
+        const payload = {
+            ...data,
+            amount: Math.round((data.amount + Number.EPSILON) * 100) / 100,
+            account: data.accountId,
+            destinationAccount: data.type === 'transfer' ? data.destinationAccountId : null,
+            category: data.type !== 'transfer' ? data.categoryId : null,
+        };
+
+        const updatedPayment = await scheduledPaymentService.update(id, payload);
+        setScheduledPayments(prev => prev.map(p => p.id === id ? updatedPayment : p));
+        addNotification('Plánovaná platba bola aktualizovaná.', 'success');
+    } catch (e: any) {
+      console.error("Chyba pri aktualizácii plánovanej platby:", e);
+      addNotification(`Nepodarilo sa aktualizovať plánovanú platbu: ${e.message}`, 'error');
+    }
+  }, [addNotification]);
+
+  const deleteScheduledPayment = useCallback(async (id: string) => {
+    try {
+        await scheduledPaymentService.delete(id);
+        setScheduledPayments(prev => prev.filter(p => p.id !== id));
+        addNotification('Plánovaná platba bola zmazaná.', 'success');
+    } catch (e: any) {
+      console.error("Chyba pri mazaní plánovanej platby:", e);
+      addNotification(`Nepodarilo sa zmazať plánovanú platbu: ${e.message}`, 'error');
+    }
+  }, [addNotification]);
+
+  const confirmScheduledPayment = useCallback(async (payment: ScheduledPayment, date: string, amount: number) => {
+      try {
+        // 1. Create real transaction
+        const transactionData = {
+            transactionDate: date,
+            notes: payment.notes || 'Plánovaná platba',
+            amount: amount,
+            type: payment.type,
+            categoryId: payment.categoryId,
+            accountId: payment.accountId,
+            destinationAccountId: payment.destinationAccountId,
+            created: new Date().toISOString()
+        };
+        
+        await addTransaction(transactionData);
+
+                        // 2. Calculate next date logic
+                const d = new Date(payment.nextPaymentDate);
+                switch(payment.frequency) {
+                    case 'daily': d.setDate(d.getDate() + 1); break;
+                    case 'weekly': d.setDate(d.getDate() + 7); break;
+                    case 'monthly': 
+                        // Ošetrenie prechodu mesiacov (napr. 31.1. -> 28.2.)
+                        const currentDay = d.getDate();
+                        d.setMonth(d.getMonth() + 1);
+                        if (d.getDate() !== currentDay) {
+                            d.setDate(0); // Nastaví na posledný deň predchádzajúceho mesiaca
+                        }
+                        break;
+                    case 'yearly': d.setFullYear(d.getFullYear() + 1); break;
+                }
+        const nextDate = d.toISOString().slice(0, 10);
+
+        // 3. Update scheduled payment
+        if (payment.frequency === 'once') {
+             await updateScheduledPayment({ ...payment, active: false });
+        } else {
+             if (payment.endDate && nextDate > payment.endDate) {
+                 await updateScheduledPayment({ ...payment, active: false, nextPaymentDate: nextDate });
+             } else {
+                 await updateScheduledPayment({ ...payment, nextPaymentDate: nextDate });
+             }
+        }
+        // Notification is handled by addTransaction/updateScheduledPayment
+      } catch (e: any) {
+          console.error("Chyba pri potvrdzovaní platby:", e);
+          addNotification("Nepodarilo sa potvrdiť platbu.", "error");
+      }
+  }, [addTransaction, updateScheduledPayment, addNotification]); // removed addTransaction dependency for now to avoid error, will fix by reordering
+
+
 
   const addOrUpdateBudget = useCallback(async (budget: Partial<Budget> & Pick<Budget, 'categoryId' | 'month'>): Promise<{ success: boolean; message?: string; }> => {
     if (!currentWorkspaceId) return { success: false, message: "Pracovný priestor nebol nájdený." };
@@ -1041,6 +1169,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     accounts, createAccount, updateAccount, archiveAccount, getAccountBalance, moveAccountUp, moveAccountDown, setDefaultAccount, setSavingsAccount,
     categories, allCategories, addCategory, updateCategory, archiveCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
+    scheduledPayments, addScheduledPayment, updateScheduledPayment, deleteScheduledPayment, confirmScheduledPayment,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
 
     notifications, addNotification, removeNotification,
@@ -1051,6 +1180,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     accounts, createAccount, updateAccount, archiveAccount, getAccountBalance, moveAccountUp, moveAccountDown, setDefaultAccount, setSavingsAccount,
     categories, allCategories, addCategory, updateCategory, archiveCategory, updateCategoryOrder, moveCategoryUp, moveCategoryDown,
     transactions, addTransaction, updateTransaction, deleteTransaction,
+    scheduledPayments, addScheduledPayment, updateScheduledPayment, deleteScheduledPayment, confirmScheduledPayment,
     budgets, addOrUpdateBudget, deleteBudget, publishBudgetForYear, publishFullBudgetForYear,
 
     notifications, addNotification, removeNotification,

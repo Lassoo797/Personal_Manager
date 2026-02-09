@@ -6,6 +6,7 @@ export type SystemEvent = {
   created: string;
 };
 export type TransactionType = 'income' | 'expense' | 'transfer';
+export type PaymentFrequency = 'once' | 'daily' | 'weekly' | 'monthly' | 'yearly';
 export type AccountType = 'Štandardný účet';
 export type AccountSubtype = 'Bankový účet' | 'Hotovosť';
 
@@ -73,4 +74,21 @@ export interface Notification {
   id: string;
   message: string;
   type: 'success' | 'error' | 'info';
+}
+
+export interface ScheduledPayment {
+  id: string;
+  workspaceId: string;
+  amount: number;
+  type: TransactionType;
+  categoryId: string | null;
+  accountId: string;
+  destinationAccountId?: string | null;
+  frequency: PaymentFrequency;
+  startDate: string; // YYYY-MM-DD
+  nextPaymentDate: string; // YYYY-MM-DD
+  endDate?: string | null; // YYYY-MM-DD
+  notes: string;
+  active: boolean;
+  created: string;
 }

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { XIcon, HomeIcon, BanknotesIcon, ChartPieIcon, WalletIcon, ChevronDownIcon, MenuIcon, CreditCardIcon, CalendarDaysIcon } from './icons';
+import { XIcon, HomeIcon, BanknotesIcon, ChartPieIcon, WalletIcon, ChevronDownIcon, MenuIcon, CreditCardIcon, CalendarDaysIcon, ClockIcon } from './icons';
+
 import ThemeSwitcher from './ThemeSwitcher';
 import { useAppContext } from '../context/AppContext';
 import { Workspace } from '../types';
@@ -165,6 +166,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, collapsed = false, o
             <CreditCardIcon className={`flex-shrink-0 ${effectiveCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
             <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${effectiveCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Transakcie</span>
           </NavLink>
+
+          <NavLink to="/scheduled-payments" className={getNavLinkClass} onClick={() => window.innerWidth < 768 && onClose()} title={effectiveCollapsed ? "Plánované" : ""}>
+            <ClockIcon className={`flex-shrink-0 ${effectiveCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />
+            <span className={`whitespace-nowrap overflow-hidden transition-all duration-300 ${effectiveCollapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>Plánované</span>
+          </NavLink>
+
           
           <NavLink to="/budgets" className={getNavLinkClass} onClick={() => window.innerWidth < 768 && onClose()} title={effectiveCollapsed ? "Rozpočty" : ""}>
             <BanknotesIcon className={`flex-shrink-0 ${effectiveCollapsed ? 'w-6 h-6' : 'w-5 h-5 mr-3'}`} />

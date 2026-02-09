@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, ReactNode } from 'react';
+
 import ReactDOM from 'react-dom';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
@@ -24,7 +25,8 @@ const AccountIcon: React.FC<{ type: AccountSubtype }> = ({ type }) => {
 const ActionMenu: React.FC<{
   isOpen: boolean;
   onClose: () => void;
-  triggerRef: React.RefObject<HTMLElement>;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+
   children: React.ReactNode;
 }> = ({ isOpen, onClose, triggerRef, children }) => {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -84,7 +86,7 @@ const AccountForm: React.FC<{
 }> = ({ account, isEditing, onSave, onCancel }) => {
     const { createAccount, updateAccount } = useAppContext();
     const [name, setName] = useState(account?.name || '');
-    const [initialBalance, setInitialBalance] = useState(account?.initialBalance?.toString() || '0');
+    const [initialBalance, setInitialBalance] = useState<number | string>(account?.initialBalance?.toString() || '0');
     const [initialBalanceDate, setInitialBalanceDate] = useState(account?.initialBalanceDate?.slice(0,10) || new Date().toISOString().slice(0, 10));
     const [currency, setCurrency] = useState<'EUR' | 'USD' | 'CZK'>(account?.currency || 'EUR');
     const [accountType, ] = useState<AccountType>(account?.accountType || 'Štandardný účet');
@@ -96,6 +98,7 @@ const AccountForm: React.FC<{
 
     const formInputStyle = "block w-full bg-transparent text-light-onSurface dark:text-dark-onSurface rounded-lg border-2 border-light-outline dark:border-dark-outline focus:border-light-primary dark:focus:border-dark-primary focus:ring-0 peer";
     const formLabelStyle = "absolute text-sm text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant duration-300 transform -translate-y-3 scale-75 top-3 z-10 origin-[0] left-4 peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 peer-focus:scale-75 peer-focus:-translate-y-3";
+
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -163,6 +166,7 @@ const AccountForm: React.FC<{
                     <label htmlFor="initialBalanceDate" className={`${formLabelStyle} cursor-pointer`}>Dátum počiatočného zostatku</label>
                 </div>
                 <div className="relative">
+
                     <input type="number" id="initialBalance" value={initialBalance} onChange={e => setInitialBalance(e.target.value)} step="0.01" className={`${formInputStyle} h-14`} required placeholder=" " />
                     <label htmlFor="initialBalance" className={formLabelStyle}>Počiatočný zostatok</label>
                 </div>
@@ -306,7 +310,7 @@ const Accounts = () => {
                         </p>
                         <div className="relative">
                           <button 
-                            ref={el => menuTriggerRefs.current[account.id] = el}
+                            ref={el => { menuTriggerRefs.current[account.id] = el; }}
                             aria-label={`Možnosti pre účet ${account.name}`} 
                             onClick={(e) => { e.stopPropagation(); toggleMenu(account.id); }} 
                             className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh transition-colors"
@@ -400,7 +404,7 @@ const Accounts = () => {
                         </p>
                          <div className="relative">
                           <button 
-                            ref={el => menuTriggerRefs.current[account.id] = el}
+                            ref={el => { menuTriggerRefs.current[account.id] = el; }}
                             aria-label={`Možnosti pre účet ${account.name}`} 
                             onClick={(e) => { e.stopPropagation(); toggleMenu(account.id); }} 
                             className="text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant rounded-full p-2 hover:bg-light-surfaceContainerHigh dark:hover:bg-dark-surfaceContainerHigh transition-colors"

@@ -10,7 +10,9 @@ import LoginPage from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import NotificationsContainer from './components/Notifications';
 import SystemEvents from './pages/SystemEvents';
+import ScheduledPayments from './pages/ScheduledPayments';
 import Layout from './components/Layout';
+
 
 const App: React.FC = () => {
   return (
@@ -57,7 +59,9 @@ const AppContent: React.FC = () => {
             <>
               <Route path="/" element={<Dashboard />} />
               <Route path="/transactions" element={<Transactions />} />
+              <Route path="/scheduled-payments" element={<ScheduledPayments />} />
               <Route path="/accounts" element={<Accounts />} />
+
               <Route path="/budgets" element={<Budgets />} />
               <Route path="/system-events" element={<SystemEvents />} />
             </>

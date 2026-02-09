@@ -2,10 +2,98 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../context/AppContext';
 import Modal from '../components/Modal';
 import PageHeader from '../components/PageHeader';
-import { PlusIcon, PencilIcon, TrashIcon, FunnelIcon, MagnifyingGlassIcon, XIcon, CalendarDaysIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, ChevronUpIcon } from '../components/icons';
+import { PlusIcon, PencilIcon, TrashIcon, FunnelIcon, MagnifyingGlassIcon, XIcon, CalendarDaysIcon, ArrowUpCircleIcon, ArrowDownCircleIcon, ChevronUpIcon, ClockIcon, CheckCircleIcon } from '../components/icons';
 import { ConfirmModal } from '../components/ConfirmModal';
 import { roundToTwoDecimals } from '../lib/utils';
-import type { Transaction, TransactionType, Account, Category } from '../types';
+import type { Transaction, TransactionType, Account, Category, ScheduledPayment } from '../types';
+
+const ScheduledPaymentConfirmModal: React.FC<{
+    isOpen: boolean,
+    onClose: () => void,
+    payment: ScheduledPayment | null,
+    onConfirm: (payment: ScheduledPayment, date: string, amount: number) => void
+}> = ({ isOpen, onClose, payment, onConfirm }) => {
+    const [date, setDate] = useState('');
+    const [amount, setAmount] = useState('');
+
+    useEffect(() => {
+        if (payment && isOpen) {
+            const d = new Date();
+            const offset = d.getTimezoneOffset() * 60000;
+            setDate(new Date(d.getTime() - offset).toISOString().slice(0, 10));
+            setAmount(payment.amount.toString());
+        }
+    }, [payment, isOpen]);
+
+    if (!isOpen || !payment) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+                    <div className="absolute inset-0 bg-gray-500 opacity-75" onClick={onClose}></div>
+                </div>
+                <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                    <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div className="sm:flex sm:items-start">
+                            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100 sm:mx-0 sm:h-10 sm:w-10">
+                                <CheckCircleIcon className="h-6 w-6 text-green-600" aria-hidden="true" />
+                            </div>
+                            <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-gray-100" id="modal-title">
+                                    Potvrdiť úhradu
+                                </h3>
+                                <div className="mt-2">
+                                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                        Skontrolujte a prípadne upravte údaje pre potvrdenie úhrady plánovanej platby: <strong>{payment.notes}</strong>
+                                    </p>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Dátum úhrady</label>
+                                            <input 
+                                                type="date" 
+                                                value={date} 
+                                                onChange={(e) => setDate(e.target.value)} 
+                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Suma</label>
+                                            <input 
+                                                type="number" 
+                                                step="0.01" 
+                                                value={amount} 
+                                                onChange={(e) => setAmount(e.target.value)} 
+                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button 
+                            type="button" 
+                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-green-600 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 sm:ml-3 sm:w-auto sm:text-sm"
+                            onClick={() => onConfirm(payment, date, parseFloat(amount))}
+                        >
+                            Potvrdiť úhradu
+                        </button>
+                        <button 
+                            type="button" 
+                            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+                            onClick={onClose}
+                        >
+                            Zrušiť
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () => void, onCancel: () => void }> = ({ transaction, onSave, onCancel }) => {
     const { accounts, allCategories, addTransaction, updateTransaction, transactions, getAccountBalance } = useAppContext();
@@ -339,10 +427,15 @@ const TransactionForm: React.FC<{ transaction?: Transaction | null, onSave: () =
 
 
 const Transactions: React.FC = () => {
-  const { transactions, deleteTransaction, categories, allCategories, accounts } = useAppContext();
+  const { transactions, deleteTransaction, categories, allCategories, accounts, scheduledPayments, confirmScheduledPayment } = useAppContext();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+
   const [confirmModalState, setConfirmModalState] = useState<{ isOpen: boolean, message: string, onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
+  
+  // Scheduled Payment Confirmation Modal State
+  const [scheduledConfirmState, setScheduledConfirmState] = useState<{ isOpen: boolean, payment: ScheduledPayment | null }>({ isOpen: false, payment: null });
+
   const startDateRef = React.useRef<HTMLInputElement>(null);
   const endDateRef = React.useRef<HTMLInputElement>(null);
   
@@ -356,7 +449,9 @@ const Transactions: React.FC = () => {
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [showScheduled, setShowScheduled] = useState(true);
   const [isScrolled, setIsScrolled] = useState(false);
+
 
   useEffect(() => {
     const handleScroll = () => {
@@ -530,10 +625,20 @@ const Transactions: React.FC = () => {
         );
     };
 
+  // Scheduled payments logic
+  const upcomingPayments = useMemo(() => {
+     return scheduledPayments
+        .filter(p => p.active)
+        .sort((a, b) => new Date(a.nextPaymentDate).getTime() - new Date(b.nextPaymentDate).getTime());
+  }, [scheduledPayments]);
+  
+  const duePaymentsCount = upcomingPayments.filter(p => new Date(p.nextPaymentDate) <= new Date()).length;
+
   return (
     <div className="space-y-6 relative h-full flex flex-col">
        <PageHeader title="Transakcie">
             <div className="flex items-center gap-3 w-full md:w-auto">
+
                  {/* Search Bar - Compact on scroll */}
                 <div className="relative flex-1 max-w-sm transition-all duration-300">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -649,7 +754,72 @@ const Transactions: React.FC = () => {
 
       </div>
 
+        {/* Scheduled Payments Summary / Toggle */}
+        {upcomingPayments.length > 0 && (
+            <div className="px-1">
+                <button 
+                    onClick={() => setShowScheduled(!showScheduled)}
+                    className="flex items-center gap-2 text-sm font-medium text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant hover:text-light-primary dark:hover:text-dark-primary transition-colors"
+                >
+                    <ClockIcon className="h-4 w-4" />
+                    <span>
+                        {showScheduled ? 'Skryť plánované' : 'Zobraziť plánované'} 
+                        <span className="ml-1 opacity-70">
+                            ({upcomingPayments.length} celkom, {duePaymentsCount} na úhradu)
+                        </span>
+                    </span>
+                    {duePaymentsCount > 0 && !showScheduled && (
+                         <span className="flex h-2 w-2 rounded-full bg-light-error dark:bg-dark-error animate-pulse"></span>
+                    )}
+                </button>
+
+                            {showScheduled && (
+                    <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 animate-fadeIn">
+                        {upcomingPayments.slice(0, 4).map(payment => { 
+                             const isDue = new Date(payment.nextPaymentDate) <= new Date();
+                             return (
+                                <div key={payment.id} className={`p-2 rounded-xl border ${isDue ? 'bg-light-errorContainer/20 border-light-error/30 dark:bg-dark-errorContainer/20 dark:border-dark-error/30' : 'bg-light-surfaceContainerLow dark:bg-dark-surfaceContainerLow border-light-outlineVariant/30 dark:border-dark-outlineVariant/30'} flex items-center justify-between gap-2 shadow-sm group`}>
+                                     <div className="flex flex-col min-w-0 flex-1">
+                                         <span className="text-xs font-bold truncate text-light-onSurface dark:text-dark-onSurface w-full" title={payment.notes}>
+                                            {payment.notes || 'Plánovaná platba'}
+                                         </span>
+                                         <span className="text-[10px] text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant">
+                                            {new Date(payment.nextPaymentDate).toLocaleDateString('sk-SK')} • {accountMap.get(payment.accountId)}
+                                         </span>
+                                     </div>
+                                     <div className="flex items-center gap-2 shrink-0">
+                                         <div className="text-right">
+                                             <span className={`font-bold text-xs ${getAmountClass(payment.type)}`}>
+                                                {payment.amount.toLocaleString('sk-SK', { style: 'currency', currency: 'EUR' })}
+                                             </span>
+                                             {isDue && <div className="text-[9px] text-light-error dark:text-dark-error font-bold uppercase mt-0.5">Na úhradu</div>}
+                                         </div>
+                                         {isDue && (
+                                            <button
+                                                onClick={() => setScheduledConfirmState({ isOpen: true, payment })}
+                                                className="p-1 rounded-full text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                                                title="Zadať úhradu"
+                                            >
+                                                <CheckCircleIcon className="w-5 h-5" />
+                                            </button>
+                                         )}
+                                     </div>
+                                </div>
+                             )
+                        })}
+                         {upcomingPayments.length > 4 && (
+                            <div className="flex items-center justify-center p-2 text-xs text-light-onSurfaceVariant dark:text-dark-onSurfaceVariant italic">
+                                + {upcomingPayments.length - 4} ďalších...
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        )}
+
       <div className="bg-light-surfaceContainer dark:bg-dark-surfaceContainer p-4 sm:p-6 rounded-2xl border border-light-outlineVariant dark:border-dark-outlineVariant flex-1 overflow-hidden flex flex-col">
+
+
         
         {/* --- UNIFIED RESPONSIVE LIST VIEW --- */}
         <div className="overflow-y-auto h-full pb-20 p-1">
@@ -777,6 +947,16 @@ const Transactions: React.FC = () => {
         <TransactionForm transaction={editingTransaction} onSave={closeModal} onCancel={closeModal} />
       </Modal>
       
+      <ScheduledPaymentConfirmModal
+        isOpen={scheduledConfirmState.isOpen}
+        onClose={() => setScheduledConfirmState({ isOpen: false, payment: null })}
+        payment={scheduledConfirmState.payment}
+        onConfirm={(payment, date, amount) => {
+            confirmScheduledPayment(payment, date, amount);
+            setScheduledConfirmState({ isOpen: false, payment: null });
+        }}
+      />
+
       <ConfirmModal 
         isOpen={confirmModalState.isOpen} 
         onClose={() => setConfirmModalState({ ...confirmModalState, isOpen: false })} 
