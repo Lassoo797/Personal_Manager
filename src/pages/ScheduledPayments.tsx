@@ -16,8 +16,8 @@ const ScheduledPaymentForm: React.FC<{ payment?: ScheduledPayment | null, onSave
     const [accountId, setAccountId] = useState(payment?.accountId || '');
     const [destinationAccountId, setDestinationAccountId] = useState(payment?.destinationAccountId || '');
     const [frequency, setFrequency] = useState<PaymentFrequency>(payment?.frequency || 'monthly');
-    const [startDate, setStartDate] = useState(payment?.startDate ? payment.startDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
-    const [endDate, setEndDate] = useState(payment?.endDate ? payment.endDate.slice(0, 10) : '');
+    const [startDate, setStartDate] = useState(payment?.startDate ? payment.startDate.substring(0, 10) : new Date().toISOString().substring(0, 10));
+    const [endDate, setEndDate] = useState(payment?.endDate ? payment.endDate.substring(0, 10) : '');
     const [notes, setNotes] = useState(payment?.notes || '');
     const [error, setError] = useState<string | null>(null);
     const startDateRef = React.useRef<HTMLInputElement>(null);
@@ -87,11 +87,12 @@ const ScheduledPaymentForm: React.FC<{ payment?: ScheduledPayment | null, onSave
         };
 
         if (payment) {
-             // For update, we preserve nextPaymentDate if it exists, logic handled in service/backend usually or here if we want to reset it on start date change?
-             // Usually changing start date or frequency implies recalculation of nextPaymentDate.
-             // For simplicity, let's assume update handles it or we pass what's needed.
-             // If we change frequency/start date, we might want to reset nextPaymentDate logic.
-             // Let's keep it simple: update fields.
+             // Ak sa zmenil dátum začiatku, aktualizujeme aj dátum najbližšej platby
+             const oldStartDate = payment.startDate ? payment.startDate.substring(0, 10) : '';
+             if (startDate !== oldStartDate) {
+                paymentData.nextPaymentDate = startDate;
+             }
+
              updateScheduledPayment({ ...payment, ...paymentData });
         } else {
              addScheduledPayment(paymentData);
