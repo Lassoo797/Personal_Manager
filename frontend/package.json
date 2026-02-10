@@ -1,7 +1,7 @@
 {
-  "name": "personal-manager",
+  "name": "personal-budget",
   "private": true,
-  "version": "0.2.4 DEV-BUILD",
+  "version": "0.2.4 DEV",
   "type": "module",
   "scripts": {
     "dev": "vite",
